@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, ChangeEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 
-// プリセット用のおすすめタグ一覧
+
 const PRESET_TASTES = [
   'アイコン',
   'ヘッダー',
@@ -25,14 +25,40 @@ const PRESET_TASTES = [
   '著作権譲渡可',
 ]
 
+// どんな不適切な値（{}, [], "{}", "null"等）が入ってきても、確実に number または null に変換する関数
+const safeParseInt = (val: any): number | null => {
+  // null, undefined, またはオブジェクト（{}, []）の場合は即座に null を返す
+  if (val === null || val === undefined || typeof val === 'object') {
+    return null
+  }
+
+  // 文字列化して不要な空白を除去
+  const str = String(val).trim()
+
+  // 不正な文字列パターンのガード
+  if (
+    str === '' || 
+    str === '{}' || 
+    str === '[]' || 
+    str === 'null' || 
+    str === 'undefined' || 
+    str === '[object Object]'
+  ) {
+    return null
+  }
+
+  const parsed = parseInt(str, 10)
+  return isNaN(parsed) ? null : parsed
+}
+
 export default function Dashboard() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [uploadingIndex, setUploadingIndex] = useState<number | null>(null)
   const [activeTab, setActiveTab] = useState<'profile' | 'portfolio'>('profile')
   const [user, setUser] = useState<User | null>(null)
 
-  // プロフィール用ステート
   const [displayName, setDisplayName] = useState('')
   const [status, setStatus] = useState<'available' | 'busy'>('available')
   const [statusComment, setStatusComment] = useState('')
@@ -43,14 +69,12 @@ export default function Dashboard() {
   const [priceMin, setPriceMin] = useState<string>('5000')
   const [avatarUrl, setAvatarUrl] = useState('')
 
-  // 連絡先・SNSリンク用ステート
   const [externalEstimationUrl, setExternalEstimationUrl] = useState('')
   const [twitterUrl, setTwitterUrl] = useState('')
   const [instagramUrl, setInstagramUrl] = useState('')
   const [pixivUrl, setPixivUrl] = useState('')
   const [websiteUrl, setWebsiteUrl] = useState('')
 
-  // ポートフォリオ用ステート（最大4枚のURL管理）
   const [portfolioUrls, setPortfolioUrls] = useState<string[]>(['', '', '', ''])
 
   useEffect(() => {
@@ -62,7 +86,6 @@ export default function Dashboard() {
       }
       setUser(user)
 
-      // プロフィール取得
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
@@ -78,27 +101,28 @@ export default function Dashboard() {
         setStatus(profileData.status || 'available')
         setStatusComment(profileData.status_comment || '')
         
-        // tastes が配列でない場合の安全策
         if (Array.isArray(profileData.tastes)) {
           setTastes(profileData.tastes.map((t: any) => String(t)))
         } else {
           setTastes([])
         }
 
-        setLeadTimeDays(profileData.lead_time_days != null ? String(profileData.lead_time_days) : '')
+        // 【原因対策2】取得時に safeParseInt を通して "{}" が State に入るのを防ぐ
+        const parsedLeadTime = safeParseInt(profileData.lead_time_days)
+        setLeadTimeDays(parsedLeadTime !== null ? String(parsedLeadTime) : '')
+
+        const parsedPriceMin = safeParseInt(profileData.price_min)
+        setPriceMin(parsedPriceMin !== null ? String(parsedPriceMin) : '')
+
         setCommercialUseAllowed(profileData.commercial_use_allowed ?? true)
-        setPriceMin(profileData.price_min != null ? String(profileData.price_min) : '')
         setAvatarUrl(profileData.avatar_url || '')
         setExternalEstimationUrl(profileData.external_estimation_url || '')
-        
-        // twitter_url と x_url の両方に対応
-        setTwitterUrl(profileData.twitter_url || profileData.x_url || '')
+        setTwitterUrl(profileData.twitter_url || '')
         setInstagramUrl(profileData.instagram_url || '')
         setPixivUrl(profileData.pixiv_url || '')
         setWebsiteUrl(profileData.website_url || '')
       }
 
-      // ポートフォリオ作品取得
       const { data: portfolioData } = await supabase
         .from('portfolio_items')
         .select('image_url, sort_order')
@@ -121,14 +145,12 @@ export default function Dashboard() {
     checkUserAndFetchData()
   }, [router])
 
-  // プリセットタグのON/OFF切り替え
   const togglePresetTaste = (tag: string) => {
     setTastes((prev) =>
       prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
     )
   }
 
-  // 自由入力タグの追加
   const handleAddCustomTaste = () => {
     const trimmed = customTasteInput.trim()
     if (!trimmed) return
@@ -138,48 +160,84 @@ export default function Dashboard() {
     setCustomTasteInput('')
   }
 
-  // タグの削除
   const handleRemoveTaste = (tagToRemove: string) => {
     setTastes((prev) => prev.filter((t) => t !== tagToRemove))
   }
+// ファイルアップロードハンドラー
 
-  // プロフィール保存
-  const handleSaveProfile = async (e: React.FormEvent) => {
+  const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>, index: number) => {
+    const file = e.target.files?.[0]
+    if (!file || !user) return
+
+    try {
+      setUploadingIndex(index)
+      const fileExt = file.name.split('.').pop()
+      const fileName = `${user.id}/${Date.now()}_${index}.${fileExt}`
+
+      const { error: uploadError } = await supabase.storage
+        .from('portfolios')
+        .upload(fileName, file, { upsert: true })
+
+      if (uploadError) throw uploadError
+
+      const { data: publicUrlData } = supabase.storage
+        .from('portfolios')
+        .getPublicUrl(fileName)
+
+      const nextUrls = [...portfolioUrls]
+      nextUrls[index] = publicUrlData.publicUrl
+      setPortfolioUrls(nextUrls)
+    } catch (error: any) {
+      alert('画像のアップロードに失敗しました: ' + error.message)
+    } finally {
+      setUploadingIndex(null)
+    }
+  }
+const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!user) return
     setSaving(true)
 
-    // 数値の安全なパース (空文字は null に変換)
-    const numPrice = priceMin.trim() === '' ? null : parseInt(priceMin, 10)
-    const numLeadTime = leadTimeDays.trim() === '' ? null : parseInt(leadTimeDays, 10)
+    // --- 【ここから修正】どんな異常な値が入っていても安全に数値またはnullにする処理 ---
+    const cleanInteger = (val: any): number | null => {
+      if (val === null || val === undefined || typeof val === 'object') return null
+      const str = String(val).replace(/[{}]/g, '').trim() // "{}" などの波括弧を強制除去
+      if (str === '' || str === 'null' || str === 'undefined') return null
+      const parsed = parseInt(str, 10)
+      return isNaN(parsed) ? null : parsed
+    }
 
-    const finalPriceMin = numPrice !== null && !isNaN(numPrice) ? numPrice : null
-    const finalLeadTimeDays = numLeadTime !== null && !isNaN(numLeadTime) ? numLeadTime : null
+    const finalPriceMin = cleanInteger(priceMin)
+    const finalLeadTimeDays = cleanInteger(leadTimeDays)
+    // --- 【ここまで】 ---
 
-    // 配列データを安全な文字列配列（string[]）として作成
     const cleanTastes = Array.isArray(tastes) 
       ? tastes.map((t) => String(t).trim()).filter((t) => t.length > 0)
       : []
 
-    // 送信データ構造の構築
-    const profilePayload: Record<string, any> = {
+// app/dashboard/page.tsx の handleSaveProfile 内
+
+    // 一時的なテスト用コード（特定用）
+
+    const profilePayload = {
       user_id: user.id,
-      display_name: displayName.trim(),
+      display_name: displayName ? displayName.trim() : '',
       status: status,
-      status_comment: statusComment.trim() || null,
+      status_comment: statusComment ? statusComment.trim() : null,
       tastes: cleanTastes,
-      lead_time_days: finalLeadTimeDays,
-      price_min: finalPriceMin,
-      commercial_use_allowed: commercialUseAllowed,
-      avatar_url: avatarUrl.trim() || null,
-      external_estimation_url: externalEstimationUrl.trim() || null,
-      twitter_url: twitterUrl.trim() || null,
-      x_url: twitterUrl.trim() || null, // DBが x_url でも twitter_url でも耐えられるよう両方セット
-      instagram_url: instagramUrl.trim() || null,
-      pixiv_url: pixivUrl.trim() || null,
-      website_url: websiteUrl.trim() || null,
+      lead_time_days: finalLeadTimeDays, // 確実に number | null
+      price_min: finalPriceMin,           // 確実に number | null
+      commercial_use_allowed: Boolean(commercialUseAllowed),
+      avatar_url: avatarUrl ? avatarUrl.trim() : null,
+      external_estimation_url: externalEstimationUrl ? externalEstimationUrl.trim() : null,
+      twitter_url: twitterUrl ? twitterUrl.trim() : null,
+      instagram_url: instagramUrl ? instagramUrl.trim() : null,
+      pixiv_url: pixivUrl ? pixivUrl.trim() : null,
+      website_url: websiteUrl ? websiteUrl.trim() : null,
       updated_at: new Date().toISOString(),
     }
+    // デバッグ確認用（ブラウザのコンソールで送信データを確認できます）
+    console.log('★実際に送信されるデータ:', JSON.stringify(profilePayload, null, 2))
 
     const { error } = await supabase
       .from('profiles')
@@ -188,20 +246,17 @@ export default function Dashboard() {
     setSaving(false)
 
     if (error) {
-      console.error('保存エラー詳細:', error)
+      console.error('保存エラー詳細:', JSON.stringify(error, null, 2))
       alert('保存に失敗しました: ' + error.message)
     } else {
       alert('プロフィール情報を更新しました！')
     }
   }
-
-  // ポートフォリオ保存
   const handleSavePortfolio = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!user) return
     setSaving(true)
 
-    // 一旦全削除して入れ替え
     const { error: deleteError } = await supabase
       .from('portfolio_items')
       .delete()
@@ -253,7 +308,6 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50/80 text-slate-800 pb-20 font-sans antialiased selection:bg-indigo-600 selection:text-white">
-      {/* ヘッダー */}
       <header className="px-6 py-4 bg-white/80 backdrop-blur-lg border-b border-slate-200/80 sticky top-0 z-30 shadow-xs">
         <div className="max-w-5xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-3">
@@ -287,10 +341,7 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {/* メインコンテンツ */}
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-
-        {/* タブナビゲーション */}
         <div className="flex gap-2 border-b border-slate-200/80 pb-1">
           <button
             type="button"
@@ -322,7 +373,6 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {/* 1. 基本プロフィール編集フォーム */}
         {activeTab === 'profile' && (
           <form onSubmit={handleSaveProfile} className="bg-white rounded-2xl border border-slate-200/80 p-6 sm:p-8 space-y-6 shadow-sm">
             <div className="border-b border-slate-100 pb-4">
@@ -331,7 +381,6 @@ export default function Dashboard() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              {/* クリエイター名 */}
               <div className="space-y-1.5 sm:col-span-2">
                 <label className="text-xs font-bold text-slate-700">表示名 (クリエイター名) <span className="text-rose-500">*</span></label>
                 <input
@@ -344,7 +393,6 @@ export default function Dashboard() {
                 />
               </div>
 
-              {/* 受付状況 */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700">現在の受付ステータス</label>
                 <select
@@ -357,7 +405,6 @@ export default function Dashboard() {
                 </select>
               </div>
 
-              {/* 参考最低価格 */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700">参考最低価格 (円)</label>
                 <div className="relative">
@@ -374,7 +421,6 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* 目安納期 */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700">目安納期 (日数)</label>
                 <input
@@ -387,7 +433,6 @@ export default function Dashboard() {
                 />
               </div>
 
-              {/* 商用利用フラグ */}
               <div className="space-y-1.5 flex flex-col justify-end">
                 <label className="flex items-center gap-2.5 p-2.5 rounded-xl border border-slate-200 bg-slate-50/50 cursor-pointer hover:bg-slate-50 transition-colors">
                   <input
@@ -400,7 +445,6 @@ export default function Dashboard() {
                 </label>
               </div>
 
-              {/* アイコンURL */}
               <div className="space-y-1.5 sm:col-span-2">
                 <label className="text-xs font-bold text-slate-700">プロフィールアイコン画像URL (任意)</label>
                 <input
@@ -412,7 +456,6 @@ export default function Dashboard() {
                 />
               </div>
 
-              {/* 自己紹介 */}
               <div className="space-y-1.5 sm:col-span-2">
                 <label className="text-xs font-bold text-slate-700">自己紹介・PRコメント</label>
                 <textarea
@@ -424,11 +467,8 @@ export default function Dashboard() {
                 />
               </div>
 
-              {/* 得意なテイスト・タグ設定 */}
               <div className="space-y-3 sm:col-span-2 border-t border-slate-100 pt-4">
                 <label className="text-xs font-bold text-slate-700">得意なテイスト・タグ設定</label>
-                
-                {/* 定番タグ */}
                 <div className="space-y-1.5">
                   <p className="text-[11px] font-semibold text-slate-400">よく使われるタグ（タップで選択）</p>
                   <div className="flex flex-wrap gap-1.5">
@@ -453,7 +493,6 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* 自由入力タグ */}
                 <div className="space-y-1.5 pt-2">
                   <p className="text-[11px] font-semibold text-slate-400">オリジナルのタグを追加</p>
                   <div className="flex gap-2">
@@ -480,7 +519,6 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* 選択中のタグ */}
                 <div className="space-y-1.5 pt-2">
                   <p className="text-[11px] font-semibold text-slate-400">現在設定されているタグ（{tastes.length}件）</p>
                   {tastes.length === 0 ? (
@@ -506,10 +544,8 @@ export default function Dashboard() {
                   )}
                 </div>
               </div>
-
             </div>
 
-            {/* 連絡先・SNSリンク */}
             <div className="border-t border-slate-100 pt-6 space-y-4">
               <div>
                 <h3 className="font-bold text-slate-900 text-xs">連絡先・SNSリンクの設定</h3>
@@ -584,12 +620,11 @@ export default function Dashboard() {
           </form>
         )}
 
-        {/* 2. ポートフォリオ作品設定フォーム */}
         {activeTab === 'portfolio' && (
           <form onSubmit={handleSavePortfolio} className="bg-white rounded-2xl border border-slate-200/80 p-6 sm:p-8 space-y-6 shadow-sm">
             <div className="border-b border-slate-100 pb-4">
-              <h2 className="font-bold text-slate-900 text-sm">作品ギャラリー画像URLの設定</h2>
-              <p className="text-xs text-slate-400 mt-0.5">※1枚目の画像がトップ画面の代表メインサムネイルとして表示されます</p>
+              <h2 className="font-bold text-slate-900 text-sm">作品ギャラリー画像の設定</h2>
+              <p className="text-xs text-slate-400 mt-0.5">※ファイルアップロードまたは直接URL指定が可能です。1枚目がメイン代表画像になります。</p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -599,23 +634,50 @@ export default function Dashboard() {
                     <label className="text-xs font-bold text-slate-700">
                       作品画像 {idx + 1} {idx === 0 && <span className="text-indigo-600 font-bold ml-1">(メイン代表画像)</span>}
                     </label>
+                    {url && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = [...portfolioUrls]
+                          next[idx] = ''
+                          setPortfolioUrls(next)
+                        }}
+                        className="text-[11px] text-rose-500 font-semibold hover:underline cursor-pointer"
+                      >
+                        クリア
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="space-y-1">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleFileUpload(e, idx)}
+                      disabled={uploadingIndex === idx}
+                      className="block w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer disabled:opacity-50"
+                    />
                   </div>
 
                   <input
                     type="url"
-                    placeholder={`https://example.com/work_${idx + 1}.png`}
+                    placeholder={`または URL を直接入力 (https://...)`}
                     value={url}
                     onChange={(e) => {
                       const next = [...portfolioUrls]
                       next[idx] = e.target.value
                       setPortfolioUrls(next)
                     }}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-300"
                   />
 
-                  {/* プレビュー表示 */}
                   <div className="w-full aspect-[4/3] rounded-lg border border-slate-200 bg-white overflow-hidden flex items-center justify-center relative">
-                    {url ? (
+                    {uploadingIndex === idx ? (
+                      <div className="flex items-center gap-2 text-xs font-semibold text-indigo-600">
+                        <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                        アップロード中...
+                      </div>
+                    ) : url ? (
                       <img
                         src={url}
                         alt={`プレビュー ${idx + 1}`}
@@ -631,7 +693,7 @@ export default function Dashboard() {
 
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || uploadingIndex !== null}
               className="w-full py-3 bg-slate-900 hover:bg-indigo-600 text-white font-bold rounded-xl text-xs transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer disabled:opacity-50"
             >
               {saving ? '更新処理中...' : '作品ポートフォリオを保存'}
