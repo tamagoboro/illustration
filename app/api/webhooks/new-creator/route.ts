@@ -3,31 +3,41 @@ import { TwitterApi } from 'twitter-api-v2'
 
 export async function POST(req: Request) {
   try {
-    // 1. セキュリティチェック（Webhook用のシークレットキー検証）
+    // 1. セキュリティチェック
     const authHeader = req.headers.get('x-webhook-secret')
     if (authHeader !== process.env.SUPABASE_WEBHOOK_SECRET) {
+      console.warn('Webhook認証エラー: Secretキーが一致しません')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const body = await req.json()
 
-    // 2. 初回登録（INSERT）のみ実行し、更新（UPDATE）などはスキップ
+    // 2. 初回登録（INSERT）のみ実行
     if (body.type !== 'INSERT') {
       return NextResponse.json({ message: 'Skipped: Not an INSERT event' }, { status: 200 })
     }
 
     const profile = body.record
-
     if (!profile || !profile.display_name) {
       return NextResponse.json({ message: 'No profile data found' }, { status: 400 })
     }
 
-    // ★ 3. リクエスト処理時に X API クライアントを初期化（ビルドエラー回避）
+    // 3. 環境変数の存在確認
+    if (
+      !process.env.TWITTER_API_KEY ||
+      !process.env.TWITTER_API_SECRET ||
+      !process.env.TWITTER_ACCESS_TOKEN ||
+      !process.env.TWITTER_ACCESS_SECRET
+    ) {
+      console.error('X APIの環境変数が設定されていません')
+      return NextResponse.json({ error: 'Twitter API keys are missing' }, { status: 500 })
+    }
+
     const twitterClient = new TwitterApi({
-      appKey: process.env.TWITTER_API_KEY!,
-      appSecret: process.env.TWITTER_API_SECRET!,
-      accessToken: process.env.TWITTER_ACCESS_TOKEN!,
-      accessSecret: process.env.TWITTER_ACCESS_SECRET!,
+      appKey: process.env.TWITTER_API_KEY,
+      appSecret: process.env.TWITTER_API_SECRET,
+      accessToken: process.env.TWITTER_ACCESS_TOKEN,
+      accessSecret: process.env.TWITTER_ACCESS_SECRET,
     })
 
     // 4. ツイート文面の作成
@@ -41,7 +51,7 @@ export async function POST(req: Request) {
       `#イラストレーター #イラストレーター検索サイト\n` +
       `#イラスト依頼`
 
-    // 5. 画像のアップロード処理（サムネイルまたはアバターが存在する場合）
+    // 5. 画像の取得とアップロード
     let mediaId: string | undefined
     const imageUrl = profile.thumbnail_url || profile.avatar_url
 
@@ -53,15 +63,17 @@ export async function POST(req: Request) {
           const buffer = Buffer.from(arrayBuffer)
           const mimeType = imageRes.headers.get('content-type') || 'image/jpeg'
 
-          // X (v1.1 API) へ画像をアップロード
+          // 画像アップロード実行
           mediaId = await twitterClient.v1.uploadMedia(buffer, { mimeType })
+        } else {
+          console.error(`画像の取得に失敗しました: HTTP ${imageRes.status}`)
         }
       } catch (imgError) {
-        console.error('画像のアップロードに失敗しました（テキストのみで投稿します）:', imgError)
+        console.error('画像アップロードエラー（テキストのみで試行します）:', imgError)
       }
     }
 
-    // 6. Xへ投稿（画像がある場合は添付）
+    // 6. Xへ投稿
     if (mediaId) {
       await twitterClient.v2.tweet({
         text: tweetText,
@@ -72,8 +84,9 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error('X自動投稿エラー:', error)
-    return NextResponse.json({ error: 'Failed to post tweet' }, { status: 500 })
+  } catch (error: any) {
+    // X APIのエラーレスポンス詳細を出力
+    console.error('X自動投稿エラー詳細:', error?.data || error)
+    return NextResponse.json({ error: 'Failed to post tweet', details: error?.data }, { status: 500 })
   }
 }
