@@ -117,16 +117,17 @@ export default function LoginPage() {
                 onChange={(e) => setAgreedTerms(e.target.checked)}
                 className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
               />
-              <span className="text-xs text-slate-600 leading-normal">
+                <span className="text-xs text-slate-600 leading-normal">
                 <Link
-                  href="/terms"
-                  target="_blank"
-                  className="font-bold text-indigo-600 hover:underline"
+                    href="/terms"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-bold text-indigo-600 hover:underline"
                 >
-                  利用規約
+                    利用規約
                 </Link>
                 に同意する
-              </span>
+                </span>
             </label>
           </div>
 
