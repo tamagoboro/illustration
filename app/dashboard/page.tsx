@@ -136,19 +136,25 @@ export default function Dashboard() {
     if (!user) return
     setSaving(true)
 
-    // 数値型の項目に空文字等が入らないよう安全にパース
-    const parsedPriceMin = priceMin === '' || isNaN(Number(priceMin)) ? 0 : Number(priceMin)
-    const parsedLeadTimeDays = leadTimeDays === '' || isNaN(Number(leadTimeDays)) ? 0 : Number(leadTimeDays)
+    // {} や NaN、空文字などを確実に排除して数値に変換する関数
+    const safeParseInt = (val: unknown, defaultValue: number = 0): number => {
+      if (typeof val === 'number') return isNaN(val) ? defaultValue : val
+      if (typeof val === 'string' && val.trim() !== '') {
+        const parsed = parseInt(val, 10)
+        return isNaN(parsed) ? defaultValue : parsed
+      }
+      return defaultValue
+    }
 
     const profileData = {
       user_id: user.id,
       display_name: displayName,
-      status,
-      status_comment: statusComment,
-      tastes: tastes,
-      lead_time_days: parsedLeadTimeDays,
-      commercial_use_allowed: commercialUseAllowed,
-      price_min: parsedPriceMin,
+      status: status || 'available',
+      status_comment: statusComment || null,
+      tastes: Array.isArray(tastes) ? tastes : [],
+      lead_time_days: safeParseInt(leadTimeDays, 14),
+      commercial_use_allowed: Boolean(commercialUseAllowed),
+      price_min: safeParseInt(priceMin, 5000),
       avatar_url: avatarUrl || null,
       external_estimation_url: externalEstimationUrl || null,
       twitter_url: twitterUrl || null,
@@ -329,7 +335,7 @@ export default function Dashboard() {
                     min="0"
                     step="500"
                     value={priceMin}
-                    onChange={(e) => setPriceMin(e.target.value === '' ? '' : Number(e.target.value))}
+                    onChange={(e) => setPriceMin(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
                     className="w-full pl-7 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-semibold text-indigo-600"
                   />
                 </div>
@@ -342,7 +348,7 @@ export default function Dashboard() {
                   type="number"
                   min="1"
                   value={leadTimeDays}
-                  onChange={(e) => setLeadTimeDays(e.target.value === '' ? '' : Number(e.target.value))}
+                  onChange={(e) => setLeadTimeDays(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                 />
               </div>
@@ -388,7 +394,7 @@ export default function Dashboard() {
               <div className="space-y-3 sm:col-span-2 border-t border-slate-100 pt-4">
                 <label className="text-xs font-bold text-slate-700">得意なテイスト・タグ設定</label>
                 
-                {/* 1. 定番タグからの複数選択 */}
+                {/* 定番タグ */}
                 <div className="space-y-1.5">
                   <p className="text-[11px] font-semibold text-slate-400">よく使われるタグ（タップで選択）</p>
                   <div className="flex flex-wrap gap-1.5">
@@ -413,7 +419,7 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* 2. 自由追加フィールド */}
+                {/* 自由入力タグ */}
                 <div className="space-y-1.5 pt-2">
                   <p className="text-[11px] font-semibold text-slate-400">オリジナルのタグを追加</p>
                   <div className="flex gap-2">
@@ -440,7 +446,7 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* 3. 現在選択・追加されているタグ一覧 */}
+                {/* 選択中のタグ */}
                 <div className="space-y-1.5 pt-2">
                   <p className="text-[11px] font-semibold text-slate-400">現在設定されているタグ（{tastes.length}件）</p>
                   {tastes.length === 0 ? (
@@ -469,7 +475,7 @@ export default function Dashboard() {
 
             </div>
 
-            {/* 連絡先・SNSリンク設定セクション */}
+            {/* 連絡先・SNSリンク */}
             <div className="border-t border-slate-100 pt-6 space-y-4">
               <div>
                 <h3 className="font-bold text-slate-900 text-xs">連絡先・SNSリンクの設定</h3>
