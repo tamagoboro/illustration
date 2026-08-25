@@ -80,7 +80,7 @@ export default function Dashboard() {
         
         // tastes が配列でない場合の安全策
         if (Array.isArray(profileData.tastes)) {
-          setTastes(profileData.tastes)
+          setTastes(profileData.tastes.map((t: any) => String(t)))
         } else {
           setTastes([])
         }
@@ -156,13 +156,18 @@ export default function Dashboard() {
     const finalPriceMin = numPrice !== null && !isNaN(numPrice) ? numPrice : null
     const finalLeadTimeDays = numLeadTime !== null && !isNaN(numLeadTime) ? numLeadTime : null
 
+    // 配列データを安全な文字列配列（string[]）として作成
+    const cleanTastes = Array.isArray(tastes) 
+      ? tastes.map((t) => String(t).trim()).filter((t) => t.length > 0)
+      : []
+
     // 送信データ構造の構築
     const profilePayload: Record<string, any> = {
       user_id: user.id,
       display_name: displayName.trim(),
       status: status,
       status_comment: statusComment.trim() || null,
-      tastes: tastes,
+      tastes: cleanTastes,
       lead_time_days: finalLeadTimeDays,
       price_min: finalPriceMin,
       commercial_use_allowed: commercialUseAllowed,
