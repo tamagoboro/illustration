@@ -10,14 +10,26 @@ export default function CreatorDetailPage({ params }: { params: Promise<{ id: st
   const [works, setWorks] = useState<PortfolioItem[]>([])
   const [loading, setLoading] = useState(true)
 
-  // お気に入り関連のステート
+  // お気に入り関連のステート（localStorage連動）
   const [isFavorite, setIsFavorite] = useState(false)
-  const [favLoading, setFavLoading] = useState(false)
 
   // 連絡先・見積もりモーダルの開閉
   const [isContactOpen, setIsContactOpen] = useState(false)
 
-  // 1. Supabaseから該当ユーザーのプロフィール、ポートフォリオ、お気に入り状態を取得
+  // ★ 1. 初回ロード時に localStorage からお気に入り状態をチェック
+  useEffect(() => {
+    const storedFavs = localStorage.getItem('favorite_creators')
+    if (storedFavs) {
+      try {
+        const favArray: string[] = JSON.parse(storedFavs)
+        setIsFavorite(favArray.includes(id))
+      } catch (e) {
+        console.error('Failed to parse favorites from localStorage', e)
+      }
+    }
+  }, [id])
+
+  // 2. Supabaseから該当ユーザーのプロフィール、ポートフォリオを取得
   useEffect(() => {
     const fetchCreatorData = async () => {
       setLoading(true)
@@ -48,65 +60,26 @@ export default function CreatorDetailPage({ params }: { params: Promise<{ id: st
         setWorks(worksData || [])
       }
 
-      // ログイン中ユーザーのお気に入り状態を取得
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const { data: favData } = await supabase
-          .from('favorites')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('creator_id', id)
-          .maybeSingle()
-
-        if (favData) {
-          setIsFavorite(true)
-        }
-      }
-
       setLoading(false)
     }
 
     fetchCreatorData()
   }, [id])
 
-  // お気に入りのトグル処理
-  const handleToggleFavorite = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    
-    if (!user) {
-      alert('お気に入り機能を利用するにはログインが必要です。')
-      return
-    }
+  // ★ 3. お気に入りのトグル処理（localStorageに保存）
+  const handleToggleFavorite = () => {
+    const storedFavs = localStorage.getItem('favorite_creators')
+    let favArray: string[] = storedFavs ? JSON.parse(storedFavs) : []
 
-    setFavLoading(true)
-
-    if (isFavorite) {
-      // お気に入り解除
-      const { error } = await supabase
-        .from('favorites')
-        .delete()
-        .eq('user_id', user.id)
-        .eq('creator_id', id)
-
-      if (!error) {
-        setIsFavorite(false)
-      } else {
-        console.error('お気に入り解除エラー:', error)
-      }
+    if (favArray.includes(id)) {
+      favArray = favArray.filter((favId) => favId !== id)
+      setIsFavorite(false)
     } else {
-      // お気に入り追加
-      const { error } = await supabase
-        .from('favorites')
-        .insert([{ user_id: user.id, creator_id: id }])
-
-      if (!error) {
-        setIsFavorite(true)
-      } else {
-        console.error('お気に入り追加エラー:', error)
-      }
+      favArray.push(id)
+      setIsFavorite(true)
     }
 
-    setFavLoading(false)
+    localStorage.setItem('favorite_creators', JSON.stringify(favArray))
   }
 
   if (loading) {
@@ -181,8 +154,7 @@ export default function CreatorDetailPage({ params }: { params: Promise<{ id: st
             {/* お気に入り追加・解除ボタン */}
             <button
               onClick={handleToggleFavorite}
-              disabled={favLoading}
-              className={`px-6 py-2.5 text-xs font-bold rounded-xl border transition-all flex items-center justify-center gap-1.5 shadow-sm ${
+              className={`px-6 py-2.5 text-xs font-bold rounded-xl border transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer ${
                 isFavorite
                   ? 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100'
                   : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
@@ -194,7 +166,7 @@ export default function CreatorDetailPage({ params }: { params: Promise<{ id: st
 
             <button
               onClick={() => setIsContactOpen(true)}
-              className="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition text-center shadow-sm text-sm"
+              className="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition text-center shadow-sm text-sm cursor-pointer"
             >
               見積もり・相談をする
             </button>
@@ -233,7 +205,7 @@ export default function CreatorDetailPage({ params }: { params: Promise<{ id: st
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl relative space-y-5">
             <button
               onClick={() => setIsContactOpen(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-xl font-bold"
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-xl font-bold cursor-pointer"
             >
               ✕
             </button>
