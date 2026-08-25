@@ -5,6 +5,22 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
+// プリセット用のおすすめタグ一覧
+const PRESET_TASTES = [
+  'アイコン',
+  'キャラクター',
+  '水彩風',
+  '厚塗り',
+  'アニメ風',
+  'SD・ちびキャラ',
+  'ゲーム用イラスト',
+  '一枚絵',
+  'ロゴ・デザイン',
+  'ヘッダー',
+  'VTuber向け',
+  'リアル系'
+]
+
 export default function Dashboard() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -16,7 +32,8 @@ export default function Dashboard() {
   const [displayName, setDisplayName] = useState('')
   const [status, setStatus] = useState<'available' | 'busy'>('available')
   const [statusComment, setStatusComment] = useState('')
-  const [tastesText, setTastesText] = useState('')
+  const [tastes, setTastes] = useState<string[]>([]) // 配列で管理
+  const [customTasteInput, setCustomTasteInput] = useState('') // 自由入力用
   const [leadTimeDays, setLeadTimeDays] = useState(14)
   const [commercialUseAllowed, setCommercialUseAllowed] = useState(true)
   const [priceMin, setPriceMin] = useState(5000)
@@ -52,7 +69,7 @@ export default function Dashboard() {
         setDisplayName(profileData.display_name || '')
         setStatus(profileData.status || 'available')
         setStatusComment(profileData.status_comment || '')
-        setTastesText(profileData.tastes ? profileData.tastes.join(', ') : '')
+        setTastes(profileData.tastes || [])
         setLeadTimeDays(profileData.lead_time_days || 14)
         setCommercialUseAllowed(profileData.commercial_use_allowed ?? true)
         setPriceMin(profileData.price_min ?? 5000)
@@ -87,23 +104,42 @@ export default function Dashboard() {
     checkUserAndFetchData()
   }, [router])
 
+  // プリセットタグのON/OFF切り替え
+  const togglePresetTaste = (tag: string) => {
+    if (tastes.includes(tag)) {
+      setTastes(tastes.filter((t) => t !== tag))
+    } else {
+      setTastes([...tastes, tag])
+    }
+  }
+
+  // 自由入力タグの追加
+  const handleAddCustomTaste = () => {
+    const trimmed = customTasteInput.trim()
+    if (!trimmed) return
+    if (!tastes.includes(trimmed)) {
+      setTastes([...tastes, trimmed])
+    }
+    setCustomTasteInput('')
+  }
+
+  // タグの削除
+  const handleRemoveTaste = (tagToRemove: string) => {
+    setTastes(tastes.filter((t) => t !== tagToRemove))
+  }
+
   // プロフィール保存
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!user) return
     setSaving(true)
 
-    const tastesArray = tastesText
-      .split(',')
-      .map((t) => t.trim())
-      .filter((t) => t.length > 0)
-
     const profileData = {
       user_id: user.id,
       display_name: displayName,
       status,
       status_comment: statusComment,
-      tastes: tastesArray,
+      tastes: tastes, // そのまま配列で保存
       lead_time_days: Number(leadTimeDays),
       commercial_use_allowed: commercialUseAllowed,
       price_min: Number(priceMin),
@@ -135,7 +171,6 @@ export default function Dashboard() {
     if (!user) return
     setSaving(true)
 
-    // 既存削除して再登録
     await supabase.from('portfolio_items').delete().eq('user_id', user.id)
 
     const itemsToInsert = portfolioUrls
@@ -343,17 +378,89 @@ export default function Dashboard() {
                 />
               </div>
 
-              {/* タグ設定 */}
-              <div className="space-y-1.5 sm:col-span-2">
-                <label className="text-xs font-bold text-slate-700">得意なテイスト・タグ (カンマ区切り)</label>
-                <input
-                  type="text"
-                  placeholder="アイコン, キャラクター, 水彩風, ゲーム用イラスト"
-                  value={tastesText}
-                  onChange={(e) => setTastesText(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-                />
+              {/* ★改良版：得意なテイスト・タグ設定 ★ */}
+              <div className="space-y-3 sm:col-span-2 border-t border-slate-100 pt-4">
+                <label className="text-xs font-bold text-slate-700">得意なテイスト・タグ設定</label>
+                
+                {/* 1. 定番タグからの複数選択 */}
+                <div className="space-y-1.5">
+                  <p className="text-[11px] font-semibold text-slate-400">よく使われるタグ（タップで選択）</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {PRESET_TASTES.map((tag) => {
+                      const isSelected = tastes.includes(tag)
+                      return (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => togglePresetTaste(tag)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                            isSelected
+                              ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs'
+                              : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          {isSelected ? '✓ ' : '+ '}
+                          {tag}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* 2. 自由追加フィールド */}
+                <div className="space-y-1.5 pt-2">
+                  <p className="text-[11px] font-semibold text-slate-400">オリジナルのタグを追加</p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="例: ドット絵, 和風イラスト..."
+                      value={customTasteInput}
+                      onChange={(e) => setCustomTasteInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          handleAddCustomTaste()
+                        }
+                      }}
+                      className="flex-1 px-3.5 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddCustomTaste}
+                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all"
+                    >
+                      追加
+                    </button>
+                  </div>
+                </div>
+
+                {/* 3. 現在選択・追加されているタグ一覧 */}
+                <div className="space-y-1.5 pt-2">
+                  <p className="text-[11px] font-semibold text-slate-400">現在設定されているタグ（{tastes.length}件）</p>
+                  {tastes.length === 0 ? (
+                    <p className="text-xs text-slate-300 italic">タグが選択されていません</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {tastes.map((tag) => (
+                        <span
+                          key={tag}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-bold"
+                        >
+                          #{tag}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveTaste(tag)}
+                            className="hover:text-rose-600 text-slate-400 text-xs font-bold px-0.5"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
+
             </div>
 
             {/* 連絡先・SNSリンク設定セクション */}
