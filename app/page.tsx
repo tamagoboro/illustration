@@ -16,6 +16,7 @@ export default function Home() {
   // 検索・フィルター用ステート
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedTastes, setSelectedTastes] = useState<string[]>([])
+  const [tasteSearch, setTasteSearch] = useState('') // テイスト専用検索
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [maxLeadTime, setMaxLeadTime] = useState<number | ''>('')
   const [maxPrice, setMaxPrice] = useState<number | ''>('')
@@ -47,10 +48,10 @@ export default function Home() {
     const fetchProfilesWithImages = async () => {
       setLoading(true)
 
+      // profiles テーブルの全件を取得
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
-        .order('updated_at', { ascending: false })
 
       if (profileError) {
         console.error('profilesの取得に失敗しました:', profileError)
@@ -78,7 +79,10 @@ export default function Home() {
           thumbnail_url: p.avatar_url || imageMap[p.user_id] || null,
         }))
 
-        setProfiles(combined)
+        // 全件データをリロード毎にランダム順へ並び替え
+        const randomized = [...combined].sort(() => Math.random() - 0.5)
+
+        setProfiles(randomized)
       }
       setLoading(false)
     }
@@ -92,7 +96,7 @@ export default function Home() {
       const nextFavorites = prev.includes(userId)
         ? prev.filter((id) => id !== userId)
         : [...prev, userId]
-      
+
       localStorage.setItem('favorite_creators', JSON.stringify(nextFavorites))
       return nextFavorites
     })
@@ -125,6 +129,7 @@ export default function Home() {
   const resetFilters = () => {
     setSearchTerm('')
     setSelectedTastes([])
+    setTasteSearch('')
     setStatusFilter('ALL')
     setMaxLeadTime('')
     setMaxPrice('')
@@ -168,11 +173,16 @@ export default function Home() {
     )
   })
 
-  const allTastes = Array.from(new Set(profiles.flatMap((p) => p.tastes || [])))
+  // テイストの抽出（重複排除 ➔ 専用検索キーワードで絞り込み ➔ 上限20件）
+  const displayedTastes = Array.from(new Set(profiles.flatMap((p) => p.tastes || [])))
+    .filter((taste) =>
+      taste.toLowerCase().includes(tasteSearch.toLowerCase())
+    )
+    .slice(0, 20)
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-32 font-sans antialiased selection:bg-indigo-500 selection:text-white relative overflow-x-hidden">
-      {/* 背景装飾グラデーション（やわらかいパステル系） */}
+      {/* 背景装飾グラデーション */}
       <div className="fixed top-0 left-1/4 w-96 h-96 bg-indigo-200/40 rounded-full blur-3xl pointer-events-none -z-10" />
       <div className="fixed top-1/3 right-10 w-[500px] h-[500px] bg-pink-100/50 rounded-full blur-3xl pointer-events-none -z-10" />
 
@@ -334,34 +344,63 @@ export default function Home() {
               {/* テイストフィルター */}
               <div className="space-y-3 pt-3 border-t border-slate-100">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-700 block">テイスト（複数選択可）</label>
+                  <label className="text-xs font-bold text-slate-700 block">
+                    テイスト（最大20個）
+                  </label>
                   {selectedTastes.length > 0 && (
                     <button
                       onClick={() => setSelectedTastes([])}
                       className="text-[10px] text-indigo-600 hover:underline font-medium"
                     >
-                      クリア
+                      選択解除
                     </button>
                   )}
                 </div>
-                <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
-                  {allTastes.map((taste) => {
-                    const isSelected = selectedTastes.includes(taste)
-                    return (
-                      <button
-                        key={taste}
-                        onClick={() => toggleTaste(taste)}
-                        className={`px-3 py-1.5 rounded-xl text-[11px] font-medium transition-all cursor-pointer flex items-center gap-1 border ${
-                          isSelected
-                            ? 'bg-indigo-600 text-white border-transparent shadow-sm'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border-slate-200/60'
-                        }`}
-                      >
-                        <span>#{taste}</span>
-                        {isSelected && <span className="text-[10px] font-bold">✓</span>}
-                      </button>
-                    )
-                  })}
+
+                {/* テイスト専用の小窓検索 */}
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="テイストを検索..."
+                    value={tasteSearch}
+                    onChange={(e) => setTasteSearch(e.target.value)}
+                    className="w-full px-3 py-1.5 text-[11px] rounded-lg border border-slate-200 bg-slate-50 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                  />
+                  {tasteSearch && (
+                    <button
+                      onClick={() => setTasteSearch('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-[10px] font-bold"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+
+                {/* テイスト一覧（スクロール対応） */}
+                <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
+                  {displayedTastes.length === 0 ? (
+                    <p className="text-[11px] text-slate-400 py-1">
+                      一致するテイストが見つかりません
+                    </p>
+                  ) : (
+                    displayedTastes.map((taste) => {
+                      const isSelected = selectedTastes.includes(taste)
+                      return (
+                        <button
+                          key={taste}
+                          onClick={() => toggleTaste(taste)}
+                          className={`px-2.5 py-1 rounded-xl text-[11px] font-medium transition-all cursor-pointer flex items-center gap-1 border ${
+                            isSelected
+                              ? 'bg-indigo-600 text-white border-transparent shadow-sm'
+                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border-slate-200/60'
+                          }`}
+                        >
+                          <span>#{taste}</span>
+                          {isSelected && <span className="text-[10px] font-bold">✓</span>}
+                        </button>
+                      )
+                    })
+                  )}
                 </div>
               </div>
             </div>
@@ -421,6 +460,8 @@ export default function Home() {
                           <img
                             src={profile.thumbnail_url}
                             alt={profile.display_name}
+                            loading="lazy"
+                            decoding="async"
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
                           />
                         ) : (
