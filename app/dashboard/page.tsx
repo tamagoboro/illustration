@@ -62,12 +62,16 @@ export default function Dashboard() {
       }
       setUser(user)
 
-      // プロフィール取得
-      const { data: profileData } = await supabase
+      // プロフィール取得（406エラー防止のため .maybeSingle() を使用）
+      const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('user_id', user.id)
-        .single()
+        .maybeSingle()
+
+      if (profileError) {
+        console.error('Profile fetch error:', profileError)
+      }
 
       if (profileData) {
         setDisplayName(profileData.display_name || '')
@@ -148,19 +152,19 @@ export default function Dashboard() {
 
     const profileData = {
       user_id: user.id,
-      display_name: displayName,
+      display_name: displayName.trim(),
       status: status || 'available',
-      status_comment: statusComment || null,
+      status_comment: statusComment ? statusComment.trim() : null,
       tastes: Array.isArray(tastes) ? tastes : [],
       lead_time_days: safeParseInt(leadTimeDays, 14),
       commercial_use_allowed: Boolean(commercialUseAllowed),
       price_min: safeParseInt(priceMin, 5000),
-      avatar_url: avatarUrl || null,
-      external_estimation_url: externalEstimationUrl || null,
-      twitter_url: twitterUrl || null,
-      instagram_url: instagramUrl || null,
-      pixiv_url: pixivUrl || null,
-      website_url: websiteUrl || null,
+      avatar_url: avatarUrl ? avatarUrl.trim() : null,
+      external_estimation_url: externalEstimationUrl ? externalEstimationUrl.trim() : null,
+      twitter_url: twitterUrl ? twitterUrl.trim() : null,
+      instagram_url: instagramUrl ? instagramUrl.trim() : null,
+      pixiv_url: pixivUrl ? pixivUrl.trim() : null,
+      website_url: websiteUrl ? websiteUrl.trim() : null,
       updated_at: new Date().toISOString(),
     }
 
@@ -171,6 +175,7 @@ export default function Dashboard() {
     setSaving(false)
 
     if (error) {
+      console.error('Save error details:', error)
       alert('保存に失敗しました: ' + error.message)
     } else {
       alert('プロフィール情報を更新しました！')
@@ -587,7 +592,7 @@ export default function Dashboard() {
                         alt={`プレビュー ${idx + 1}`}
                         className="w-full h-full object-cover"
                         onError={(e) => {
-                          (e.target as HTMLElement).style.display = 'none'
+                          ;(e.target as HTMLElement).style.display = 'none'
                         }}
                       />
                     ) : (
