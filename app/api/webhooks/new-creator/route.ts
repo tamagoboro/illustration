@@ -1,14 +1,6 @@
 import { NextResponse } from 'next/server'
 import { TwitterApi } from 'twitter-api-v2'
 
-// X API クライアント（画像アップロード用に write 権限が必要）
-const twitterClient = new TwitterApi({
-  appKey: process.env.TWITTER_API_KEY!,
-  appSecret: process.env.TWITTER_API_SECRET!,
-  accessToken: process.env.TWITTER_ACCESS_TOKEN!,
-  accessSecret: process.env.TWITTER_ACCESS_SECRET!,
-})
-
 export async function POST(req: Request) {
   try {
     // 1. セキュリティチェック（Webhook用のシークレットキー検証）
@@ -30,7 +22,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: 'No profile data found' }, { status: 400 })
     }
 
-    // 3. ツイート文面の作成
+    // ★ 3. リクエスト処理時に X API クライアントを初期化（ビルドエラー回避）
+    const twitterClient = new TwitterApi({
+      appKey: process.env.TWITTER_API_KEY!,
+      appSecret: process.env.TWITTER_API_SECRET!,
+      accessToken: process.env.TWITTER_ACCESS_TOKEN!,
+      accessSecret: process.env.TWITTER_ACCESS_SECRET!,
+    })
+
+    // 4. ツイート文面の作成
     const name = profile.display_name
     const comment = profile.status_comment || profile.bio || 'よろしくお願いします！'
     const creatorUrl = `https://illustration-jq5k.vercel.app/creator/${profile.user_id}`
@@ -41,13 +41,12 @@ export async function POST(req: Request) {
       `#イラストレーター #イラストレーター検索サイト\n` +
       `#イラスト依頼`
 
-    // 4. 画像のアップロード処理（サムネイルまたはアバターが存在する場合）
+    // 5. 画像のアップロード処理（サムネイルまたはアバターが存在する場合）
     let mediaId: string | undefined
     const imageUrl = profile.thumbnail_url || profile.avatar_url
 
     if (imageUrl) {
       try {
-        // 画像を取得して Buffer 化
         const imageRes = await fetch(imageUrl)
         if (imageRes.ok) {
           const arrayBuffer = await imageRes.arrayBuffer()
@@ -62,7 +61,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // 5. Xへ投稿（画像がある場合は添付）
+    // 6. Xへ投稿（画像がある場合は添付）
     if (mediaId) {
       await twitterClient.v2.tweet({
         text: tweetText,
