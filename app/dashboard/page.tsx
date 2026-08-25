@@ -62,7 +62,7 @@ export default function Dashboard() {
       }
       setUser(user)
 
-      // プロフィール取得（406エラー防止のため .maybeSingle() を使用）
+      // プロフィール取得
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
@@ -78,9 +78,9 @@ export default function Dashboard() {
         setStatus(profileData.status || 'available')
         setStatusComment(profileData.status_comment || '')
         setTastes(Array.isArray(profileData.tastes) ? profileData.tastes : [])
-        setLeadTimeDays(profileData.lead_time_days ?? 14)
+        setLeadTimeDays(typeof profileData.lead_time_days === 'number' ? profileData.lead_time_days : 14)
         setCommercialUseAllowed(profileData.commercial_use_allowed ?? true)
-        setPriceMin(profileData.price_min ?? 5000)
+        setPriceMin(typeof profileData.price_min === 'number' ? profileData.price_min : 5000)
         setAvatarUrl(profileData.avatar_url || '')
         setExternalEstimationUrl(profileData.external_estimation_url || '')
         setTwitterUrl(profileData.twitter_url || '')
@@ -140,34 +140,33 @@ export default function Dashboard() {
     if (!user) return
     setSaving(true)
 
-    // 不正な値（空文字、NaN、オブジェクト等）を厳格に除外し、純粋な number または null に変換
-    const parseIntegerStrict = (val: unknown): number | null => {
-      if (val === null || val === undefined || val === '') return null
-      if (typeof val === 'number') return isNaN(val) ? null : Math.floor(val)
-      if (typeof val === 'string') {
-        const parsed = parseInt(val.trim(), 10)
-        return isNaN(parsed) ? null : parsed
-      }
-      return null
+    // 数値型の安全なバリデーション関数
+    const parseInteger = (val: any): number | null => {
+      if (val === '' || val === null || val === undefined) return null
+      const parsed = parseInt(String(val), 10)
+      return isNaN(parsed) ? null : parsed
     }
 
+    // 送信するデータを完全・安全に整形
     const profileData = {
       user_id: user.id,
       display_name: displayName.trim(),
       status: status || 'available',
-      status_comment: statusComment ? statusComment.trim() : null,
+      status_comment: statusComment.trim() || null,
       tastes: Array.isArray(tastes) ? tastes : [],
-      lead_time_days: parseIntegerStrict(leadTimeDays),
+      lead_time_days: parseInteger(leadTimeDays),
+      price_min: parseInteger(priceMin),
       commercial_use_allowed: Boolean(commercialUseAllowed),
-      price_min: parseIntegerStrict(priceMin),
-      avatar_url: avatarUrl ? avatarUrl.trim() : null,
-      external_estimation_url: externalEstimationUrl ? externalEstimationUrl.trim() : null,
-      twitter_url: twitterUrl ? twitterUrl.trim() : null,
-      instagram_url: instagramUrl ? instagramUrl.trim() : null,
-      pixiv_url: pixivUrl ? pixivUrl.trim() : null,
-      website_url: websiteUrl ? websiteUrl.trim() : null,
+      avatar_url: avatarUrl.trim() || null,
+      external_estimation_url: externalEstimationUrl.trim() || null,
+      twitter_url: twitterUrl.trim() || null,
+      instagram_url: instagramUrl.trim() || null,
+      pixiv_url: pixivUrl.trim() || null,
+      website_url: websiteUrl.trim() || null,
       updated_at: new Date().toISOString(),
     }
+
+    console.log('Save profile payload:', profileData)
 
     const { error } = await supabase
       .from('profiles')
@@ -341,7 +340,10 @@ export default function Dashboard() {
                     min="0"
                     step="500"
                     value={priceMin}
-                    onChange={(e) => setPriceMin(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      setPriceMin(val === '' ? '' : Number(val))
+                    }}
                     className="w-full pl-7 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-semibold text-indigo-600"
                   />
                 </div>
@@ -354,7 +356,10 @@ export default function Dashboard() {
                   type="number"
                   min="1"
                   value={leadTimeDays}
-                  onChange={(e) => setLeadTimeDays(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                  onChange={(e) => {
+                    const val = e.target.value
+                    setLeadTimeDays(val === '' ? '' : Number(val))
+                  }}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                 />
               </div>
