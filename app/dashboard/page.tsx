@@ -38,9 +38,9 @@ export default function Dashboard() {
   const [statusComment, setStatusComment] = useState('')
   const [tastes, setTastes] = useState<string[]>([])
   const [customTasteInput, setCustomTasteInput] = useState('')
-  const [leadTimeDays, setLeadTimeDays] = useState(14)
+  const [leadTimeDays, setLeadTimeDays] = useState<number | ''>(14)
   const [commercialUseAllowed, setCommercialUseAllowed] = useState(true)
-  const [priceMin, setPriceMin] = useState(5000)
+  const [priceMin, setPriceMin] = useState<number | ''>(5000)
   const [avatarUrl, setAvatarUrl] = useState('')
 
   // 連絡先・SNSリンク用ステート
@@ -136,15 +136,19 @@ export default function Dashboard() {
     if (!user) return
     setSaving(true)
 
+    // 数値型の項目に空文字等が入らないよう安全にパース
+    const parsedPriceMin = priceMin === '' || isNaN(Number(priceMin)) ? 0 : Number(priceMin)
+    const parsedLeadTimeDays = leadTimeDays === '' || isNaN(Number(leadTimeDays)) ? 0 : Number(leadTimeDays)
+
     const profileData = {
       user_id: user.id,
       display_name: displayName,
       status,
       status_comment: statusComment,
       tastes: tastes,
-      lead_time_days: Number(leadTimeDays),
+      lead_time_days: parsedLeadTimeDays,
       commercial_use_allowed: commercialUseAllowed,
-      price_min: Number(priceMin),
+      price_min: parsedPriceMin,
       avatar_url: avatarUrl || null,
       external_estimation_url: externalEstimationUrl || null,
       twitter_url: twitterUrl || null,
@@ -179,7 +183,7 @@ export default function Dashboard() {
       .map((url, idx) => ({
         user_id: user.id,
         image_url: url.trim(),
-        sort_order: idx,
+        sort_order: Number(idx),
       }))
       .filter((item) => item.image_url.length > 0)
 
@@ -325,7 +329,7 @@ export default function Dashboard() {
                     min="0"
                     step="500"
                     value={priceMin}
-                    onChange={(e) => setPriceMin(Number(e.target.value))}
+                    onChange={(e) => setPriceMin(e.target.value === '' ? '' : Number(e.target.value))}
                     className="w-full pl-7 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-semibold text-indigo-600"
                   />
                 </div>
@@ -338,7 +342,7 @@ export default function Dashboard() {
                   type="number"
                   min="1"
                   value={leadTimeDays}
-                  onChange={(e) => setLeadTimeDays(Number(e.target.value))}
+                  onChange={(e) => setLeadTimeDays(e.target.value === '' ? '' : Number(e.target.value))}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                 />
               </div>
@@ -577,7 +581,6 @@ export default function Dashboard() {
                         alt={`プレビュー ${idx + 1}`}
                         className="w-full h-full object-cover"
                         onError={(e) => {
-                          // 画像読み込み失敗時のハンドリング
                           (e.target as HTMLElement).style.display = 'none'
                         }}
                       />
