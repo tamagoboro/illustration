@@ -9,6 +9,13 @@ export type Profile = {
   commercial_use_allowed: boolean
   portfolio_publish_required: boolean
   external_estimation_url: string | null
+  
+  // ▼ SNS・外部連絡先フィールドを追記
+  twitter_url?: string | null
+  instagram_url?: string | null
+  pixiv_url?: string | null
+  website_url?: string | null
+
   portfolio_items?: PortfolioItem[]
 }
 

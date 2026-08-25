@@ -1,18 +1,24 @@
 import { createClient } from '@supabase/supabase-js'
 
 export type Profile = {
+  id?: string
   user_id: string
   display_name: string
-  avatar_url: string | null
-  status: string
-  status_comment: string | null
+  avatar_url?: string | null
+  status: 'available' | 'busy' | string
+  status_comment?: string | null
+  tastes?: string[]
   lead_time_days: number
-  tastes: string[]
   commercial_use_allowed: boolean
-  portfolio_publish_required: boolean
-  external_estimation_url: string | null
-  price_min?: number | null // 👈 追加
-  updated_at: string
+  portfolio_publish_required?: boolean
+  price_min?: number | null
+  external_estimation_url?: string | null
+  twitter_url?: string | null
+  instagram_url?: string | null
+  pixiv_url?: string | null
+  website_url?: string | null
+  created_at?: string
+  updated_at?: string
 }
 
 export type CustomPageSetting = {
@@ -35,14 +41,14 @@ export type PageBlock = {
 }
 
 export type PortfolioItem = {
-  id: string
+  id?: string
   user_id: string
-  title: string | null
+  title?: string | null
   image_url: string
-  before_image_url: string | null
-  is_pinned: boolean
+  before_image_url?: string | null
+  is_pinned?: boolean
   sort_order: number
-  created_at: string
+  created_at?: string
 }
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!

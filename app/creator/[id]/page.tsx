@@ -65,6 +65,14 @@ export default function CreatorDetailPage({ params }: { params: Promise<{ id: st
     )
   }
 
+  // SNSまたは連絡先リンクが1つでも登録されているか判定
+  const hasContactLinks = 
+    profile.external_estimation_url || 
+    profile.twitter_url || 
+    profile.instagram_url || 
+    profile.pixiv_url || 
+    profile.website_url;
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-16">
       {/* ナビバー */}
@@ -158,23 +166,78 @@ export default function CreatorDetailPage({ params }: { params: Promise<{ id: st
 
             <div className="text-center space-y-1">
               <h3 className="text-xl font-bold text-slate-900">{profile.display_name} へ相談・見積もり</h3>
-              <p className="text-xs text-slate-500">指定の外部サービス・連絡先を開きます</p>
+              <p className="text-xs text-slate-500">ご希望の連絡方法をお選びください</p>
             </div>
 
-            <div className="space-y-2.5 pt-2">
-              {profile.external_estimation_url ? (
+            <div className="space-y-2.5 pt-2 max-h-[60vh] overflow-y-auto">
+              {/* 外部見積もりフォーム */}
+              {profile.external_estimation_url && (
                 <a
                   href={profile.external_estimation_url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full py-3 px-4 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition flex items-center justify-between text-sm shadow-sm"
                 >
-                  <span className="flex items-center gap-2">連絡先・見積もりフォームを開く</span>
-                  <span className="text-xs text-indigo-200">外部サイト ↗</span>
+                  <span className="flex items-center gap-2">📋 外部見積もりフォーム</span>
+                  <span className="text-xs text-indigo-200">開く ↗</span>
                 </a>
-              ) : (
-                <div className="text-center py-4 text-xs text-slate-400">
-                  連絡先URLがまだ登録されていません
+              )}
+
+              {/* X (旧Twitter) */}
+              {profile.twitter_url && (
+                <a
+                  href={profile.twitter_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3 px-4 bg-slate-900 text-white font-semibold rounded-xl hover:bg-slate-800 transition flex items-center justify-between text-sm shadow-sm"
+                >
+                  <span className="flex items-center gap-2">𝕏 (Twitter) で相談・DM</span>
+                  <span className="text-xs text-slate-400">開く ↗</span>
+                </a>
+              )}
+
+              {/* Instagram */}
+              {profile.instagram_url && (
+                <a
+                  href={profile.instagram_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-pink-500 text-white font-semibold rounded-xl hover:opacity-95 transition flex items-center justify-between text-sm shadow-sm"
+                >
+                  <span className="flex items-center gap-2">📸 Instagram で相談・DM</span>
+                  <span className="text-xs text-pink-200">開く ↗</span>
+                </a>
+              )}
+
+              {/* Pixiv */}
+              {profile.pixiv_url && (
+                <a
+                  href={profile.pixiv_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3 px-4 bg-blue-500 text-white font-semibold rounded-xl hover:bg-blue-600 transition flex items-center justify-between text-sm shadow-sm"
+                >
+                  <span className="flex items-center gap-2">🎨 Pixiv メッセージ</span>
+                  <span className="text-xs text-blue-200">開く ↗</span>
+                </a>
+              )}
+
+              {/* 個人Webサイト */}
+              {profile.website_url && (
+                <a
+                  href={profile.website_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3 px-4 bg-slate-100 text-slate-800 border border-slate-200 font-semibold rounded-xl hover:bg-slate-200 transition flex items-center justify-between text-sm shadow-sm"
+                >
+                  <span className="flex items-center gap-2">🌐 公式Webサイト</span>
+                  <span className="text-xs text-slate-500">開く ↗</span>
+                </a>
+              )}
+
+              {!hasContactLinks && (
+                <div className="text-center py-6 text-xs text-slate-400">
+                  連絡先・SNSリンクがまだ登録されていません
                 </div>
               )}
             </div>

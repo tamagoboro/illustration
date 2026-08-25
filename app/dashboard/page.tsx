@@ -22,6 +22,13 @@ export default function Dashboard() {
   const [priceMin, setPriceMin] = useState(5000)
   const [avatarUrl, setAvatarUrl] = useState('')
 
+  // 連絡先・SNSリンク用ステート
+  const [externalEstimationUrl, setExternalEstimationUrl] = useState('')
+  const [twitterUrl, setTwitterUrl] = useState('')
+  const [instagramUrl, setInstagramUrl] = useState('')
+  const [pixivUrl, setPixivUrl] = useState('')
+  const [websiteUrl, setWebsiteUrl] = useState('')
+
   // ポートフォリオ用ステート（最大4枚のURL管理）
   const [portfolioUrls, setPortfolioUrls] = useState<string[]>(['', '', '', ''])
 
@@ -50,6 +57,11 @@ export default function Dashboard() {
         setCommercialUseAllowed(profileData.commercial_use_allowed ?? true)
         setPriceMin(profileData.price_min ?? 5000)
         setAvatarUrl(profileData.avatar_url || '')
+        setExternalEstimationUrl(profileData.external_estimation_url || '')
+        setTwitterUrl(profileData.twitter_url || '')
+        setInstagramUrl(profileData.instagram_url || '')
+        setPixivUrl(profileData.pixiv_url || '')
+        setWebsiteUrl(profileData.website_url || '')
       }
 
       // ポートフォリオ作品取得
@@ -96,6 +108,11 @@ export default function Dashboard() {
       commercial_use_allowed: commercialUseAllowed,
       price_min: Number(priceMin),
       avatar_url: avatarUrl || null,
+      external_estimation_url: externalEstimationUrl || null,
+      twitter_url: twitterUrl || null,
+      instagram_url: instagramUrl || null,
+      pixiv_url: pixivUrl || null,
+      website_url: websiteUrl || null,
       updated_at: new Date().toISOString(),
     }
 
@@ -209,7 +226,7 @@ export default function Dashboard() {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>
-            基本プロフィール
+            基本プロフィール & 連絡先
           </button>
           <button
             onClick={() => setActiveTab('portfolio')}
@@ -336,6 +353,71 @@ export default function Dashboard() {
                   onChange={(e) => setTastesText(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                 />
+              </div>
+            </div>
+
+            {/* 連絡先・SNSリンク設定セクション */}
+            <div className="border-t border-slate-100 pt-6 space-y-4">
+              <div>
+                <h3 className="font-bold text-slate-900 text-xs">連絡先・SNSリンクの設定</h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">詳細画面の「見積もり・相談をする」モーダルに表示されます</p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="text-xs font-bold text-slate-700">外部見積もりフォームURL</label>
+                  <input
+                    type="url"
+                    placeholder="https://google.form/..."
+                    value={externalEstimationUrl}
+                    onChange={(e) => setExternalEstimationUrl(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">𝕏 (Twitter) URL</label>
+                  <input
+                    type="url"
+                    placeholder="https://x.com/username"
+                    value={twitterUrl}
+                    onChange={(e) => setTwitterUrl(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">Instagram URL</label>
+                  <input
+                    type="url"
+                    placeholder="https://instagram.com/username"
+                    value={instagramUrl}
+                    onChange={(e) => setInstagramUrl(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">Pixiv URL</label>
+                  <input
+                    type="url"
+                    placeholder="https://pixiv.net/users/..."
+                    value={pixivUrl}
+                    onChange={(e) => setPixivUrl(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">公式Webサイト URL</label>
+                  <input
+                    type="url"
+                    placeholder="https://yourportfolio.com"
+                    value={websiteUrl}
+                    onChange={(e) => setWebsiteUrl(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                  />
+                </div>
               </div>
             </div>
 
