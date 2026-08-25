@@ -10,12 +10,19 @@ export default function LoginPage() {
   const [isSignUp, setIsSignUp] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [agreedTerms, setAgreedTerms] = useState(false) // 利用規約同意ステート
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
   const [infoMsg, setInfoMsg] = useState('')
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!agreedTerms) {
+      setErrorMsg('利用規約への同意が必要です。')
+      return
+    }
+
     setLoading(true)
     setErrorMsg('')
     setInfoMsg('')
@@ -100,10 +107,33 @@ export default function LoginPage() {
             />
           </div>
 
+          {/* 利用規約同意チェックボックス ＆ リンク */}
+          <div className="pt-1">
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                required
+                checked={agreedTerms}
+                onChange={(e) => setAgreedTerms(e.target.checked)}
+                className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+              />
+              <span className="text-xs text-slate-600 leading-normal">
+                <Link
+                  href="/terms"
+                  target="_blank"
+                  className="font-bold text-indigo-600 hover:underline"
+                >
+                  利用規約
+                </Link>
+                に同意する
+              </span>
+            </label>
+          </div>
+
           <button
             type="submit"
-            disabled={loading}
-            className="w-full py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition text-sm shadow-sm disabled:opacity-50"
+            disabled={loading || !agreedTerms}
+            className="w-full py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? '処理中...' : isSignUp ? 'アカウントを作成する' : 'ログインする'}
           </button>

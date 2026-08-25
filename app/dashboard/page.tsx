@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 
 // プリセット用のおすすめタグ一覧
@@ -21,8 +22,7 @@ const PRESET_TASTES = [
   'パーツ分け可',
   'モデリング',
   '3D背景',
-  '著作権譲渡可'
-
+  '著作権譲渡可',
 ]
 
 export default function Dashboard() {
@@ -30,14 +30,14 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [activeTab, setActiveTab] = useState<'profile' | 'portfolio'>('profile')
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<User | null>(null)
 
   // プロフィール用ステート
   const [displayName, setDisplayName] = useState('')
   const [status, setStatus] = useState<'available' | 'busy'>('available')
   const [statusComment, setStatusComment] = useState('')
-  const [tastes, setTastes] = useState<string[]>([]) // 配列で管理
-  const [customTasteInput, setCustomTasteInput] = useState('') // 自由入力用
+  const [tastes, setTastes] = useState<string[]>([])
+  const [customTasteInput, setCustomTasteInput] = useState('')
   const [leadTimeDays, setLeadTimeDays] = useState(14)
   const [commercialUseAllowed, setCommercialUseAllowed] = useState(true)
   const [priceMin, setPriceMin] = useState(5000)
@@ -74,7 +74,7 @@ export default function Dashboard() {
         setStatus(profileData.status || 'available')
         setStatusComment(profileData.status_comment || '')
         setTastes(profileData.tastes || [])
-        setLeadTimeDays(profileData.lead_time_days || 14)
+        setLeadTimeDays(profileData.lead_time_days ?? 14)
         setCommercialUseAllowed(profileData.commercial_use_allowed ?? true)
         setPriceMin(profileData.price_min ?? 5000)
         setAvatarUrl(profileData.avatar_url || '')
@@ -110,11 +110,9 @@ export default function Dashboard() {
 
   // プリセットタグのON/OFF切り替え
   const togglePresetTaste = (tag: string) => {
-    if (tastes.includes(tag)) {
-      setTastes(tastes.filter((t) => t !== tag))
-    } else {
-      setTastes([...tastes, tag])
-    }
+    setTastes((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    )
   }
 
   // 自由入力タグの追加
@@ -122,14 +120,14 @@ export default function Dashboard() {
     const trimmed = customTasteInput.trim()
     if (!trimmed) return
     if (!tastes.includes(trimmed)) {
-      setTastes([...tastes, trimmed])
+      setTastes((prev) => [...prev, trimmed])
     }
     setCustomTasteInput('')
   }
 
   // タグの削除
   const handleRemoveTaste = (tagToRemove: string) => {
-    setTastes(tastes.filter((t) => t !== tagToRemove))
+    setTastes((prev) => prev.filter((t) => t !== tagToRemove))
   }
 
   // プロフィール保存
@@ -143,7 +141,7 @@ export default function Dashboard() {
       display_name: displayName,
       status,
       status_comment: statusComment,
-      tastes: tastes, // そのまま配列で保存
+      tastes: tastes,
       lead_time_days: Number(leadTimeDays),
       commercial_use_allowed: commercialUseAllowed,
       price_min: Number(priceMin),
@@ -241,7 +239,7 @@ export default function Dashboard() {
             </Link>
             <button
               onClick={handleLogout}
-              className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:underline transition-colors"
+              className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:underline transition-colors cursor-pointer"
             >
               ログアウト
             </button>
@@ -256,7 +254,7 @@ export default function Dashboard() {
         <div className="flex gap-2 border-b border-slate-200/80 pb-1">
           <button
             onClick={() => setActiveTab('profile')}
-            className={`px-5 py-2.5 text-xs font-bold rounded-xl transition-all flex items-center gap-2 ${
+            className={`px-5 py-2.5 text-xs font-bold rounded-xl transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'profile'
                 ? 'bg-slate-900 text-white shadow-sm'
                 : 'text-slate-500 hover:bg-slate-200/60'
@@ -269,7 +267,7 @@ export default function Dashboard() {
           </button>
           <button
             onClick={() => setActiveTab('portfolio')}
-            className={`px-5 py-2.5 text-xs font-bold rounded-xl transition-all flex items-center gap-2 ${
+            className={`px-5 py-2.5 text-xs font-bold rounded-xl transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'portfolio'
                 ? 'bg-slate-900 text-white shadow-sm'
                 : 'text-slate-500 hover:bg-slate-200/60'
@@ -309,7 +307,7 @@ export default function Dashboard() {
                 <label className="text-xs font-bold text-slate-700">現在の受付ステータス</label>
                 <select
                   value={status}
-                  onChange={(e) => setStatus(e.target.value as any)}
+                  onChange={(e) => setStatus(e.target.value as 'available' | 'busy')}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium text-slate-700"
                 >
                   <option value="available">即対応可</option>
@@ -352,7 +350,7 @@ export default function Dashboard() {
                     type="checkbox"
                     checked={commercialUseAllowed}
                     onChange={(e) => setCommercialUseAllowed(e.target.checked)}
-                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
                   />
                   <span className="text-xs font-bold text-slate-700">商用利用を可能として掲載する</span>
                 </label>
@@ -382,7 +380,7 @@ export default function Dashboard() {
                 />
               </div>
 
-              {/* ★改良版：得意なテイスト・タグ設定 ★ */}
+              {/* 得意なテイスト・タグ設定 */}
               <div className="space-y-3 sm:col-span-2 border-t border-slate-100 pt-4">
                 <label className="text-xs font-bold text-slate-700">得意なテイスト・タグ設定</label>
                 
@@ -397,7 +395,7 @@ export default function Dashboard() {
                           key={tag}
                           type="button"
                           onClick={() => togglePresetTaste(tag)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
                             isSelected
                               ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs'
                               : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
@@ -431,7 +429,7 @@ export default function Dashboard() {
                     <button
                       type="button"
                       onClick={handleAddCustomTaste}
-                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all"
+                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all cursor-pointer"
                     >
                       追加
                     </button>
@@ -454,7 +452,7 @@ export default function Dashboard() {
                           <button
                             type="button"
                             onClick={() => handleRemoveTaste(tag)}
-                            className="hover:text-rose-600 text-slate-400 text-xs font-bold px-0.5"
+                            className="hover:text-rose-600 text-slate-400 text-xs font-bold px-0.5 cursor-pointer"
                           >
                             ×
                           </button>
@@ -535,7 +533,7 @@ export default function Dashboard() {
             <button
               type="submit"
               disabled={saving}
-              className="w-full py-3 bg-slate-900 hover:bg-indigo-600 text-white font-bold rounded-xl text-xs transition-all duration-200 shadow-sm hover:shadow-md"
+              className="w-full py-3 bg-slate-900 hover:bg-indigo-600 text-white font-bold rounded-xl text-xs transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer disabled:opacity-50"
             >
               {saving ? '更新処理中...' : 'プロフィールを保存'}
             </button>
@@ -574,7 +572,15 @@ export default function Dashboard() {
                   {/* プレビュー表示 */}
                   <div className="w-full aspect-[4/3] rounded-lg border border-slate-200 bg-white overflow-hidden flex items-center justify-center">
                     {url ? (
-                      <img src={url} alt={`プレビュー ${idx + 1}`} className="w-full h-full object-cover" />
+                      <img
+                        src={url}
+                        alt={`プレビュー ${idx + 1}`}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          // 画像読み込み失敗時のハンドリング
+                          (e.target as HTMLElement).style.display = 'none'
+                        }}
+                      />
                     ) : (
                       <span className="text-[11px] font-medium text-slate-300">プレビューなし</span>
                     )}
@@ -586,7 +592,7 @@ export default function Dashboard() {
             <button
               type="submit"
               disabled={saving}
-              className="w-full py-3 bg-slate-900 hover:bg-indigo-600 text-white font-bold rounded-xl text-xs transition-all duration-200 shadow-sm hover:shadow-md"
+              className="w-full py-3 bg-slate-900 hover:bg-indigo-600 text-white font-bold rounded-xl text-xs transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer disabled:opacity-50"
             >
               {saving ? '更新処理中...' : '作品ポートフォリオを保存'}
             </button>
