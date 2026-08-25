@@ -77,7 +77,7 @@ export default function Dashboard() {
         setDisplayName(profileData.display_name || '')
         setStatus(profileData.status || 'available')
         setStatusComment(profileData.status_comment || '')
-        setTastes(profileData.tastes || [])
+        setTastes(Array.isArray(profileData.tastes) ? profileData.tastes : [])
         setLeadTimeDays(profileData.lead_time_days ?? 14)
         setCommercialUseAllowed(profileData.commercial_use_allowed ?? true)
         setPriceMin(profileData.price_min ?? 5000)
@@ -140,14 +140,15 @@ export default function Dashboard() {
     if (!user) return
     setSaving(true)
 
-    // {} や NaN、空文字などを確実に排除して数値またはnullに変換する関数
-    const safeParseInt = (val: unknown, defaultValue: number | null = null): number | null => {
-      if (typeof val === 'number') return isNaN(val) ? defaultValue : val
-      if (typeof val === 'string' && val.trim() !== '') {
-        const parsed = parseInt(val, 10)
-        return isNaN(parsed) ? defaultValue : parsed
+    // 不正な値（空文字、NaN、オブジェクト等）を厳格に除外し、純粋な number または null に変換
+    const parseIntegerStrict = (val: unknown): number | null => {
+      if (val === null || val === undefined || val === '') return null
+      if (typeof val === 'number') return isNaN(val) ? null : Math.floor(val)
+      if (typeof val === 'string') {
+        const parsed = parseInt(val.trim(), 10)
+        return isNaN(parsed) ? null : parsed
       }
-      return defaultValue
+      return null
     }
 
     const profileData = {
@@ -156,9 +157,9 @@ export default function Dashboard() {
       status: status || 'available',
       status_comment: statusComment ? statusComment.trim() : null,
       tastes: Array.isArray(tastes) ? tastes : [],
-      lead_time_days: safeParseInt(leadTimeDays, 14),
+      lead_time_days: parseIntegerStrict(leadTimeDays),
       commercial_use_allowed: Boolean(commercialUseAllowed),
-      price_min: safeParseInt(priceMin, 5000),
+      price_min: parseIntegerStrict(priceMin),
       avatar_url: avatarUrl ? avatarUrl.trim() : null,
       external_estimation_url: externalEstimationUrl ? externalEstimationUrl.trim() : null,
       twitter_url: twitterUrl ? twitterUrl.trim() : null,
