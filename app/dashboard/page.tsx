@@ -83,7 +83,7 @@ export default function Dashboard() {
         setPriceMin(typeof profileData.price_min === 'number' ? profileData.price_min : 5000)
         setAvatarUrl(profileData.avatar_url || '')
         setExternalEstimationUrl(profileData.external_estimation_url || '')
-        setTwitterUrl(profileData.twitter_url || '')
+        setTwitterUrl(profileData.twitter_url || profileData.x_url || '')
         setInstagramUrl(profileData.instagram_url || '')
         setPixivUrl(profileData.pixiv_url || '')
         setWebsiteUrl(profileData.website_url || '')
@@ -140,23 +140,20 @@ export default function Dashboard() {
     if (!user) return
     setSaving(true)
 
-    // 数値型の安全なバリデーション関数
-    const parseInteger = (val: any): number | null => {
-      if (val === '' || val === null || val === undefined) return null
-      const parsed = parseInt(String(val), 10)
-      return isNaN(parsed) ? null : parsed
-    }
+    // 数値安全変換処理
+    const parsedLeadTime = leadTimeDays === '' ? null : Number(leadTimeDays)
+    const parsedPriceMin = priceMin === '' ? null : Number(priceMin)
 
-    // 送信するデータを完全・安全に整形
+    // 送信データ構造の定義
     const profileData = {
       user_id: user.id,
       display_name: displayName.trim(),
-      status: status || 'available',
+      status: status,
       status_comment: statusComment.trim() || null,
-      tastes: Array.isArray(tastes) ? tastes : [],
-      lead_time_days: parseInteger(leadTimeDays),
-      price_min: parseInteger(priceMin),
-      commercial_use_allowed: Boolean(commercialUseAllowed),
+      tastes: tastes, // JS配列のまま渡す
+      lead_time_days: isNaN(parsedLeadTime as number) ? null : parsedLeadTime,
+      price_min: isNaN(parsedPriceMin as number) ? null : parsedPriceMin,
+      commercial_use_allowed: commercialUseAllowed,
       avatar_url: avatarUrl.trim() || null,
       external_estimation_url: externalEstimationUrl.trim() || null,
       twitter_url: twitterUrl.trim() || null,
@@ -166,8 +163,6 @@ export default function Dashboard() {
       updated_at: new Date().toISOString(),
     }
 
-    console.log('Save profile payload:', profileData)
-
     const { error } = await supabase
       .from('profiles')
       .upsert(profileData, { onConflict: 'user_id' })
@@ -175,7 +170,7 @@ export default function Dashboard() {
     setSaving(false)
 
     if (error) {
-      console.error('Save error details:', error)
+      console.error('エラー詳細:', error)
       alert('保存に失敗しました: ' + error.message)
     } else {
       alert('プロフィール情報を更新しました！')
