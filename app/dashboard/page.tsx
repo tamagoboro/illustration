@@ -140,8 +140,8 @@ export default function Dashboard() {
     if (!user) return
     setSaving(true)
 
-    // {} や NaN、空文字などを確実に排除して数値に変換する関数
-    const safeParseInt = (val: unknown, defaultValue: number = 0): number => {
+    // {} や NaN、空文字などを確実に排除して数値またはnullに変換する関数
+    const safeParseInt = (val: unknown, defaultValue: number | null = null): number | null => {
       if (typeof val === 'number') return isNaN(val) ? defaultValue : val
       if (typeof val === 'string' && val.trim() !== '') {
         const parsed = parseInt(val, 10)
