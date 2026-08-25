@@ -27,6 +27,18 @@ export default function Home() {
   const [compareList, setCompareList] = useState<ProfileWithImage[]>([])
   const [isCompareOpen, setIsCompareOpen] = useState(false)
 
+  // ★ 初回描画時に localStorage からお気に入りリストを復元
+  useEffect(() => {
+    const storedFavs = localStorage.getItem('favorite_creators')
+    if (storedFavs) {
+      try {
+        setFavorites(JSON.parse(storedFavs))
+      } catch (e) {
+        console.error('Failed to load favorites from localStorage', e)
+      }
+    }
+  }, [])
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data?.user) setIsLoggedIn(true)
@@ -74,10 +86,16 @@ export default function Home() {
     fetchProfilesWithImages()
   }, [])
 
+  // ★ お気に入りの追加 / 解除と同時に localStorage に保存
   const toggleFavorite = (userId: string) => {
-    setFavorites((prev) =>
-      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
-    )
+    setFavorites((prev) => {
+      const nextFavorites = prev.includes(userId)
+        ? prev.filter((id) => id !== userId)
+        : [...prev, userId]
+      
+      localStorage.setItem('favorite_creators', JSON.stringify(nextFavorites))
+      return nextFavorites
+    })
   }
 
   const toggleCompare = (profile: ProfileWithImage) => {
@@ -163,7 +181,7 @@ export default function Home() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
-              className={`px-3.5 py-2 text-xs font-semibold rounded-xl transition-all duration-200 flex items-center gap-2 border ${
+              className={`px-3.5 py-2 text-xs font-semibold rounded-xl transition-all duration-200 flex items-center gap-2 border cursor-pointer ${
                 showFavoritesOnly
                   ? 'bg-rose-50 text-rose-600 border-rose-200 shadow-xs'
                   : 'bg-white text-slate-700 hover:bg-slate-50 border-slate-200'
@@ -207,7 +225,7 @@ export default function Home() {
                 </div>
                 <button
                   onClick={resetFilters}
-                  className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold transition-colors"
+                  className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold transition-colors cursor-pointer"
                 >
                   リセット
                 </button>
@@ -304,7 +322,7 @@ export default function Home() {
                 <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
                   <button
                     onClick={() => setSelectedTaste('ALL')}
-                    className={`px-3 py-1 rounded-lg text-[11px] font-semibold transition-all ${
+                    className={`px-3 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
                       selectedTaste === 'ALL'
                         ? 'bg-slate-900 text-white shadow-xs'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -316,7 +334,7 @@ export default function Home() {
                     <button
                       key={taste}
                       onClick={() => setSelectedTaste(taste)}
-                      className={`px-3 py-1 rounded-lg text-[11px] font-medium transition-all ${
+                      className={`px-3 py-1 rounded-lg text-[11px] font-medium transition-all cursor-pointer ${
                         selectedTaste === taste
                           ? 'bg-indigo-600 text-white shadow-xs'
                           : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -362,7 +380,7 @@ export default function Home() {
                 <p className="text-xs text-slate-400">検索条件を変更して再度お試しください。</p>
                 <button
                   onClick={resetFilters}
-                  className="mt-2 inline-block px-4 py-2 text-xs font-semibold text-indigo-600 bg-indigo-50 rounded-xl hover:bg-indigo-100 transition-all"
+                  className="mt-2 inline-block px-4 py-2 text-xs font-semibold text-indigo-600 bg-indigo-50 rounded-xl hover:bg-indigo-100 transition-all cursor-pointer"
                 >
                   条件を初期化する
                 </button>
@@ -378,7 +396,7 @@ export default function Home() {
                       key={profile.user_id}
                       className="group bg-white rounded-2xl border border-slate-200/80 hover:border-indigo-300/80 shadow-xs hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between overflow-hidden"
                     >
-                      {/* イラスト画像エリア（縦横比固定 4:3） */}
+                      {/* イラスト画像エリア */}
                       <div className="relative w-full aspect-[4/3] bg-slate-100 overflow-hidden">
                         {profile.thumbnail_url ? (
                           <img
@@ -411,9 +429,10 @@ export default function Home() {
 
                         {/* お気に入りボタン */}
                         <button
+                          type="button"
                           onClick={() => toggleFavorite(profile.user_id)}
-                          className={`absolute top-3 right-3 p-2 rounded-full bg-white/80 hover:bg-white backdrop-blur-md transition-all duration-200 shadow-xs ${
-                            isFav ? 'text-rose-500' : 'text-slate-400 hover:text-rose-500'
+                          className={`absolute top-3 right-3 p-2 rounded-full bg-white/80 hover:bg-white backdrop-blur-md transition-all duration-200 shadow-xs cursor-pointer ${
+                            isFav ? 'text-rose-500 scale-105' : 'text-slate-400 hover:text-rose-500'
                           }`}
                         >
                           <svg className={`w-4 h-4 ${isFav ? 'fill-current' : 'fill-none stroke-current'}`} viewBox="0 0 24 24" strokeWidth="2">
@@ -475,7 +494,7 @@ export default function Home() {
                       <div className="px-5 pb-5 flex gap-2.5">
                         <button
                           onClick={() => toggleCompare(profile)}
-                          className={`flex-1 py-2.5 text-xs font-semibold rounded-xl border transition-all duration-200 flex items-center justify-center gap-1 ${
+                          className={`flex-1 py-2.5 text-xs font-semibold rounded-xl border transition-all duration-200 flex items-center justify-center gap-1 cursor-pointer ${
                             isCompared
                               ? 'bg-indigo-50 text-indigo-600 border-indigo-200 shadow-xs'
                               : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
@@ -518,7 +537,7 @@ export default function Home() {
           </div>
           <button
             onClick={() => setIsCompareOpen(true)}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold transition-all shadow-sm"
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold transition-all shadow-sm cursor-pointer"
           >
             比較表を開く
           </button>
@@ -536,7 +555,7 @@ export default function Home() {
               </div>
               <button
                 onClick={() => setIsCompareOpen(false)}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 font-bold text-xs transition-colors"
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 font-bold text-xs transition-colors cursor-pointer"
               >
                 ✕
               </button>
@@ -550,7 +569,7 @@ export default function Home() {
                       <h4 className="font-bold text-slate-900 text-sm">{item.display_name}</h4>
                       <button
                         onClick={() => toggleCompare(item)}
-                        className="text-[11px] text-rose-500 font-semibold hover:underline"
+                        className="text-[11px] text-rose-500 font-semibold hover:underline cursor-pointer"
                       >
                         削除
                       </button>
