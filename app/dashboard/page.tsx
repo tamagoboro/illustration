@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation'
 import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 
-
 const PRESET_TASTES = [
   'アイコン',
   'ヘッダー',
@@ -25,17 +24,9 @@ const PRESET_TASTES = [
   '著作権譲渡可',
 ]
 
-// どんな不適切な値（{}, [], "{}", "null"等）が入ってきても、確実に number または null に変換する関数
 const safeParseInt = (val: any): number | null => {
-  // null, undefined, またはオブジェクト（{}, []）の場合は即座に null を返す
-  if (val === null || val === undefined || typeof val === 'object') {
-    return null
-  }
-
-  // 文字列化して不要な空白を除去
+  if (val === null || val === undefined || typeof val === 'object') return null
   const str = String(val).trim()
-
-  // 不正な文字列パターンのガード
   if (
     str === '' || 
     str === '{}' || 
@@ -46,7 +37,6 @@ const safeParseInt = (val: any): number | null => {
   ) {
     return null
   }
-
   const parsed = parseInt(str, 10)
   return isNaN(parsed) ? null : parsed
 }
@@ -55,6 +45,7 @@ export default function Dashboard() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState<string | null>(null)
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null)
   const [activeTab, setActiveTab] = useState<'profile' | 'portfolio'>('profile')
   const [user, setUser] = useState<User | null>(null)
@@ -107,7 +98,6 @@ export default function Dashboard() {
           setTastes([])
         }
 
-        // 【原因対策2】取得時に safeParseInt を通して "{}" が State に入るのを防ぐ
         const parsedLeadTime = safeParseInt(profileData.lead_time_days)
         setLeadTimeDays(parsedLeadTime !== null ? String(parsedLeadTime) : '')
 
@@ -163,7 +153,6 @@ export default function Dashboard() {
   const handleRemoveTaste = (tagToRemove: string) => {
     setTastes((prev) => prev.filter((t) => t !== tagToRemove))
   }
-// ファイルアップロードハンドラー
 
   const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>, index: number) => {
     const file = e.target.files?.[0]
@@ -193,15 +182,20 @@ export default function Dashboard() {
       setUploadingIndex(null)
     }
   }
-const handleSaveProfile = async (e: React.FormEvent) => {
+
+  const showSuccessToast = (msg: string) => {
+    setSaveSuccess(msg)
+    setTimeout(() => setSaveSuccess(null), 3000)
+  }
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!user) return
     setSaving(true)
 
-    // --- 【ここから修正】どんな異常な値が入っていても安全に数値またはnullにする処理 ---
     const cleanInteger = (val: any): number | null => {
       if (val === null || val === undefined || typeof val === 'object') return null
-      const str = String(val).replace(/[{}]/g, '').trim() // "{}" などの波括弧を強制除去
+      const str = String(val).replace(/[{}]/g, '').trim()
       if (str === '' || str === 'null' || str === 'undefined') return null
       const parsed = parseInt(str, 10)
       return isNaN(parsed) ? null : parsed
@@ -209,15 +203,10 @@ const handleSaveProfile = async (e: React.FormEvent) => {
 
     const finalPriceMin = cleanInteger(priceMin)
     const finalLeadTimeDays = cleanInteger(leadTimeDays)
-    // --- 【ここまで】 ---
 
     const cleanTastes = Array.isArray(tastes) 
       ? tastes.map((t) => String(t).trim()).filter((t) => t.length > 0)
       : []
-
-// app/dashboard/page.tsx の handleSaveProfile 内
-
-    // 一時的なテスト用コード（特定用）
 
     const profilePayload = {
       user_id: user.id,
@@ -225,8 +214,8 @@ const handleSaveProfile = async (e: React.FormEvent) => {
       status: status,
       status_comment: statusComment ? statusComment.trim() : null,
       tastes: cleanTastes,
-      lead_time_days: finalLeadTimeDays, // 確実に number | null
-      price_min: finalPriceMin,           // 確実に number | null
+      lead_time_days: finalLeadTimeDays,
+      price_min: finalPriceMin,
       commercial_use_allowed: Boolean(commercialUseAllowed),
       avatar_url: avatarUrl ? avatarUrl.trim() : null,
       external_estimation_url: externalEstimationUrl ? externalEstimationUrl.trim() : null,
@@ -236,8 +225,6 @@ const handleSaveProfile = async (e: React.FormEvent) => {
       website_url: websiteUrl ? websiteUrl.trim() : null,
       updated_at: new Date().toISOString(),
     }
-    // デバッグ確認用（ブラウザのコンソールで送信データを確認できます）
-    console.log('★実際に送信されるデータ:', JSON.stringify(profilePayload, null, 2))
 
     const { error } = await supabase
       .from('profiles')
@@ -249,9 +236,10 @@ const handleSaveProfile = async (e: React.FormEvent) => {
       console.error('保存エラー詳細:', JSON.stringify(error, null, 2))
       alert('保存に失敗しました: ' + error.message)
     } else {
-      alert('プロフィール情報を更新しました！')
+      showSuccessToast('プロフィール情報を更新しました！')
     }
   }
+
   const handleSavePortfolio = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!user) return
@@ -287,7 +275,7 @@ const handleSaveProfile = async (e: React.FormEvent) => {
     }
 
     setSaving(false)
-    alert('作品ポートフォリオを更新しました！')
+    showSuccessToast('作品ポートフォリオを更新しました！')
   }
 
   const handleLogout = async () => {
@@ -297,35 +285,44 @@ const handleSaveProfile = async (e: React.FormEvent) => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50/80 flex items-center justify-center">
-        <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
-          <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-          設定データを読み込み中...
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-xs font-bold text-slate-500 tracking-wider">設定データを読み込み中...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-50/80 text-slate-800 pb-20 font-sans antialiased selection:bg-indigo-600 selection:text-white">
-      <header className="px-6 py-4 bg-white/80 backdrop-blur-lg border-b border-slate-200/80 sticky top-0 z-30 shadow-xs">
-        <div className="max-w-5xl mx-auto flex justify-between items-center">
+    <div className="min-h-screen bg-slate-50/60 text-slate-800 pb-24 font-sans antialiased selection:bg-indigo-500 selection:text-white">
+      {/* Toast Notification */}
+      {saveSuccess && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 bg-slate-900 text-white rounded-2xl shadow-2xl border border-slate-700 animate-in fade-in slide-in-from-bottom-5 duration-300">
+          <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-xs text-white font-bold">✓</div>
+          <p className="text-xs font-semibold">{saveSuccess}</p>
+        </div>
+      )}
+
+      {/* Header */}
+      <header className="px-6 py-3.5 bg-white/80 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-30 shadow-xs">
+        <div className="max-w-4xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-black text-sm shadow-sm shadow-indigo-200">
+            <div className="w-9 h-9 rounded-2xl bg-indigo-600 flex items-center justify-center text-white font-black text-base shadow-md shadow-indigo-200">
               D
             </div>
             <div>
-              <h1 className="text-base font-bold text-slate-900 leading-none">クリエイターダッシュボード</h1>
-              <p className="text-[11px] text-slate-400 font-medium mt-0.5">掲載情報とポートフォリオの管理</p>
+              <h1 className="text-sm font-bold text-slate-900 leading-none">ダッシュボード</h1>
+              <p className="text-[11px] text-slate-400 font-medium mt-1">プロフィール・作品の掲載管理</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <Link
               href="/"
-              className="px-3.5 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all flex items-center gap-1.5"
+              className="px-3.5 py-2 text-xs font-bold text-slate-600 hover:text-indigo-600 bg-slate-100/80 hover:bg-indigo-50 rounded-xl transition-all flex items-center gap-1.5"
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
               トップへ戻る
@@ -333,7 +330,7 @@ const handleSaveProfile = async (e: React.FormEvent) => {
             <button
               type="button"
               onClick={handleLogout}
-              className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:underline transition-colors cursor-pointer"
+              className="px-3.5 py-2 text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition-all cursor-pointer"
             >
               ログアウト
             </button>
@@ -341,43 +338,53 @@ const handleSaveProfile = async (e: React.FormEvent) => {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-        <div className="flex gap-2 border-b border-slate-200/80 pb-1">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+        {/* Tab Selector */}
+        <div className="flex p-1 bg-slate-200/60 rounded-2xl max-w-md mx-auto">
           <button
             type="button"
             onClick={() => setActiveTab('profile')}
-            className={`px-5 py-2.5 text-xs font-bold rounded-xl transition-all flex items-center gap-2 cursor-pointer ${
+            className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
               activeTab === 'profile'
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'text-slate-500 hover:bg-slate-200/60'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-500 hover:text-slate-800'
             }`}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>
-            基本プロフィール & 連絡先
+            基本プロフィール
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('portfolio')}
-            className={`px-5 py-2.5 text-xs font-bold rounded-xl transition-all flex items-center gap-2 cursor-pointer ${
+            className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
               activeTab === 'portfolio'
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'text-slate-500 hover:bg-slate-200/60'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-500 hover:text-slate-800'
             }`}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            作品ギャラリー (最大4枚)
+            作品ギャラリー
           </button>
         </div>
 
+        {/* PROFILE TAB */}
         {activeTab === 'profile' && (
-          <form onSubmit={handleSaveProfile} className="bg-white rounded-2xl border border-slate-200/80 p-6 sm:p-8 space-y-6 shadow-sm">
-            <div className="border-b border-slate-100 pb-4">
-              <h2 className="font-bold text-slate-900 text-sm">基本情報の設定</h2>
-              <p className="text-xs text-slate-400 mt-0.5">一覧画面および詳細画面に表示される情報です</p>
+          <form onSubmit={handleSaveProfile} className="bg-white rounded-3xl border border-slate-200/70 p-6 sm:p-8 space-y-8 shadow-xs">
+            {/* Header */}
+            <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
+              <div>
+                <h2 className="font-extrabold text-slate-900 text-base">基本情報の設定</h2>
+                <p className="text-xs text-slate-400 mt-1">公開プロフィールに反映される基本情報です</p>
+              </div>
+              {avatarUrl && (
+                <div className="w-12 h-12 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shadow-xs">
+                  <img src={avatarUrl} alt="アバタープレビュー" className="w-full h-full object-cover" />
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -389,7 +396,7 @@ const handleSaveProfile = async (e: React.FormEvent) => {
                   placeholder="例: イラスト屋 たろう"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
                 />
               </div>
 
@@ -398,17 +405,17 @@ const handleSaveProfile = async (e: React.FormEvent) => {
                 <select
                   value={status}
                   onChange={(e) => setStatus(e.target.value as 'available' | 'busy')}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium text-slate-700"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-semibold text-slate-700 cursor-pointer"
                 >
-                  <option value="available">即対応可</option>
-                  <option value="busy">相談受付中</option>
+                  <option value="available">🟢 即対応可</option>
+                  <option value="busy">🟡 相談受付中</option>
                 </select>
               </div>
 
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700">参考最低価格 (円)</label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-semibold">¥</span>
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-semibold">¥</span>
                   <input
                     type="number"
                     min="0"
@@ -416,7 +423,7 @@ const handleSaveProfile = async (e: React.FormEvent) => {
                     placeholder="5000"
                     value={priceMin}
                     onChange={(e) => setPriceMin(e.target.value)}
-                    className="w-full pl-7 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-semibold text-indigo-600"
+                    className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-bold text-indigo-600"
                   />
                 </div>
               </div>
@@ -429,12 +436,12 @@ const handleSaveProfile = async (e: React.FormEvent) => {
                   placeholder="14"
                   value={leadTimeDays}
                   onChange={(e) => setLeadTimeDays(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
                 />
               </div>
 
               <div className="space-y-1.5 flex flex-col justify-end">
-                <label className="flex items-center gap-2.5 p-2.5 rounded-xl border border-slate-200 bg-slate-50/50 cursor-pointer hover:bg-slate-50 transition-colors">
+                <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50/50 cursor-pointer hover:bg-slate-100/50 transition-colors">
                   <input
                     type="checkbox"
                     checked={commercialUseAllowed}
@@ -452,25 +459,27 @@ const handleSaveProfile = async (e: React.FormEvent) => {
                   placeholder="https://example.com/avatar.jpg"
                   value={avatarUrl}
                   onChange={(e) => setAvatarUrl(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-300"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-300 font-mono text-[11px]"
                 />
               </div>
 
               <div className="space-y-1.5 sm:col-span-2">
                 <label className="text-xs font-bold text-slate-700">自己紹介・PRコメント</label>
                 <textarea
-                  rows={3}
+                  rows={4}
                   placeholder="作風や得意なジャンル、実績などのアピール文を入力してください"
                   value={statusComment}
                   onChange={(e) => setStatusComment(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all leading-relaxed"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all leading-relaxed font-medium"
                 />
               </div>
 
-              <div className="space-y-3 sm:col-span-2 border-t border-slate-100 pt-4">
-                <label className="text-xs font-bold text-slate-700">得意なテイスト・タグ設定</label>
-                <div className="space-y-1.5">
-                  <p className="text-[11px] font-semibold text-slate-400">よく使われるタグ（タップで選択）</p>
+              {/* Tag Selection Section */}
+              <div className="space-y-4 sm:col-span-2 border-t border-slate-100 pt-6">
+                <label className="text-xs font-bold text-slate-700 block">得意なテイスト・タグ設定</label>
+                
+                <div className="space-y-2">
+                  <p className="text-[11px] font-bold text-slate-400">よく使われるタグ（タップでオン/オフ）</p>
                   <div className="flex flex-wrap gap-1.5">
                     {PRESET_TASTES.map((tag) => {
                       const isSelected = tastes.includes(tag)
@@ -479,10 +488,10 @@ const handleSaveProfile = async (e: React.FormEvent) => {
                           key={tag}
                           type="button"
                           onClick={() => togglePresetTaste(tag)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer active:scale-95 ${
                             isSelected
                               ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs'
-                              : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                              : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300'
                           }`}
                         >
                           {isSelected ? '✓ ' : '+ '}
@@ -493,8 +502,8 @@ const handleSaveProfile = async (e: React.FormEvent) => {
                   </div>
                 </div>
 
-                <div className="space-y-1.5 pt-2">
-                  <p className="text-[11px] font-semibold text-slate-400">オリジナルのタグを追加</p>
+                <div className="space-y-2 pt-2">
+                  <p className="text-[11px] font-bold text-slate-400">オリジナルのタグを追加</p>
                   <div className="flex gap-2">
                     <input
                       type="text"
@@ -507,20 +516,20 @@ const handleSaveProfile = async (e: React.FormEvent) => {
                           handleAddCustomTaste()
                         }
                       }}
-                      className="flex-1 px-3.5 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                      className="flex-1 px-4 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
                     />
                     <button
                       type="button"
                       onClick={handleAddCustomTaste}
-                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                      className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-all cursor-pointer shadow-xs active:scale-95"
                     >
                       追加
                     </button>
                   </div>
                 </div>
 
-                <div className="space-y-1.5 pt-2">
-                  <p className="text-[11px] font-semibold text-slate-400">現在設定されているタグ（{tastes.length}件）</p>
+                <div className="space-y-2 pt-2">
+                  <p className="text-[11px] font-bold text-slate-400">現在設定中のタグ ({tastes.length}件)</p>
                   {tastes.length === 0 ? (
                     <p className="text-xs text-slate-300 italic">タグが選択されていません</p>
                   ) : (
@@ -534,7 +543,7 @@ const handleSaveProfile = async (e: React.FormEvent) => {
                           <button
                             type="button"
                             onClick={() => handleRemoveTaste(tag)}
-                            className="hover:text-rose-600 text-slate-400 text-xs font-bold px-0.5 cursor-pointer"
+                            className="hover:text-rose-600 text-indigo-400 text-xs font-bold px-0.5 cursor-pointer"
                           >
                             ×
                           </button>
@@ -546,10 +555,11 @@ const handleSaveProfile = async (e: React.FormEvent) => {
               </div>
             </div>
 
+            {/* Links Section */}
             <div className="border-t border-slate-100 pt-6 space-y-4">
               <div>
                 <h3 className="font-bold text-slate-900 text-xs">連絡先・SNSリンクの設定</h3>
-                <p className="text-[11px] text-slate-400 mt-0.5">詳細画面の「見積もり・相談をする」モーダルに表示されます</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">詳細画面の「見積もり・相談をする」モーダル等に表示されます</p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -560,7 +570,7 @@ const handleSaveProfile = async (e: React.FormEvent) => {
                     placeholder="https://google.form/..."
                     value={externalEstimationUrl}
                     onChange={(e) => setExternalEstimationUrl(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono text-[11px]"
                   />
                 </div>
 
@@ -571,7 +581,7 @@ const handleSaveProfile = async (e: React.FormEvent) => {
                     placeholder="https://x.com/username"
                     value={twitterUrl}
                     onChange={(e) => setTwitterUrl(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono text-[11px]"
                   />
                 </div>
 
@@ -582,7 +592,7 @@ const handleSaveProfile = async (e: React.FormEvent) => {
                     placeholder="https://instagram.com/username"
                     value={instagramUrl}
                     onChange={(e) => setInstagramUrl(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono text-[11px]"
                   />
                 </div>
 
@@ -593,7 +603,7 @@ const handleSaveProfile = async (e: React.FormEvent) => {
                     placeholder="https://pixiv.net/users/..."
                     value={pixivUrl}
                     onChange={(e) => setPixivUrl(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono text-[11px]"
                   />
                 </div>
 
@@ -604,7 +614,7 @@ const handleSaveProfile = async (e: React.FormEvent) => {
                     placeholder="https://yourportfolio.com"
                     value={websiteUrl}
                     onChange={(e) => setWebsiteUrl(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono text-[11px]"
                   />
                 </div>
               </div>
@@ -613,26 +623,28 @@ const handleSaveProfile = async (e: React.FormEvent) => {
             <button
               type="submit"
               disabled={saving}
-              className="w-full py-3 bg-slate-900 hover:bg-indigo-600 text-white font-bold rounded-xl text-xs transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer disabled:opacity-50"
+              className="w-full py-3.5 bg-slate-900 hover:bg-indigo-600 active:scale-[0.99] text-white font-extrabold rounded-2xl text-xs transition-all duration-200 shadow-md hover:shadow-indigo-200 cursor-pointer disabled:opacity-50"
             >
-              {saving ? '更新処理中...' : 'プロフィールを保存'}
+              {saving ? '保存中...' : 'プロフィール情報を保存'}
             </button>
           </form>
         )}
 
+        {/* PORTFOLIO TAB */}
         {activeTab === 'portfolio' && (
-          <form onSubmit={handleSavePortfolio} className="bg-white rounded-2xl border border-slate-200/80 p-6 sm:p-8 space-y-6 shadow-sm">
+          <form onSubmit={handleSavePortfolio} className="bg-white rounded-3xl border border-slate-200/70 p-6 sm:p-8 space-y-8 shadow-xs">
             <div className="border-b border-slate-100 pb-4">
-              <h2 className="font-bold text-slate-900 text-sm">作品ギャラリー画像の設定</h2>
-              <p className="text-xs text-slate-400 mt-0.5">※ファイルアップロードまたは直接URL指定が可能です。1枚目がメイン代表画像になります。</p>
+              <h2 className="font-extrabold text-slate-900 text-base">作品ギャラリーの設定</h2>
+              <p className="text-xs text-slate-400 mt-1">最大4枚まで登録可能です。1枚目の画像がカード・検索一覧の代表画像になります。</p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               {portfolioUrls.map((url, idx) => (
-                <div key={idx} className="space-y-2.5 p-4 rounded-xl border border-slate-200/80 bg-slate-50/50">
+                <div key={idx} className="space-y-3 p-4 rounded-2xl border border-slate-200/80 bg-slate-50/40 hover:bg-slate-50 transition-all">
                   <div className="flex justify-between items-center">
-                    <label className="text-xs font-bold text-slate-700">
-                      作品画像 {idx + 1} {idx === 0 && <span className="text-indigo-600 font-bold ml-1">(メイン代表画像)</span>}
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      作品 {idx + 1}
+                      {idx === 0 && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-md font-extrabold">メイン代表</span>}
                     </label>
                     {url && (
                       <button
@@ -642,39 +654,17 @@ const handleSaveProfile = async (e: React.FormEvent) => {
                           next[idx] = ''
                           setPortfolioUrls(next)
                         }}
-                        className="text-[11px] text-rose-500 font-semibold hover:underline cursor-pointer"
+                        className="text-[11px] text-rose-500 font-bold hover:underline cursor-pointer"
                       >
-                        クリア
+                        画像を削除
                       </button>
                     )}
                   </div>
 
-                  <div className="space-y-1">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => handleFileUpload(e, idx)}
-                      disabled={uploadingIndex === idx}
-                      className="block w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer disabled:opacity-50"
-                    />
-                  </div>
-
-                  <input
-                    type="url"
-                    placeholder={`または URL を直接入力 (https://...)`}
-                    value={url}
-                    onChange={(e) => {
-                      const next = [...portfolioUrls]
-                      next[idx] = e.target.value
-                      setPortfolioUrls(next)
-                    }}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-300"
-                  />
-
-                  <div className="w-full aspect-[4/3] rounded-lg border border-slate-200 bg-white overflow-hidden flex items-center justify-center relative">
+                  <div className="w-full aspect-[4/3] rounded-xl border border-slate-200 bg-white overflow-hidden flex items-center justify-center relative shadow-xs">
                     {uploadingIndex === idx ? (
-                      <div className="flex items-center gap-2 text-xs font-semibold text-indigo-600">
-                        <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                      <div className="flex flex-col items-center gap-2 text-xs font-bold text-indigo-600">
+                        <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
                         アップロード中...
                       </div>
                     ) : url ? (
@@ -684,8 +674,35 @@ const handleSaveProfile = async (e: React.FormEvent) => {
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <span className="text-[11px] font-medium text-slate-300">プレビューなし</span>
+                      <div className="flex flex-col items-center gap-1 text-slate-300">
+                        <svg className="w-8 h-8 stroke-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <span className="text-[11px] font-semibold">未登録</span>
+                      </div>
                     )}
+                  </div>
+
+                  <div className="space-y-2 pt-1">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleFileUpload(e, idx)}
+                      disabled={uploadingIndex === idx}
+                      className="block w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 cursor-pointer disabled:opacity-50"
+                    />
+
+                    <input
+                      type="url"
+                      placeholder="または画像URLを直接入力"
+                      value={url}
+                      onChange={(e) => {
+                        const next = [...portfolioUrls]
+                        next[idx] = e.target.value
+                        setPortfolioUrls(next)
+                      }}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-300 font-mono text-[11px]"
+                    />
                   </div>
                 </div>
               ))}
@@ -694,9 +711,9 @@ const handleSaveProfile = async (e: React.FormEvent) => {
             <button
               type="submit"
               disabled={saving || uploadingIndex !== null}
-              className="w-full py-3 bg-slate-900 hover:bg-indigo-600 text-white font-bold rounded-xl text-xs transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer disabled:opacity-50"
+              className="w-full py-3.5 bg-slate-900 hover:bg-indigo-600 active:scale-[0.99] text-white font-extrabold rounded-2xl text-xs transition-all duration-200 shadow-md hover:shadow-indigo-200 cursor-pointer disabled:opacity-50"
             >
-              {saving ? '更新処理中...' : '作品ポートフォリオを保存'}
+              {saving ? '保存中...' : '作品ポートフォリオを保存'}
             </button>
           </form>
         )}
