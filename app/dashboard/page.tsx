@@ -38,9 +38,9 @@ export default function Dashboard() {
   const [statusComment, setStatusComment] = useState('')
   const [tastes, setTastes] = useState<string[]>([])
   const [customTasteInput, setCustomTasteInput] = useState('')
-  const [leadTimeDays, setLeadTimeDays] = useState<number | ''>(14)
+  const [leadTimeDays, setLeadTimeDays] = useState<string>('14')
   const [commercialUseAllowed, setCommercialUseAllowed] = useState(true)
-  const [priceMin, setPriceMin] = useState<number | ''>(5000)
+  const [priceMin, setPriceMin] = useState<string>('5000')
   const [avatarUrl, setAvatarUrl] = useState('')
 
   // 連絡先・SNSリンク用ステート
@@ -77,12 +77,21 @@ export default function Dashboard() {
         setDisplayName(profileData.display_name || '')
         setStatus(profileData.status || 'available')
         setStatusComment(profileData.status_comment || '')
-        setTastes(Array.isArray(profileData.tastes) ? profileData.tastes : [])
-        setLeadTimeDays(typeof profileData.lead_time_days === 'number' ? profileData.lead_time_days : 14)
+        
+        // tastes が配列でない場合の安全策
+        if (Array.isArray(profileData.tastes)) {
+          setTastes(profileData.tastes)
+        } else {
+          setTastes([])
+        }
+
+        setLeadTimeDays(profileData.lead_time_days != null ? String(profileData.lead_time_days) : '')
         setCommercialUseAllowed(profileData.commercial_use_allowed ?? true)
-        setPriceMin(typeof profileData.price_min === 'number' ? profileData.price_min : 5000)
+        setPriceMin(profileData.price_min != null ? String(profileData.price_min) : '')
         setAvatarUrl(profileData.avatar_url || '')
         setExternalEstimationUrl(profileData.external_estimation_url || '')
+        
+        // twitter_url と x_url の両方に対応
         setTwitterUrl(profileData.twitter_url || profileData.x_url || '')
         setInstagramUrl(profileData.instagram_url || '')
         setPixivUrl(profileData.pixiv_url || '')
@@ -100,7 +109,7 @@ export default function Dashboard() {
         const urls = ['', '', '', '']
         portfolioData.forEach((item) => {
           if (item.sort_order < 4) {
-            urls[item.sort_order] = item.image_url
+            urls[item.sort_order] = item.image_url || ''
           }
         })
         setPortfolioUrls(urls)
@@ -140,23 +149,27 @@ export default function Dashboard() {
     if (!user) return
     setSaving(true)
 
-    // 数値安全変換処理
-    const parsedLeadTime = leadTimeDays === '' ? null : Number(leadTimeDays)
-    const parsedPriceMin = priceMin === '' ? null : Number(priceMin)
+    // 数値の安全なパース (空文字は null に変換)
+    const numPrice = priceMin.trim() === '' ? null : parseInt(priceMin, 10)
+    const numLeadTime = leadTimeDays.trim() === '' ? null : parseInt(leadTimeDays, 10)
 
-    // 送信データ構造の定義
-    const profileData = {
+    const finalPriceMin = numPrice !== null && !isNaN(numPrice) ? numPrice : null
+    const finalLeadTimeDays = numLeadTime !== null && !isNaN(numLeadTime) ? numLeadTime : null
+
+    // 送信データ構造の構築
+    const profilePayload: Record<string, any> = {
       user_id: user.id,
       display_name: displayName.trim(),
       status: status,
       status_comment: statusComment.trim() || null,
-      tastes: tastes, // JS配列のまま渡す
-      lead_time_days: isNaN(parsedLeadTime as number) ? null : parsedLeadTime,
-      price_min: isNaN(parsedPriceMin as number) ? null : parsedPriceMin,
+      tastes: tastes,
+      lead_time_days: finalLeadTimeDays,
+      price_min: finalPriceMin,
       commercial_use_allowed: commercialUseAllowed,
       avatar_url: avatarUrl.trim() || null,
       external_estimation_url: externalEstimationUrl.trim() || null,
       twitter_url: twitterUrl.trim() || null,
+      x_url: twitterUrl.trim() || null, // DBが x_url でも twitter_url でも耐えられるよう両方セット
       instagram_url: instagramUrl.trim() || null,
       pixiv_url: pixivUrl.trim() || null,
       website_url: websiteUrl.trim() || null,
@@ -165,12 +178,12 @@ export default function Dashboard() {
 
     const { error } = await supabase
       .from('profiles')
-      .upsert(profileData, { onConflict: 'user_id' })
+      .upsert(profilePayload, { onConflict: 'user_id' })
 
     setSaving(false)
 
     if (error) {
-      console.error('エラー詳細:', error)
+      console.error('保存エラー詳細:', error)
       alert('保存に失敗しました: ' + error.message)
     } else {
       alert('プロフィール情報を更新しました！')
@@ -183,20 +196,31 @@ export default function Dashboard() {
     if (!user) return
     setSaving(true)
 
-    await supabase.from('portfolio_items').delete().eq('user_id', user.id)
+    // 一旦全削除して入れ替え
+    const { error: deleteError } = await supabase
+      .from('portfolio_items')
+      .delete()
+      .eq('user_id', user.id)
+
+    if (deleteError) {
+      console.error('既存ポートフォリオ削除エラー:', deleteError)
+    }
 
     const itemsToInsert = portfolioUrls
       .map((url, idx) => ({
         user_id: user.id,
         image_url: url.trim(),
-        sort_order: Number(idx),
+        sort_order: idx,
       }))
       .filter((item) => item.image_url.length > 0)
 
     if (itemsToInsert.length > 0) {
-      const { error } = await supabase.from('portfolio_items').insert(itemsToInsert)
-      if (error) {
-        alert('作品情報の更新に失敗しました: ' + error.message)
+      const { error: insertError } = await supabase
+        .from('portfolio_items')
+        .insert(itemsToInsert)
+
+      if (insertError) {
+        alert('作品情報の更新に失敗しました: ' + insertError.message)
         setSaving(false)
         return
       }
@@ -248,6 +272,7 @@ export default function Dashboard() {
               トップへ戻る
             </Link>
             <button
+              type="button"
               onClick={handleLogout}
               className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:underline transition-colors cursor-pointer"
             >
@@ -263,6 +288,7 @@ export default function Dashboard() {
         {/* タブナビゲーション */}
         <div className="flex gap-2 border-b border-slate-200/80 pb-1">
           <button
+            type="button"
             onClick={() => setActiveTab('profile')}
             className={`px-5 py-2.5 text-xs font-bold rounded-xl transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'profile'
@@ -276,6 +302,7 @@ export default function Dashboard() {
             基本プロフィール & 連絡先
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('portfolio')}
             className={`px-5 py-2.5 text-xs font-bold rounded-xl transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'portfolio'
@@ -334,11 +361,9 @@ export default function Dashboard() {
                     type="number"
                     min="0"
                     step="500"
+                    placeholder="5000"
                     value={priceMin}
-                    onChange={(e) => {
-                      const val = e.target.value
-                      setPriceMin(val === '' ? '' : Number(val))
-                    }}
+                    onChange={(e) => setPriceMin(e.target.value)}
                     className="w-full pl-7 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-semibold text-indigo-600"
                   />
                 </div>
@@ -350,11 +375,9 @@ export default function Dashboard() {
                 <input
                   type="number"
                   min="1"
+                  placeholder="14"
                   value={leadTimeDays}
-                  onChange={(e) => {
-                    const val = e.target.value
-                    setLeadTimeDays(val === '' ? '' : Number(val))
-                  }}
+                  onChange={(e) => setLeadTimeDays(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                 />
               </div>
@@ -586,15 +609,12 @@ export default function Dashboard() {
                   />
 
                   {/* プレビュー表示 */}
-                  <div className="w-full aspect-[4/3] rounded-lg border border-slate-200 bg-white overflow-hidden flex items-center justify-center">
+                  <div className="w-full aspect-[4/3] rounded-lg border border-slate-200 bg-white overflow-hidden flex items-center justify-center relative">
                     {url ? (
                       <img
                         src={url}
                         alt={`プレビュー ${idx + 1}`}
                         className="w-full h-full object-cover"
-                        onError={(e) => {
-                          ;(e.target as HTMLElement).style.display = 'none'
-                        }}
                       />
                     ) : (
                       <span className="text-[11px] font-medium text-slate-300">プレビューなし</span>
