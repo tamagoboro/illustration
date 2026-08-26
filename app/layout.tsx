@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image', // 画像を大きく表示するタイプ
     title: 'クリエイター検索・比較',
     description: 'クリエイターのポートフォリオ検索・比較サービス',
-    images: ['icon.png'], // public/ogp-image.png を参照（metadataBaseにより自動で絶対パス化されます）
+    images: ['app/icon.png'], // public/ogp-image.png を参照（metadataBaseにより自動で絶対パス化されます）
   },
 
   // LINE, Facebook, Discord等用の共通表示設定（OGP）
@@ -34,7 +34,7 @@ export const metadata: Metadata = {
     siteName: 'クリエイター検索・比較',
     images: [
       {
-        url: '/ogp-image.png', // 推奨サイズ: 1200 x 630 px
+        url: 'app/icon.png', // 推奨サイズ: 1200 x 630 px
         width: 1200,
         height: 630,
         alt: 'クリエイター検索・比較のメインイメージ',
