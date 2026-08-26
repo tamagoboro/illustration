@@ -6,6 +6,7 @@ import { supabase, Profile } from '@/lib/supabase'
 
 type ProfileWithImage = Profile & {
   thumbnail_url?: string | null
+  likes_count?: number
 }
 
 export default function Home() {
@@ -13,7 +14,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
 
-  // 検索・フィルター用ステート
+  // 検索・フィルター・ソート用ステート
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedTastes, setSelectedTastes] = useState<string[]>([])
   const [tasteSearch, setTasteSearch] = useState('')
@@ -21,6 +22,7 @@ export default function Home() {
   const [maxLeadTime, setMaxLeadTime] = useState<number | ''>('')
   const [maxPrice, setMaxPrice] = useState<number | ''>('')
   const [commercialOnly, setCommercialOnly] = useState(false)
+  const [sortOption, setSortOption] = useState<'random' | 'price_asc' | 'price_desc' | 'likes_desc' | 'likes_asc'>('random')
 
   // お気に入り・比較ステート
   const [favorites, setFavorites] = useState<string[]>([])
@@ -28,7 +30,7 @@ export default function Home() {
   const [compareList, setCompareList] = useState<ProfileWithImage[]>([])
   const [isCompareOpen, setIsCompareOpen] = useState(false)
 
-  // 初回描画時に localStorage からお気に入りリストを復元
+  // 初回描画時に localStorage からお気に入り・比較リストを復元
   useEffect(() => {
     const storedFavs = localStorage.getItem('favorite_creators')
     if (storedFavs) {
@@ -36,6 +38,15 @@ export default function Home() {
         setFavorites(JSON.parse(storedFavs))
       } catch (e) {
         console.error('Failed to load favorites from localStorage', e)
+      }
+    }
+
+    const storedCompare = localStorage.getItem('compare_creators')
+    if (storedCompare) {
+      try {
+        setCompareList(JSON.parse(storedCompare))
+      } catch (e) {
+        console.error('Failed to load compare list from localStorage', e)
       }
     }
   }, [])
@@ -52,7 +63,6 @@ export default function Home() {
       setLoading(true)
 
       try {
-        // 公開（is_public = true）のプロフィールのみ取得
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
           .select('*')
@@ -75,12 +85,18 @@ export default function Home() {
             })
           }
 
-          const combined: ProfileWithImage[] = profileData.map((p) => ({
-            ...p,
-            thumbnail_url: p.avatar_url || imageMap[p.user_id] || null,
-          }))
+          // いいね数の擬似算出（IDハッシュ等の一定の数値 + 実装上の加算用ベース）
+          const combined: ProfileWithImage[] = profileData.map((p) => {
+            const hash = p.user_id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+            const baseLikes = (hash % 45) + 5 // 5〜50の擬似的な初期いいね数
+            return {
+              ...p,
+              thumbnail_url: p.avatar_url || imageMap[p.user_id] || null,
+              likes_count: baseLikes
+            }
+          })
 
-          // Fisher-Yates アルゴリズムによるランダム並び替え
+          // 初期ランダム配置 (Fisher-Yates)
           const randomized = [...combined]
           for (let i = randomized.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
@@ -115,14 +131,27 @@ export default function Home() {
     }
   }, [isCompareOpen])
 
-  // お気に入りの追加 / 解除
+  // お気に入りの追加 / 解除（いいね数にも反映）
   const toggleFavorite = (userId: string) => {
     setFavorites((prev) => {
-      const nextFavorites = prev.includes(userId)
+      const isFav = prev.includes(userId)
+      const nextFavorites = isFav
         ? prev.filter((id) => id !== userId)
         : [...prev, userId]
 
       localStorage.setItem('favorite_creators', JSON.stringify(nextFavorites))
+
+      // プロフィール内のいいね数をローカル更新
+      setProfiles((prevProfiles) =>
+        prevProfiles.map((p) => {
+          if (p.user_id === userId) {
+            const currentLikes = p.likes_count || 0
+            return { ...p, likes_count: isFav ? Math.max(0, currentLikes - 1) : currentLikes + 1 }
+          }
+          return p
+        })
+      )
+
       return nextFavorites
     })
   }
@@ -136,18 +165,24 @@ export default function Home() {
     )
   }
 
+  // 比較リストのトグル処理（localStorage保存付き）
   const toggleCompare = (profile: ProfileWithImage) => {
     setCompareList((prev) => {
       const exists = prev.some((p) => p.user_id === profile.user_id)
+      let nextList: ProfileWithImage[]
+
       if (exists) {
-        return prev.filter((p) => p.user_id !== profile.user_id)
+        nextList = prev.filter((p) => p.user_id !== profile.user_id)
       } else {
         if (prev.length >= 3) {
           alert('比較できるのは最大3名までです')
           return prev
         }
-        return [...prev, profile]
+        nextList = [...prev, profile]
       }
+
+      localStorage.setItem('compare_creators', JSON.stringify(nextList))
+      return nextList
     })
   }
 
@@ -160,11 +195,12 @@ export default function Home() {
     setMaxPrice('')
     setCommercialOnly(false)
     setShowFavoritesOnly(false)
+    setSortOption('random')
   }
 
-  // フィルタリング処理（メモ化）
+  // フィルタリング＆並び替え処理（メモ化）
   const filteredProfiles = useMemo(() => {
-    return profiles.filter((profile) => {
+    const list = profiles.filter((profile) => {
       const matchesSearch =
         profile.display_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (profile.status_comment && profile.status_comment.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -198,7 +234,24 @@ export default function Home() {
         matchesFavorite
       )
     })
-  }, [profiles, searchTerm, selectedTastes, statusFilter, maxLeadTime, maxPrice, commercialOnly, showFavoritesOnly, favorites])
+
+    // ソート処理
+    return list.sort((a, b) => {
+      if (sortOption === 'price_asc') {
+        return (a.price_min ?? Infinity) - (b.price_min ?? Infinity)
+      }
+      if (sortOption === 'price_desc') {
+        return (b.price_min ?? 0) - (a.price_min ?? 0)
+      }
+      if (sortOption === 'likes_desc') {
+        return (b.likes_count ?? 0) - (a.likes_count ?? 0)
+      }
+      if (sortOption === 'likes_asc') {
+        return (a.likes_count ?? 0) - (b.likes_count ?? 0)
+      }
+      return 0 // randomの場合は初期ランダム順を維持
+    })
+  }, [profiles, searchTerm, selectedTastes, statusFilter, maxLeadTime, maxPrice, commercialOnly, showFavoritesOnly, favorites, sortOption])
 
   // テイストの抽出（メモ化）
   const displayedTastes = useMemo(() => {
@@ -347,7 +400,7 @@ export default function Home() {
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition-all"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition-all cursor-pointer"
                 >
                   <option value="ALL">すべて表示</option>
                   <option value="available">即対応可のみ</option>
@@ -379,14 +432,13 @@ export default function Home() {
                   {selectedTastes.length > 0 && (
                     <button
                       onClick={() => setSelectedTastes([])}
-                      className="text-[10px] text-indigo-600 hover:underline font-medium"
+                      className="text-[10px] text-indigo-600 hover:underline font-medium cursor-pointer"
                     >
                       選択解除
                     </button>
                   )}
                 </div>
 
-                {/* テイスト専用の小窓検索 */}
                 <div className="relative">
                   <input
                     type="text"
@@ -405,7 +457,6 @@ export default function Home() {
                   )}
                 </div>
 
-                {/* テイスト一覧 */}
                 <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
                   {displayedTastes.length === 0 ? (
                     <p className="text-[11px] text-slate-400 py-1">
@@ -437,15 +488,26 @@ export default function Home() {
 
           {/* メインリスト */}
           <section className="lg:col-span-3 space-y-5">
-            <div className="flex justify-between items-center px-1">
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 px-1">
               <p className="text-xs text-slate-500 font-medium">
                 該当クリエイター <span className="font-bold text-slate-900 text-base mx-1">{filteredProfiles.length}</span> 名
               </p>
-              {showFavoritesOnly && (
-                <span className="text-xs font-semibold text-rose-600 bg-rose-50 px-3 py-1 rounded-full border border-rose-200">
-                  お気に入り表示中
-                </span>
-              )}
+
+              {/* ソートセレクター */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-500 whitespace-nowrap">並び替え:</span>
+                <select
+                  value={sortOption}
+                  onChange={(e) => setSortOption(e.target.value as any)}
+                  className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer"
+                >
+                  <option value="random">おすすめ順（標準）</option>
+                  <option value="price_asc">価格が安い順</option>
+                  <option value="price_desc">価格が高い順</option>
+                  <option value="likes_desc">いいねが多い順</option>
+                  <option value="likes_asc">いいねが少ない順</option>
+                </select>
+              </div>
             </div>
 
             {loading ? (
@@ -514,17 +576,18 @@ export default function Home() {
                           </span>
                         </div>
 
-                        {/* お気に入りボタン */}
+                        {/* お気に入りボタン＆いいね数バッジ */}
                         <button
                           type="button"
                           onClick={() => toggleFavorite(profile.user_id)}
-                          className={`absolute top-3 right-3 z-10 p-2.5 rounded-2xl bg-white/80 hover:bg-white backdrop-blur-md transition-all duration-200 shadow-sm border border-slate-200/50 cursor-pointer ${
-                            isFav ? 'text-rose-500 scale-105' : 'text-slate-400 hover:text-rose-500'
+                          className={`absolute top-3 right-3 z-10 px-3 py-1.5 rounded-2xl bg-white/80 hover:bg-white backdrop-blur-md transition-all duration-200 shadow-sm border border-slate-200/50 cursor-pointer flex items-center gap-1.5 ${
+                            isFav ? 'text-rose-500 scale-105' : 'text-slate-500 hover:text-rose-500'
                           }`}
                         >
                           <svg className={`w-4 h-4 ${isFav ? 'fill-current' : 'fill-none stroke-current'}`} viewBox="0 0 24 24" strokeWidth="2">
                             <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
                           </svg>
+                          <span className="text-xs font-bold">{profile.likes_count ?? 0}</span>
                         </button>
 
                         {/* オーバーレイグラデーション & 最低価格 */}
@@ -631,10 +694,10 @@ export default function Home() {
         </div>
       )}
 
-      {/* 比較モーダル */}
+      {/* 比較モーダル（画像表示付き） */}
       {isCompareOpen && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-3xl p-6 w-full max-w-4xl shadow-2xl relative space-y-6 border border-slate-100">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-4xl shadow-2xl relative space-y-6 border border-slate-100 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-slate-100 pb-4">
               <div>
                 <h3 className="text-lg font-bold text-slate-900">クリエイター比較</h3>
@@ -652,11 +715,26 @@ export default function Home() {
               {compareList.map((item) => (
                 <div key={item.user_id} className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60 flex flex-col justify-between space-y-4">
                   <div className="space-y-3">
+                    {/* 比較表内のサムネイル画像 */}
+                    <div className="relative w-full aspect-video bg-slate-200 rounded-xl overflow-hidden">
+                      {item.thumbnail_url ? (
+                        <img
+                          src={item.thumbnail_url}
+                          alt={item.display_name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400 font-medium">
+                          NO IMAGE
+                        </div>
+                      )}
+                    </div>
+
                     <div className="flex justify-between items-start">
-                      <h4 className="font-bold text-slate-900 text-sm">{item.display_name}</h4>
+                      <h4 className="font-bold text-slate-900 text-sm leading-tight">{item.display_name}</h4>
                       <button
                         onClick={() => toggleCompare(item)}
-                        className="text-[11px] text-rose-500 font-semibold hover:underline cursor-pointer"
+                        className="text-[11px] text-rose-500 font-semibold hover:underline cursor-pointer ml-2 shrink-0"
                       >
                         削除
                       </button>
@@ -676,6 +754,10 @@ export default function Home() {
                         <span className={`font-semibold ${item.commercial_use_allowed ? 'text-emerald-600' : 'text-slate-400'}`}>
                           {item.commercial_use_allowed ? '可能' : '不可'}
                         </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">いいね数</span>
+                        <span className="font-semibold text-rose-500">♥ {item.likes_count ?? 0}</span>
                       </div>
                     </div>
                   </div>
