@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { supabase, Profile } from '@/lib/supabase'
 
 type ProfileWithImage = Profile & {
@@ -16,7 +17,7 @@ export default function Home() {
   // 検索・フィルター用ステート
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedTastes, setSelectedTastes] = useState<string[]>([])
-  const [tasteSearch, setTasteSearch] = useState('') // テイスト専用検索
+  const [tasteSearch, setTasteSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [maxLeadTime, setMaxLeadTime] = useState<number | ''>('')
   const [maxPrice, setMaxPrice] = useState<number | ''>('')
@@ -40,55 +41,80 @@ export default function Home() {
     }
   }, [])
 
+  // データ取得＆認証状態の確認
   useEffect(() => {
+    let isMounted = true
+
     supabase.auth.getUser().then(({ data }) => {
-      if (data?.user) setIsLoggedIn(true)
+      if (isMounted && data?.user) setIsLoggedIn(true)
     })
 
     const fetchProfilesWithImages = async () => {
       setLoading(true)
 
-      // profiles テーブルの全件を取得
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
+      try {
+        // 公開（is_public = true）のプロフィールのみ取得
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('is_public', true)
 
-      if (profileError) {
-        console.error('profilesの取得に失敗しました:', profileError)
-        setLoading(false)
-        return
-      }
+        if (profileError) throw profileError
 
-      if (profileData) {
-        const { data: portfolioData } = await supabase
-          .from('portfolio_items')
-          .select('user_id, image_url')
-          .order('sort_order', { ascending: true })
+        if (profileData && isMounted) {
+          const { data: portfolioData } = await supabase
+            .from('portfolio_items')
+            .select('user_id, image_url')
+            .order('sort_order', { ascending: true })
 
-        const imageMap: Record<string, string> = {}
-        if (portfolioData) {
-          portfolioData.forEach((item) => {
-            if (!imageMap[item.user_id]) {
-              imageMap[item.user_id] = item.image_url
-            }
-          })
+          const imageMap: Record<string, string> = {}
+          if (portfolioData) {
+            portfolioData.forEach((item) => {
+              if (!imageMap[item.user_id]) {
+                imageMap[item.user_id] = item.image_url
+              }
+            })
+          }
+
+          const combined: ProfileWithImage[] = profileData.map((p) => ({
+            ...p,
+            thumbnail_url: p.avatar_url || imageMap[p.user_id] || null,
+          }))
+
+          // Fisher-Yates アルゴリズムによるランダム並び替え
+          const randomized = [...combined]
+          for (let i = randomized.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [randomized[i], randomized[j]] = [randomized[j], randomized[i]]
+          }
+
+          setProfiles(randomized)
         }
-
-        const combined = profileData.map((p) => ({
-          ...p,
-          thumbnail_url: p.avatar_url || imageMap[p.user_id] || null,
-        }))
-
-        // 全件データをリロード毎にランダム順へ並び替え
-        const randomized = [...combined].sort(() => Math.random() - 0.5)
-
-        setProfiles(randomized)
+      } catch (error) {
+        console.error('データの取得に失敗しました:', error)
+      } finally {
+        if (isMounted) setLoading(false)
       }
-      setLoading(false)
     }
 
     fetchProfilesWithImages()
+
+    return () => {
+      isMounted = false
+    }
   }, [])
+
+  // モーダル表示時の背景スクロールを防止
+  useEffect(() => {
+    if (isCompareOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = 'unset'
+    }
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [isCompareOpen])
 
   // お気に入りの追加 / 解除
   const toggleFavorite = (userId: string) => {
@@ -137,48 +163,52 @@ export default function Home() {
     setShowFavoritesOnly(false)
   }
 
-  // フィルタリング処理
-  const filteredProfiles = profiles.filter((profile) => {
-    const matchesSearch =
-      profile.display_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (profile.status_comment && profile.status_comment.toLowerCase().includes(searchTerm.toLowerCase()))
+  // フィルタリング処理（メモ化）
+  const filteredProfiles = useMemo(() => {
+    return profiles.filter((profile) => {
+      const matchesSearch =
+        profile.display_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (profile.status_comment && profile.status_comment.toLowerCase().includes(searchTerm.toLowerCase()))
 
-    const matchesTaste =
-      selectedTastes.length === 0 ||
-      selectedTastes.every((taste) => profile.tastes && profile.tastes.includes(taste))
+      const matchesTaste =
+        selectedTastes.length === 0 ||
+        selectedTastes.every((taste) => profile.tastes && profile.tastes.includes(taste))
 
-    const matchesStatus =
-      statusFilter === 'ALL' || profile.status === statusFilter
+      const matchesStatus =
+        statusFilter === 'ALL' || profile.status === statusFilter
 
-    const matchesLeadTime =
-      maxLeadTime === '' || (profile.lead_time_days && profile.lead_time_days <= Number(maxLeadTime))
+      const matchesLeadTime =
+        maxLeadTime === '' || (profile.lead_time_days && profile.lead_time_days <= Number(maxLeadTime))
 
-    const matchesPrice =
-      maxPrice === '' || (profile.price_min && profile.price_min <= Number(maxPrice))
+      const matchesPrice =
+        maxPrice === '' || (profile.price_min && profile.price_min <= Number(maxPrice))
 
-    const matchesCommercial =
-      !commercialOnly || profile.commercial_use_allowed === true
+      const matchesCommercial =
+        !commercialOnly || profile.commercial_use_allowed === true
 
-    const matchesFavorite =
-      !showFavoritesOnly || favorites.includes(profile.user_id)
+      const matchesFavorite =
+        !showFavoritesOnly || favorites.includes(profile.user_id)
 
-    return (
-      matchesSearch &&
-      matchesTaste &&
-      matchesStatus &&
-      matchesLeadTime &&
-      matchesPrice &&
-      matchesCommercial &&
-      matchesFavorite
-    )
-  })
+      return (
+        matchesSearch &&
+        matchesTaste &&
+        matchesStatus &&
+        matchesLeadTime &&
+        matchesPrice &&
+        matchesCommercial &&
+        matchesFavorite
+      )
+    })
+  }, [profiles, searchTerm, selectedTastes, statusFilter, maxLeadTime, maxPrice, commercialOnly, showFavoritesOnly, favorites])
 
-  // テイストの抽出（重複排除 ➔ 専用検索キーワードで絞り込み ➔ 上限20件）
-  const displayedTastes = Array.from(new Set(profiles.flatMap((p) => p.tastes || [])))
-    .filter((taste) =>
-      taste.toLowerCase().includes(tasteSearch.toLowerCase())
-    )
-    .slice(0, 20)
+  // テイストの抽出（メモ化）
+  const displayedTastes = useMemo(() => {
+    return Array.from(new Set(profiles.flatMap((p) => p.tastes || [])))
+      .filter((taste) =>
+        taste.toLowerCase().includes(tasteSearch.toLowerCase())
+      )
+      .slice(0, 20)
+  }, [profiles, tasteSearch])
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-32 font-sans antialiased selection:bg-indigo-500 selection:text-white relative overflow-x-hidden">
@@ -376,7 +406,7 @@ export default function Home() {
                   )}
                 </div>
 
-                {/* テイスト一覧（スクロール対応） */}
+                {/* テイスト一覧 */}
                 <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
                   {displayedTastes.length === 0 ? (
                     <p className="text-[11px] text-slate-400 py-1">
@@ -452,17 +482,17 @@ export default function Home() {
                   return (
                     <div
                       key={profile.user_id}
-                      className="group bg-white hover:bg-white rounded-3xl border border-slate-200/80 hover:border-indigo-300 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between overflow-hidden"
+                      className="group bg-white rounded-3xl border border-slate-200/80 hover:border-indigo-300 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between overflow-hidden"
                     >
                       {/* イラスト画像エリア */}
                       <div className="relative w-full aspect-[4/3] bg-slate-100 overflow-hidden">
                         {profile.thumbnail_url ? (
-                          <img
+                          <Image
                             src={profile.thumbnail_url}
                             alt={profile.display_name}
-                            loading="lazy"
-                            decoding="async"
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
+                            fill
+                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                            className="object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
                           />
                         ) : (
                           <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 bg-slate-50">
@@ -474,7 +504,7 @@ export default function Home() {
                         )}
 
                         {/* 受付ステータスバッジ */}
-                        <div className="absolute top-3 left-3">
+                        <div className="absolute top-3 left-3 z-10">
                           <span
                             className={`inline-flex items-center gap-1.5 text-[10px] px-3 py-1 rounded-full font-bold backdrop-blur-md shadow-sm ${
                               profile.status === 'available'
@@ -491,7 +521,7 @@ export default function Home() {
                         <button
                           type="button"
                           onClick={() => toggleFavorite(profile.user_id)}
-                          className={`absolute top-3 right-3 p-2.5 rounded-2xl bg-white/80 hover:bg-white backdrop-blur-md transition-all duration-200 shadow-sm border border-slate-200/50 cursor-pointer ${
+                          className={`absolute top-3 right-3 z-10 p-2.5 rounded-2xl bg-white/80 hover:bg-white backdrop-blur-md transition-all duration-200 shadow-sm border border-slate-200/50 cursor-pointer ${
                             isFav ? 'text-rose-500 scale-105' : 'text-slate-400 hover:text-rose-500'
                           }`}
                         >
@@ -501,7 +531,7 @@ export default function Home() {
                         </button>
 
                         {/* オーバーレイグラデーション & 最低価格 */}
-                        <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-slate-900/80 via-slate-900/20 to-transparent p-4 pt-10 flex justify-between items-end">
+                        <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-slate-900/80 via-slate-900/20 to-transparent p-4 pt-10 flex justify-between items-end z-10">
                           <div>
                             <span className="text-[10px] text-slate-200 font-medium block">参考価格</span>
                             <span className="text-white font-black text-lg tracking-tight leading-none">
