@@ -295,23 +295,23 @@ export default function Home() {
 
   return (
     <div
-      className="min-h-screen text-slate-800 pb-32 font-sans antialiased relative bg-fixed bg-cover bg-center"
+      className="min-h-screen text-slate-900 pb-32 font-sans antialiased relative bg-fixed bg-cover bg-center"
       style={{ backgroundImage: `url(${BACKGROUND_IMAGE_URL})` }}
     >
       {/* 背景オーバーレイ */}
-      <div className="absolute inset-0 bg-white/10 backdrop-blur-[1px] pointer-events-none -z-10" />
+      <div className="absolute inset-0 bg-white/20 backdrop-blur-[1px] pointer-events-none -z-10" />
 
       {/* ヘッダー */}
       <header className="px-6 py-4 flex justify-between items-center max-w-7xl mx-auto">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-purple-600 flex items-center justify-center text-white font-black text-xs shadow-md">
+          <div className="w-8 h-8 rounded-xl bg-purple-700 flex items-center justify-center text-white font-black text-xs shadow-md">
             ✦
           </div>
           <div>
-            <h1 className="text-xs font-black text-slate-900 tracking-wider">
+            <h1 className="text-xs font-black text-slate-950 tracking-wider">
               CREATOR SEARCH
             </h1>
-            <p className="text-[10px] text-slate-600 font-bold">
+            <p className="text-[10px] text-slate-800 font-extrabold">
               理想のイラストレーターを探す
             </p>
           </div>
@@ -322,21 +322,21 @@ export default function Home() {
             onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
             className={`px-3.5 py-2 text-xs font-bold rounded-2xl border transition-all flex items-center gap-1.5 backdrop-blur-md cursor-pointer ${
               showFavoritesOnly
-                ? 'bg-rose-500 text-white border-rose-500 shadow-md'
-                : 'bg-white/80 text-purple-700 hover:bg-white border-white/80 shadow-sm'
+                ? 'bg-rose-600 text-white border-rose-600 shadow-md'
+                : 'bg-white/90 text-purple-900 hover:bg-white border-white/90 shadow-sm'
             }`}
           >
-            <span className="text-rose-500">♥</span>
+            <span className="text-rose-600">♥</span>
             <span>お気に入り</span>
             {favorites.length > 0 && (
-              <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] bg-purple-700 text-white font-black">
+              <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] bg-purple-800 text-white font-black">
                 {favorites.length}
               </span>
             )}
           </button>
           <Link
             href={isLoggedIn ? '/dashboard' : '/login'}
-            className="px-4 py-2 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-2xl shadow-md transition-all"
+            className="px-4 py-2 text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-2xl shadow-md transition-all"
           >
             {isLoggedIn ? 'ダッシュボード' : 'ログイン / 登録'}
           </Link>
@@ -345,11 +345,11 @@ export default function Home() {
 
       {/* ヒーローヘッダー */}
       <section className="text-center py-10 px-4 max-w-4xl mx-auto space-y-2">
-        <h2 className="text-xl sm:text-2xl font-black text-slate-800 tracking-wide font-serif">
+        <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-wide font-serif drop-shadow-[0_1px_2px_rgba(255,255,255,0.8)]">
           『誰に頼むか決まらない…』<br />
           そんな時間もったいない。
         </h2>
-        <p className="text-2xl sm:text-3xl font-black text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)] tracking-widest font-serif pt-1">
+        <p className="text-2xl sm:text-3xl font-black text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)] tracking-widest font-serif pt-1">
           自分にぴったりのクリエイター検索
         </p>
       </section>
@@ -360,17 +360,17 @@ export default function Home() {
 
           {/* 検索・絞り込みサイドバー */}
           <aside className="lg:col-span-1 space-y-6">
-            <div className="bg-white/70 backdrop-blur-md p-5 rounded-3xl border border-white/80 shadow-lg shadow-purple-500/5 space-y-4">
+            <div className="bg-white/90 backdrop-blur-md p-5 rounded-3xl border border-white/80 shadow-lg shadow-purple-900/10 space-y-4">
               <div className="flex justify-between items-center pb-1">
-                <div className="flex items-center gap-1.5 text-purple-700">
+                <div className="flex items-center gap-1.5 text-purple-900">
                   <span className="text-xs">⚙</span>
-                  <h2 className="font-extrabold text-xs tracking-wider">
+                  <h2 className="font-black text-xs tracking-wider">
                     FILTER & SEARCH
                   </h2>
                 </div>
                 <button
                   onClick={resetFilters}
-                  className="text-[11px] text-purple-600 font-bold hover:underline cursor-pointer"
+                  className="text-[11px] text-purple-700 font-extrabold hover:underline cursor-pointer"
                 >
                   リセット
                 </button>
@@ -378,19 +378,19 @@ export default function Home() {
 
               {/* キーワード検索 */}
               <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-700 block">キーワード</label>
+                <label className="text-[11px] font-extrabold text-slate-900 block">キーワード</label>
                 <input
                   type="text"
                   placeholder="名前、説明文など..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200/80 bg-white/80 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
               </div>
 
               {/* 予算上限 */}
               <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-700 block">予算上限</label>
+                <label className="text-[11px] font-extrabold text-slate-900 block">予算上限</label>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
@@ -398,34 +398,34 @@ export default function Home() {
                     placeholder="指定なし"
                     value={maxPrice}
                     onChange={(e) => setMaxPrice(e.target.value ? Number(e.target.value) : '')}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200/80 bg-white/80 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
-                  <span className="text-xs text-slate-600 font-bold whitespace-nowrap">以下</span>
+                  <span className="text-xs text-slate-800 font-bold whitespace-nowrap">以下</span>
                 </div>
               </div>
 
               {/* 納期目安 */}
               <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-700 block">希望納期</label>
+                <label className="text-[11px] font-extrabold text-slate-900 block">希望納期</label>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
                     placeholder="指定なし"
                     value={maxLeadTime}
                     onChange={(e) => setMaxLeadTime(e.target.value ? Number(e.target.value) : '')}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200/80 bg-white/80 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
-                  <span className="text-xs text-slate-600 font-bold whitespace-nowrap">日以内</span>
+                  <span className="text-xs text-slate-800 font-bold whitespace-nowrap">日以内</span>
                 </div>
               </div>
 
               {/* 受付ステータス */}
               <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-700 block">受付状況</label>
+                <label className="text-[11px] font-extrabold text-slate-900 block">受付状況</label>
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200/80 bg-white/80 text-xs text-slate-700 font-bold focus:outline-none focus:ring-2 focus:ring-purple-400 cursor-pointer"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
                 >
                   <option value="ALL">すべて表示</option>
                   <option value="available">即対応可のみ</option>
@@ -436,26 +436,26 @@ export default function Home() {
               {/* 商用利用トグル */}
               <div className="pt-1">
                 <label className="flex items-center justify-between cursor-pointer">
-                  <span className="text-[11px] font-bold text-slate-700">商用利用可能のみ</span>
+                  <span className="text-[11px] font-extrabold text-slate-900">商用利用可能のみ</span>
                   <input
                     type="checkbox"
                     checked={commercialOnly}
                     onChange={(e) => setCommercialOnly(e.target.checked)}
-                    className="w-4 h-4 rounded accent-purple-600 cursor-pointer"
+                    className="w-4 h-4 rounded accent-purple-700 cursor-pointer"
                   />
                 </label>
               </div>
 
               {/* テイストフィルター */}
-              <div className="space-y-2 pt-2 border-t border-slate-200/50">
+              <div className="space-y-2 pt-2 border-t border-slate-200">
                 <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-bold text-slate-700 block">
+                  <label className="text-[11px] font-extrabold text-slate-900 block">
                     テイスト（最大20個）
                   </label>
                   {selectedTastes.length > 0 && (
                     <button
                       onClick={() => setSelectedTastes([])}
-                      className="text-[10px] text-purple-600 hover:underline font-bold cursor-pointer"
+                      className="text-[10px] text-purple-700 hover:underline font-extrabold cursor-pointer"
                     >
                       選択解除
                     </button>
@@ -467,12 +467,12 @@ export default function Home() {
                   placeholder="テイストを検索..."
                   value={tasteSearch}
                   onChange={(e) => setTasteSearch(e.target.value)}
-                  className="w-full px-3 py-1.5 text-[10px] rounded-lg border border-slate-200/80 bg-white/80 text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                  className="w-full px-3 py-1.5 text-[10px] rounded-lg border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
 
                 <div className="flex flex-wrap gap-1 max-h-40 overflow-y-auto pt-1">
                   {displayedTastes.length === 0 ? (
-                    <p className="text-[10px] text-slate-400 py-1">
+                    <p className="text-[10px] text-slate-500 py-1 font-bold">
                       一致するテイストが見つかりません
                     </p>
                   ) : (
@@ -482,10 +482,10 @@ export default function Home() {
                         <button
                           key={taste}
                           onClick={() => toggleTaste(taste)}
-                          className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold transition-all cursor-pointer ${
                             isSelected
-                              ? 'bg-purple-600 text-white'
-                              : 'bg-purple-50 text-purple-700 hover:bg-purple-100'
+                              ? 'bg-purple-700 text-white'
+                              : 'bg-purple-100 text-purple-900 hover:bg-purple-200'
                           }`}
                         >
                           #{taste}
@@ -500,18 +500,18 @@ export default function Home() {
 
           {/* メインリスト */}
           <section className="lg:col-span-3 space-y-4">
-            <div className="flex justify-between items-center px-1">
-              <p className="text-xs font-bold text-slate-700">
-                該当クリエイター <span className="text-sm font-black text-slate-900 mx-1">{filteredProfiles.length}</span> 名
+            <div className="flex justify-between items-center px-2 py-1 rounded-xl bg-white/60 backdrop-blur-md border border-white/80 shadow-sm">
+              <p className="text-xs font-extrabold text-slate-900">
+                該当クリエイター <span className="text-sm font-black text-purple-800 mx-1">{filteredProfiles.length}</span> 名
               </p>
 
               {/* ソートセレクター */}
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-700">並び替え:</span>
+                <span className="text-xs font-extrabold text-slate-900">並び替え:</span>
                 <select
                   value={sortOption}
                   onChange={(e) => setSortOption(e.target.value as any)}
-                  className="px-3 py-1.5 bg-white/80 backdrop-blur-md border border-white rounded-xl text-xs font-bold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-400 cursor-pointer"
+                  className="px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-extrabold text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
                 >
                   <option value="random">おすすめ順（標準）</option>
                   <option value="price_asc">価格が安い順</option>
@@ -525,18 +525,18 @@ export default function Home() {
             {loading ? (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {[1, 2, 3].map((n) => (
-                  <div key={n} className="bg-white/70 backdrop-blur-md rounded-3xl p-4 animate-pulse space-y-3 border border-white">
-                    <div className="aspect-square bg-slate-200/60 rounded-2xl" />
-                    <div className="h-4 bg-slate-200/60 rounded w-1/2" />
+                  <div key={n} className="bg-white/90 backdrop-blur-md rounded-3xl p-4 animate-pulse space-y-3 border border-white">
+                    <div className="aspect-square bg-slate-200/80 rounded-2xl" />
+                    <div className="h-4 bg-slate-200/80 rounded w-1/2" />
                   </div>
                 ))}
               </div>
             ) : filteredProfiles.length === 0 ? (
-              <div className="text-center py-20 bg-white/70 backdrop-blur-md rounded-3xl border border-white p-6">
-                <p className="text-xs font-bold text-slate-600">条件に合うクリエイターが見つかりませんでした</p>
+              <div className="text-center py-20 bg-white/90 backdrop-blur-md rounded-3xl border border-white p-6 shadow-md">
+                <p className="text-xs font-extrabold text-slate-800">条件に合うクリエイターが見つかりませんでした</p>
                 <button
                   onClick={resetFilters}
-                  className="mt-3 px-4 py-2 text-xs font-bold text-purple-600 bg-purple-50 rounded-xl hover:bg-purple-100"
+                  className="mt-3 px-4 py-2 text-xs font-extrabold text-purple-800 bg-purple-100 rounded-xl hover:bg-purple-200 cursor-pointer"
                 >
                   条件をリセット
                 </button>
@@ -553,7 +553,7 @@ export default function Home() {
                   return (
                     <div
                       key={profile.user_id}
-                      className="bg-white/80 backdrop-blur-md rounded-3xl border border-white shadow-lg shadow-purple-500/5 hover:shadow-xl transition-all duration-300 flex flex-col justify-between overflow-hidden group"
+                      className="bg-white/90 backdrop-blur-md rounded-3xl border border-white shadow-lg shadow-purple-900/10 hover:shadow-xl transition-all duration-300 flex flex-col justify-between overflow-hidden group"
                     >
                       {/* イラスト画像エリア */}
                       <div className="relative w-full aspect-square bg-slate-100 overflow-hidden">
@@ -564,22 +564,22 @@ export default function Home() {
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                           />
                         ) : (
-                          <div className="w-full h-full flex flex-col items-center justify-center bg-slate-100 text-slate-300">
-                            <span className="text-[10px] font-bold tracking-widest">NO PORTFOLIO</span>
+                          <div className="w-full h-full flex flex-col items-center justify-center bg-slate-100 text-slate-400">
+                            <span className="text-[10px] font-black tracking-widest">NO PORTFOLIO</span>
                           </div>
                         )}
 
                         {/* ステータスバッジ & NEWバッジ */}
                         <div className="absolute top-2.5 left-2.5 flex items-center gap-1">
                           {isNew && (
-                            <span className="text-[9px] px-2 py-0.5 rounded-full font-extrabold bg-pink-500 text-white shadow-sm">
+                            <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-pink-600 text-white shadow-md">
                               NEW
                             </span>
                           )}
 
                           <span
-                            className={`text-[9px] px-2.5 py-0.5 rounded-full font-extrabold text-white shadow-sm ${
-                              profile.status === 'available' ? 'bg-emerald-500' : 'bg-amber-500'
+                            className={`text-[9px] px-2.5 py-0.5 rounded-full font-black text-white shadow-md ${
+                              profile.status === 'available' ? 'bg-emerald-600' : 'bg-amber-600'
                             }`}
                           >
                             {profile.status === 'available' ? '即対応可' : '相談受付中'}
@@ -590,8 +590,8 @@ export default function Home() {
                         <button
                           type="button"
                           onClick={() => toggleFavorite(profile.user_id)}
-                          className={`absolute top-2.5 right-2.5 px-2.5 py-0.5 rounded-full bg-white/90 backdrop-blur-md shadow-sm flex items-center gap-1 text-[11px] font-bold cursor-pointer active:scale-95 transition-transform ${
-                            isFav ? 'text-rose-500' : 'text-purple-600 hover:text-rose-500'
+                          className={`absolute top-2.5 right-2.5 px-2.5 py-0.5 rounded-full bg-white/95 backdrop-blur-md shadow-md flex items-center gap-1 text-[11px] font-black cursor-pointer active:scale-95 transition-transform ${
+                            isFav ? 'text-rose-600' : 'text-purple-800 hover:text-rose-600'
                           }`}
                         >
                           <span>♥</span>
@@ -599,15 +599,15 @@ export default function Home() {
                         </button>
 
                         {/* オーバーレイグラデーション & 最低価格 */}
-                        <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-purple-950/80 via-purple-900/30 to-transparent p-3 pt-6 flex justify-between items-end">
+                        <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-slate-950/90 via-slate-900/50 to-transparent p-3 pt-6 flex justify-between items-end">
                           <div>
-                            <span className="text-[9px] text-purple-200 font-bold block">参考価格</span>
-                            <span className="text-white font-extrabold text-sm tracking-tight">
+                            <span className="text-[9px] text-slate-300 font-extrabold block">参考価格</span>
+                            <span className="text-white font-black text-sm tracking-tight drop-shadow">
                               {profile.price_min ? `¥${profile.price_min.toLocaleString()}〜` : '応相談'}
                             </span>
                           </div>
                           {profile.commercial_use_allowed && (
-                            <span className="text-[9px] font-extrabold bg-purple-600 text-white px-1.5 py-0.5 rounded">
+                            <span className="text-[9px] font-black bg-purple-700 text-white px-1.5 py-0.5 rounded shadow">
                               商用利用OK
                             </span>
                           )}
@@ -617,25 +617,25 @@ export default function Home() {
                       {/* 情報本文エリア */}
                       <div className="p-3.5 space-y-2.5 flex-1 flex flex-col justify-between">
                         <div className="space-y-1">
-                          <h3 className="font-extrabold text-xs text-slate-800 line-clamp-1">
+                          <h3 className="font-black text-xs text-slate-950 line-clamp-1">
                             {profile.display_name}
                           </h3>
-                          <p className="text-[10px] text-slate-500 line-clamp-2 leading-relaxed">
+                          <p className="text-[10px] text-slate-700 font-medium line-clamp-2 leading-relaxed">
                             {profile.status_comment || 'プロフィール文は設定されていません。'}
                           </p>
                         </div>
 
                         <div className="space-y-1.5">
                           {/* 仕様目安 */}
-                          <div className="flex justify-between items-center text-[10px] text-slate-500">
+                          <div className="flex justify-between items-center text-[10px] text-slate-700 font-bold">
                             <span>納期目安</span>
-                            <span className="font-bold text-slate-700">{profile.lead_time_days || 14}日以内</span>
+                            <span className="font-extrabold text-slate-900">{profile.lead_time_days || 14}日以内</span>
                           </div>
 
                           {/* タグ一覧 */}
                           <div className="flex flex-wrap gap-1">
                             {profile.tastes?.map((taste) => (
-                              <span key={taste} className="text-[9px] font-bold bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded">
+                              <span key={taste} className="text-[9px] font-extrabold bg-purple-100 text-purple-900 px-1.5 py-0.5 rounded">
                                 #{taste}
                               </span>
                             ))}
@@ -646,17 +646,17 @@ export default function Home() {
                         <div className="flex gap-1.5 pt-1">
                           <button
                             onClick={() => toggleCompare(profile)}
-                            className={`flex-1 py-1.5 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                            className={`flex-1 py-1.5 text-xs font-extrabold rounded-xl border transition-all cursor-pointer ${
                               isCompared
-                                ? 'bg-purple-100 text-purple-700 border-purple-300'
-                                : 'bg-slate-50 text-purple-700 border-slate-200 hover:bg-purple-50'
+                                ? 'bg-purple-200 text-purple-900 border-purple-400'
+                                : 'bg-slate-100 text-purple-900 border-slate-300 hover:bg-purple-100'
                             }`}
                           >
                             + 比較
                           </button>
                           <Link
                             href={`/creator/${profile.user_id}`}
-                            className="flex-1 py-1.5 text-xs font-bold text-center text-white bg-purple-600 hover:bg-purple-700 rounded-xl shadow-md transition-all flex items-center justify-center"
+                            className="flex-1 py-1.5 text-xs font-black text-center text-white bg-purple-700 hover:bg-purple-800 rounded-xl shadow-md transition-all flex items-center justify-center"
                           >
                             詳細を見る &gt;
                           </Link>
@@ -673,13 +673,13 @@ export default function Home() {
 
       {/* 比較固定バー */}
       {compareList.length > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/90 text-white backdrop-blur-xl px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-6 z-40 border border-slate-800">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-950/95 text-white backdrop-blur-xl px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-6 z-40 border border-slate-800">
           <div className="text-xs font-bold">
-            比較リスト: <span className="font-extrabold text-purple-400 text-sm mx-1">{compareList.length}</span> / 3 名
+            比較リスト: <span className="font-black text-purple-400 text-sm mx-1">{compareList.length}</span> / 3 名
           </div>
           <button
             onClick={() => setIsCompareOpen(true)}
-            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
+            className="px-4 py-2 bg-purple-700 hover:bg-purple-600 text-white rounded-xl text-xs font-black transition-all shadow-md cursor-pointer"
           >
             比較表を開く
           </button>
@@ -688,16 +688,16 @@ export default function Home() {
 
       {/* 比較モーダル（画像表示付き） */}
       {isCompareOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-3xl p-6 w-full max-w-4xl shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+            <div className="flex justify-between items-center border-b border-slate-200 pb-3">
               <div>
-                <h3 className="text-sm font-extrabold text-slate-900">クリエイター詳細比較</h3>
-                <p className="text-[11px] text-slate-500">選択したクリエイターの条件を一覧で比較できます</p>
+                <h3 className="text-sm font-black text-slate-950">クリエイター詳細比較</h3>
+                <p className="text-[11px] text-slate-600 font-bold">選択したクリエイターの条件を一覧で比較できます</p>
               </div>
               <button
                 onClick={() => setIsCompareOpen(false)}
-                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 font-bold text-xs transition-colors cursor-pointer"
+                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-700 font-extrabold text-xs transition-colors cursor-pointer"
               >
                 ✕
               </button>
@@ -705,7 +705,7 @@ export default function Home() {
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {compareList.map((item) => (
-                <div key={item.user_id} className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60 flex flex-col justify-between space-y-3">
+                <div key={item.user_id} className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col justify-between space-y-3">
                   <div className="space-y-3">
                     {/* 比較表内のサムネイル画像 */}
                     <div className="relative w-full aspect-video bg-slate-200 rounded-xl overflow-hidden">
@@ -716,47 +716,47 @@ export default function Home() {
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400 font-bold">
+                        <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-500 font-extrabold">
                           NO IMAGE
                         </div>
                       )}
                     </div>
 
                     <div className="flex justify-between items-start">
-                      <h4 className="font-extrabold text-slate-900 text-xs">{item.display_name}</h4>
+                      <h4 className="font-black text-slate-950 text-xs">{item.display_name}</h4>
                       <button
                         onClick={() => toggleCompare(item)}
-                        className="text-[10px] text-rose-500 font-bold hover:underline cursor-pointer"
+                        className="text-[10px] text-rose-600 font-extrabold hover:underline cursor-pointer"
                       >
                         削除
                       </button>
                     </div>
 
-                    <div className="text-xs space-y-2 bg-white p-3 rounded-xl border border-slate-200/60">
+                    <div className="text-xs space-y-2 bg-white p-3 rounded-xl border border-slate-200">
                       <div className="flex justify-between">
-                        <span className="text-slate-500">最安参考価格</span>
-                        <span className="font-bold text-purple-600">¥{item.price_min?.toLocaleString() || '応相談'}〜</span>
+                        <span className="text-slate-600 font-bold">最安参考価格</span>
+                        <span className="font-black text-purple-800">¥{item.price_min?.toLocaleString() || '応相談'}〜</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-slate-500">納期目安</span>
-                        <span className="font-bold text-slate-700">{item.lead_time_days || 14}日以内</span>
+                        <span className="text-slate-600 font-bold">納期目安</span>
+                        <span className="font-black text-slate-900">{item.lead_time_days || 14}日以内</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-slate-500">商用利用</span>
-                        <span className={`font-bold ${item.commercial_use_allowed ? 'text-emerald-600' : 'text-slate-400'}`}>
+                        <span className="text-slate-600 font-bold">商用利用</span>
+                        <span className={`font-black ${item.commercial_use_allowed ? 'text-emerald-700' : 'text-slate-500'}`}>
                           {item.commercial_use_allowed ? '可能' : '不可'}
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-slate-500">いいね数</span>
-                        <span className="font-bold text-rose-500">♥ {item.likes_count ?? 0}</span>
+                        <span className="text-slate-600 font-bold">いいね数</span>
+                        <span className="font-black text-rose-600">♥ {item.likes_count ?? 0}</span>
                       </div>
                     </div>
                   </div>
 
                   <Link
                     href={`/creator/${item.user_id}`}
-                    className="block w-full py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold text-center rounded-xl shadow-md transition-all"
+                    className="block w-full py-2 bg-purple-700 hover:bg-purple-800 text-white text-xs font-black text-center rounded-xl shadow-md transition-all"
                   >
                     詳細ページへ
                   </Link>
