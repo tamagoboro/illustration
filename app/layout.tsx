@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image', // 画像を大きく表示するタイプ
     title: 'クリエイター検索・比較',
     description: 'クリエイターのポートフォリオ検索・比較サービス',
-    images: ['/ogp-image.png'], // public/ogp-image.png を参照（metadataBaseにより自動で絶対パス化されます）
+    images: ['icon.png'], // public/ogp-image.png を参照（metadataBaseにより自動で絶対パス化されます）
   },
 
   // LINE, Facebook, Discord等用の共通表示設定（OGP）
