@@ -4,9 +4,20 @@ import { use, useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase, Profile, PortfolioItem } from '@/lib/supabase'
 
+// Profile 型に menu_items を拡張（@/lib/supabase で未定義の場合の補完）
+type MenuItem = {
+  title: string
+  price: number
+}
+
+type ExtendedProfile = Profile & {
+  menu_items?: MenuItem[]
+  price_min?: number | null
+}
+
 export default function CreatorDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const [profile, setProfile] = useState<Profile | null>(null)
+  const [profile, setProfile] = useState<ExtendedProfile | null>(null)
   const [works, setWorks] = useState<PortfolioItem[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -16,7 +27,7 @@ export default function CreatorDetailPage({ params }: { params: Promise<{ id: st
   // 連絡先・見積もりモーダルの開閉
   const [isContactOpen, setIsContactOpen] = useState(false)
 
-  // ★ 1. 初回ロード時に localStorage からお気に入り状態をチェック
+  // 1. 初回ロード時に localStorage からお気に入り状態をチェック
   useEffect(() => {
     const storedFavs = localStorage.getItem('favorite_creators')
     if (storedFavs) {
@@ -44,7 +55,7 @@ export default function CreatorDetailPage({ params }: { params: Promise<{ id: st
       if (profileError) {
         console.error('プロフィールの取得に失敗:', profileError)
       } else {
-        setProfile(profileData)
+        setProfile(profileData as ExtendedProfile)
       }
 
       // ポートフォリオ一覧取得
@@ -66,7 +77,7 @@ export default function CreatorDetailPage({ params }: { params: Promise<{ id: st
     fetchCreatorData()
   }, [id])
 
-  // ★ 3. お気に入りのトグル処理（localStorageに保存）
+  // 3. お気に入りのトグル処理（localStorageに保存）
   const handleToggleFavorite = () => {
     const storedFavs = localStorage.getItem('favorite_creators')
     let favArray: string[] = storedFavs ? JSON.parse(storedFavs) : []
@@ -122,23 +133,36 @@ export default function CreatorDetailPage({ params }: { params: Promise<{ id: st
         <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
           <div className="space-y-3">
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-slate-900">{profile.display_name}</h1>
-              <span
-                className={`text-xs px-3 py-1 rounded-full font-medium ${
-                  profile.status === 'available'
-                    ? 'bg-emerald-100 text-emerald-700'
-                    : 'bg-amber-100 text-amber-700'
-                }`}
-              >
-                {profile.status === 'available' ? '即対応可' : profile.status}
-              </span>
+              {profile.avatar_url && (
+                <img
+                  src={profile.avatar_url}
+                  alt={profile.display_name}
+                  className="w-12 h-12 rounded-full object-cover border border-slate-200"
+                />
+              )}
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-2xl font-bold text-slate-900">{profile.display_name}</h1>
+                  <span
+                    className={`text-xs px-3 py-1 rounded-full font-medium ${
+                      profile.status === 'available'
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : 'bg-amber-100 text-amber-700'
+                    }`}
+                  >
+                    {profile.status === 'available' ? '🟢 即対応可' : '🟡 相談受付中'}
+                  </span>
+                </div>
+              </div>
             </div>
-            <p className="text-slate-600 max-w-xl">
+
+            <p className="text-slate-600 max-w-xl text-sm leading-relaxed whitespace-pre-wrap">
               {profile.status_comment || 'プロフィールコメントはありません。'}
             </p>
-            <div className="flex flex-wrap gap-2">
+
+            <div className="flex flex-wrap gap-2 pt-1">
               {profile.tastes?.map((t) => (
-                <span key={t} className="text-xs bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md">
+                <span key={t} className="text-xs bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md font-medium">
                   #{t}
                 </span>
               ))}
@@ -146,15 +170,18 @@ export default function CreatorDetailPage({ params }: { params: Promise<{ id: st
           </div>
 
           <div className="w-full md:w-auto flex flex-col items-stretch gap-3 bg-slate-50 p-5 rounded-xl border border-slate-100">
-            <div className="text-xs text-slate-500 space-y-1">
-              <div>納期目安: <span className="font-bold text-slate-800">{profile.lead_time_days}日以内</span></div>
-              <div>商用利用: <span className="font-bold text-slate-800">{profile.commercial_use_allowed ? '可' : '不可'}</span></div>
+            <div className="text-xs text-slate-500 space-y-1.5 border-b border-slate-200/60 pb-3">
+              {profile.price_min != null && (
+                <div>最低参考価格: <span className="font-extrabold text-indigo-600 text-sm">¥{profile.price_min.toLocaleString()}〜</span></div>
+              )}
+              <div>納期目安: <span className="font-bold text-slate-800">{profile.lead_time_days ?? '-'}日以内</span></div>
+              <div>商用利用: <span className="font-bold text-slate-800">{profile.commercial_use_allowed ? '可能' : '不可'}</span></div>
             </div>
 
             {/* お気に入り追加・解除ボタン */}
             <button
               onClick={handleToggleFavorite}
-              className={`px-6 py-2.5 text-xs font-bold rounded-xl border transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer ${
+              className={`px-6 py-2.5 text-xs font-bold rounded-xl border transition-all flex items-center justify-center gap-1.5 shadow-xs cursor-pointer ${
                 isFavorite
                   ? 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100'
                   : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
@@ -166,12 +193,34 @@ export default function CreatorDetailPage({ params }: { params: Promise<{ id: st
 
             <button
               onClick={() => setIsContactOpen(true)}
-              className="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition text-center shadow-sm text-sm cursor-pointer"
+              className="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition text-center shadow-xs text-sm cursor-pointer"
             >
               見積もり・相談をする
             </button>
           </div>
         </div>
+
+        {/* 料金メニューセクション */}
+        {profile.menu_items && profile.menu_items.length > 0 && (
+          <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <span>🏷️</span> 料金目安・メニュー一覧
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {profile.menu_items.map((item, index) => (
+                <div
+                  key={index}
+                  className="p-3.5 bg-slate-50 border border-slate-100 rounded-xl flex justify-between items-center"
+                >
+                  <span className="text-xs font-bold text-slate-700">{item.title}</span>
+                  <span className="text-xs font-extrabold text-indigo-600">
+                    ¥{typeof item.price === 'number' ? item.price.toLocaleString() : item.price}〜
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* ポートフォリオギャラリー */}
         <section className="space-y-4">
