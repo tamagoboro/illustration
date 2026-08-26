@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { supabase, Profile } from '@/lib/supabase'
 
 type ProfileWithImage = Profile & {
@@ -487,12 +486,10 @@ export default function Home() {
                       {/* イラスト画像エリア */}
                       <div className="relative w-full aspect-[4/3] bg-slate-100 overflow-hidden">
                         {profile.thumbnail_url ? (
-                          <Image
+                          <img
                             src={profile.thumbnail_url}
                             alt={profile.display_name}
-                            fill
-                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                            className="object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
                           />
                         ) : (
                           <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 bg-slate-50">
