@@ -95,16 +95,12 @@ export default function Home() {
             })
           }
 
-          // いいね数の擬似算出（IDハッシュ等の一定の数値 + 実装上の加算用ベース）
-          const combined: ProfileWithImage[] = profileData.map((p) => {
-            const hash = p.user_id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
-            const baseLikes = (hash % 45) + 5 // 5〜50の擬似的な初期いいね数
-            return {
-              ...p,
-              thumbnail_url: p.avatar_url || imageMap[p.user_id] || null,
-              likes_count: baseLikes
-            }
-          })
+          // DBの実データをそのまま使用（likes_countがnullの場合は0）
+          const combined: ProfileWithImage[] = profileData.map((p) => ({
+            ...p,
+            thumbnail_url: p.avatar_url || imageMap[p.user_id] || null,
+            likes_count: p.likes_count ?? 0
+          }))
 
           // 初期ランダム配置 (Fisher-Yates)
           const randomized = [...combined]
@@ -141,29 +137,40 @@ export default function Home() {
     }
   }, [isCompareOpen])
 
-  // お気に入りの追加 / 解除（いいね数にも反映）
-  const toggleFavorite = (userId: string) => {
+  // お気に入りの追加 / 解除（DBのいいね数も同期更新）
+  const toggleFavorite = async (userId: string) => {
+    const isFav = favorites.includes(userId)
+    const targetProfile = profiles.find((p) => p.user_id === userId)
+    if (!targetProfile) return
+
+    const currentLikes = targetProfile.likes_count ?? 0
+    const newLikes = isFav ? Math.max(0, currentLikes - 1) : currentLikes + 1
+
+    // ローカルStateの即時反映
     setFavorites((prev) => {
-      const isFav = prev.includes(userId)
       const nextFavorites = isFav
         ? prev.filter((id) => id !== userId)
         : [...prev, userId]
 
       localStorage.setItem('favorite_creators', JSON.stringify(nextFavorites))
-
-      // プロフィール内のいいね数をローカル更新
-      setProfiles((prevProfiles) =>
-        prevProfiles.map((p) => {
-          if (p.user_id === userId) {
-            const currentLikes = p.likes_count || 0
-            return { ...p, likes_count: isFav ? Math.max(0, currentLikes - 1) : currentLikes + 1 }
-          }
-          return p
-        })
-      )
-
       return nextFavorites
     })
+
+    setProfiles((prevProfiles) =>
+      prevProfiles.map((p) =>
+        p.user_id === userId ? { ...p, likes_count: newLikes } : p
+      )
+    )
+
+    // Supabase DBへのいいね数更新
+    const { error } = await supabase
+      .from('profiles')
+      .update({ likes_count: newLikes })
+      .eq('user_id', userId)
+
+    if (error) {
+      console.error('いいね数の更新に失敗しました:', error)
+    }
   }
 
   // テイスト選択のトグル処理
