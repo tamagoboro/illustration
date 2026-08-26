@@ -8,13 +8,35 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
+// Edge Runtimeで安全に外部画像をBase64に変換する関数
+async function getImageBase64(url: string) {
+  try {
+    const res = await fetch(url)
+    if (!res.ok) return null
+    const arrayBuffer = await res.arrayBuffer()
+    
+    const bytes = new Uint8Array(arrayBuffer)
+    let binary = ''
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i])
+    }
+    
+    const base64 = btoa(binary)
+    const contentType = res.headers.get('content-type') || 'image/png'
+    return `data:${contentType};base64,${base64}`
+  } catch (e) {
+    console.error('OGP Image Fetch Error:', e)
+    return null
+  }
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
 
-  // プロフィールと作品（背景用）を取得
+  // 1. Supabaseからデータ取得
   const { data: profile } = await supabase
     .from('profiles')
     .select('display_name, avatar_url')
@@ -28,8 +50,16 @@ export async function GET(
     .limit(1)
 
   const name = profile?.display_name || 'クリエイター'
-  const coverImage = works?.[0]?.image_url || ''
 
+  // 2. 画像を Base64 に変換
+  const avatarBase64 = profile?.avatar_url
+    ? await getImageBase64(profile.avatar_url)
+    : null
+  const coverBase64 = works?.[0]?.image_url
+    ? await getImageBase64(works[0].image_url)
+    : null
+
+  // 3. OGP 画像の生成
   return new ImageResponse(
     (
       <div
@@ -45,17 +75,17 @@ export async function GET(
           position: 'relative',
         }}
       >
-        {/* 背景に作品画像をうっすら表示 */}
-        {coverImage && (
+        {/* 背景画像 */}
+        {coverBase64 && (
           <img
-            src={coverImage}
+            src={coverBase64}
             alt=""
             style={{
               position: 'absolute',
               width: '100%',
               height: '100%',
               objectFit: 'cover',
-              opacity: 0.25,
+              opacity: 0.3,
             }}
           />
         )}
@@ -71,26 +101,41 @@ export async function GET(
             backgroundColor: 'rgba(15, 23, 42, 0.85)',
             borderRadius: '24px',
             border: '2px solid rgba(255, 255, 255, 0.1)',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)',
           }}
         >
-          {profile?.avatar_url && (
+          {/* アバター画像 */}
+          {avatarBase64 && (
             <img
-              src={profile.avatar_url}
+              src={avatarBase64}
               alt=""
               style={{
-                width: 100,
-                height: 100,
+                width: 110,
+                height: 110,
                 borderRadius: '50%',
                 marginBottom: 20,
                 objectFit: 'cover',
               }}
             />
           )}
-          <h1 style={{ fontSize: 56, fontWeight: 'bold', marginBottom: 10, margin: 0 }}>
+
+          <h1
+            style={{
+              fontSize: 56,
+              fontWeight: 'bold',
+              margin: 0,
+              color: '#ffffff',
+            }}
+          >
             {name}
           </h1>
-          <p style={{ fontSize: 24, color: '#94a3b8', marginTop: 12, margin: 0 }}>
+          <p
+            style={{
+              fontSize: 24,
+              color: '#94a3b8',
+              marginTop: 12,
+              margin: 0,
+            }}
+          >
             クリエイターポートフォリオ | 検索・比較
           </p>
         </div>
