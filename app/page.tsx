@@ -9,6 +9,16 @@ type ProfileWithImage = Profile & {
   likes_count?: number
 }
 
+// 24時間以内に作成・更新されたか判定する関数 (24時間 = 86,400,000ミリ秒)
+const isRecentlyUpdated = (updatedAt?: string | null) => {
+  if (!updatedAt) return false
+  const updatedTime = new Date(updatedAt).getTime()
+  const currentTime = new Date().getTime()
+  
+  const diffHours = (currentTime - updatedTime) / (1000 * 60 * 60)
+  return diffHours >= 0 && diffHours <= 24
+}
+
 export default function Home() {
   const [profiles, setProfiles] = useState<ProfileWithImage[]>([])
   const [loading, setLoading] = useState(true)
@@ -539,6 +549,9 @@ export default function Home() {
                 {filteredProfiles.map((profile) => {
                   const isFav = favorites.includes(profile.user_id)
                   const isCompared = compareList.some((p) => p.user_id === profile.user_id)
+                  
+                  // updated_at から24時間以内かをチェック
+                  const isNew = isRecentlyUpdated(profile.updated_at)
 
                   return (
                     <div
@@ -562,8 +575,14 @@ export default function Home() {
                           </div>
                         )}
 
-                        {/* 受付ステータスバッジ */}
-                        <div className="absolute top-3 left-3 z-10">
+                        {/* ステータスバッジ & NEWバッジ */}
+                        <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5">
+                          {isNew && (
+                            <span className="inline-flex items-center text-[10px] px-2.5 py-1 rounded-full font-black bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-md shadow-pink-500/30 border border-white/20 animate-pulse">
+                              NEW
+                            </span>
+                          )}
+
                           <span
                             className={`inline-flex items-center gap-1.5 text-[10px] px-3 py-1 rounded-full font-bold backdrop-blur-md shadow-sm ${
                               profile.status === 'available'
