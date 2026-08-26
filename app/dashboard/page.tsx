@@ -688,7 +688,7 @@ export default function Dashboard() {
 
                     <input
                       type="url"
-                      placeholder="または画像URLを直接入力"
+                      placeholder="画像URLを直接入力"
                       value={url}
                       onChange={(e) => {
                         const next = [...portfolioUrls]
