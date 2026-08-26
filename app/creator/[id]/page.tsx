@@ -5,9 +5,10 @@ import Link from 'next/link'
 import { supabase, Profile, PortfolioItem } from '@/lib/supabase'
 
 // Profile 型に menu_items を拡張（@/lib/supabase で未定義の場合の補完）
+// price: number | '' も許容するように変更
 type MenuItem = {
   title: string
-  price: number
+  price: number | ''
 }
 
 type ExtendedProfile = Profile & {
@@ -214,7 +215,7 @@ export default function CreatorDetailPage({ params }: { params: Promise<{ id: st
                 >
                   <span className="text-xs font-bold text-slate-700">{item.title}</span>
                   <span className="text-xs font-extrabold text-indigo-600">
-                    ¥{typeof item.price === 'number' ? item.price.toLocaleString() : item.price}〜
+                    {typeof item.price === 'number' ? `¥${item.price.toLocaleString()}〜` : '要相談'}
                   </span>
                 </div>
               ))}

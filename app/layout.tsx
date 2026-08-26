@@ -1,10 +1,9 @@
 import type { Metadata } from 'next'
 import './globals.css'
 
-// 本番環境のURLを設定（開発環境は localhost にフォールバック）
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL 
-  ? `https://${process.env.NEXT_PUBLIC_SITE_URL}` 
-  : 'http://localhost:3000'
+// 環境変数の先頭に https:// が含まれている場合にも安全に対応
+const rawSiteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+const siteUrl = rawSiteUrl.startsWith('http') ? rawSiteUrl : `https://${rawSiteUrl}`
 
 export const metadata: Metadata = {
   // メタデータで使用するベースURLを定義
@@ -20,10 +19,10 @@ export const metadata: Metadata = {
 
   // Twitter（X）用の表示設定
   twitter: {
-    card: 'summary_large_image', // 画像を大きく表示するタイプ
+    card: 'summary_large_image',
     title: 'クリエイター検索・比較',
     description: 'クリエイターのポートフォリオ検索・比較サービス',
-    images: ['public/icon.png'], // public/ogp-image.png を参照（metadataBaseにより自動で絶対パス化されます）
+    images: ['/icon.png'], // 'public/' を削除し '/' から始める
   },
 
   // LINE, Facebook, Discord等用の共通表示設定（OGP）
@@ -34,7 +33,7 @@ export const metadata: Metadata = {
     siteName: 'クリエイター検索・比較',
     images: [
       {
-        url: 'public/icon.png', // 推奨サイズ: 1200 x 630 px
+        url: '/icon.png', // 'public/' を削除し '/' から始める
         width: 1200,
         height: 630,
         alt: 'クリエイター検索・比較のメインイメージ',

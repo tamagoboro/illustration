@@ -47,6 +47,16 @@ const safeParseInt = (val: any): number | null => {
   return isNaN(parsed) ? null : parsed
 }
 
+// 古いURL形式（/object/portfolios/）を正しいPublic URL形式（/object/public/portfolios/）に補正するヘルパー
+const normalizeStorageUrl = (url: string): string => {
+  if (!url) return ''
+  const trimmed = url.trim()
+  if (trimmed.includes('/storage/v1/object/portfolios/')) {
+    return trimmed.replace('/storage/v1/object/portfolios/', '/storage/v1/object/public/portfolios/')
+  }
+  return trimmed
+}
+
 export default function Dashboard() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -76,7 +86,6 @@ export default function Dashboard() {
 
   const [portfolioUrls, setPortfolioUrls] = useState<string[]>(['', '', '', ''])
   
-  // 新規追加: メニュー項目の動的リストステート
   const [menuItems, setMenuItems] = useState<MenuItem[]>([
     { title: 'アイコン制作', price: 5000 },
     { title: 'ヘッダー制作', price: 8000 }
@@ -119,7 +128,7 @@ export default function Dashboard() {
           setMenuItems(
             profileData.menu_items.map((item: any) => ({
               title: item.title || '',
-              price: typeof item.price === 'number' ? item.price : ''
+              price: typeof item.price === 'number' ? item.price : (item.price === '' ? '' : safeParseInt(item.price) ?? '')
             }))
           )
         }
@@ -149,7 +158,7 @@ export default function Dashboard() {
         const urls = ['', '', '', '']
         portfolioData.forEach((item) => {
           if (item.sort_order < 4) {
-            urls[item.sort_order] = item.image_url || ''
+            urls[item.sort_order] = normalizeStorageUrl(item.image_url || '')
           }
         })
         setPortfolioUrls(urls)
@@ -204,18 +213,56 @@ export default function Dashboard() {
     setTastes((prev) => prev.filter((t) => t !== tagToRemove))
   }
 
+  // 画像軽量化ヘルパー（最大幅1200pxにリサイズ＆WebP圧縮）
+  const compressImage = (file: File, maxWidth = 1200, quality = 0.8): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => {
+        let { width, height } = img
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width)
+          width = maxWidth
+        }
+
+        const canvas = document.createElement('canvas')
+        canvas.width = width
+        canvas.height = height
+
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return reject(new Error('Canvas context error'))
+
+        ctx.drawImage(img, 0, 0, width, height)
+        canvas.toBlob(
+          (blob) => {
+            if (blob) resolve(blob)
+            else reject(new Error('Blob convert error'))
+          },
+          'image/webp',
+          quality
+        )
+      }
+      img.onerror = (err) => reject(err)
+      img.src = URL.createObjectURL(file)
+    })
+  }
+
   const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>, index: number) => {
     const file = e.target.files?.[0]
     if (!file || !user) return
 
     try {
       setUploadingIndex(index)
-      const fileExt = file.name.split('.').pop()
-      const fileName = `${user.id}/${Date.now()}_${index}.${fileExt}`
+
+      // ブラウザ側で圧縮処理を実行
+      const compressedBlob = await compressImage(file, 1200, 0.8)
+      const fileName = `${user.id}/${Date.now()}_${index}.webp`
 
       const { error: uploadError } = await supabase.storage
         .from('portfolios')
-        .upload(fileName, file, { upsert: true })
+        .upload(fileName, compressedBlob, {
+          contentType: 'image/webp',
+          upsert: true,
+        })
 
       if (uploadError) throw uploadError
 
@@ -258,12 +305,12 @@ export default function Dashboard() {
       ? tastes.map((t) => String(t).trim()).filter((t) => t.length > 0)
       : []
 
-    // 有効なメニュー項目のクレンジング
+    // 有効なメニュー項目のクレンジング (数値または空文字を正しく許可)
     const cleanMenuItems = menuItems
-      .filter((item) => item.title.trim().length > 0 && typeof item.price === 'number')
+      .filter((item) => item.title.trim().length > 0)
       .map((item) => ({
         title: item.title.trim(),
-        price: item.price as number
+        price: typeof item.price === 'number' ? item.price : ''
       }))
 
     const profilePayload = {
@@ -317,7 +364,7 @@ export default function Dashboard() {
     const itemsToInsert = portfolioUrls
       .map((url, idx) => ({
         user_id: user.id,
-        image_url: url.trim(),
+        image_url: normalizeStorageUrl(url),
         sort_order: idx,
       }))
       .filter((item) => item.image_url.length > 0)
@@ -525,7 +572,7 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* 新規追加: メニュー料金項目の設定 */}
+              {/* メニュー料金項目の設定 */}
               <div className="space-y-3 sm:col-span-2 border-t border-slate-100 pt-6">
                 <div className="flex justify-between items-center">
                   <div>
@@ -814,7 +861,7 @@ export default function Dashboard() {
                     {uploadingIndex === idx ? (
                       <div className="flex flex-col items-center gap-2 text-xs font-bold text-indigo-600">
                         <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                        アップロード中...
+                        圧縮＆アップロード中...
                       </div>
                     ) : url ? (
                       <img
@@ -833,6 +880,31 @@ export default function Dashboard() {
                   </div>
 
                   <div className="space-y-2 pt-1">
+                    {/* ファイル選択ボタン */}
+                    <label className="block">
+                      <span className="sr-only">画像を選択</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        disabled={uploadingIndex !== null}
+                        onChange={(e) => handleFileUpload(e, idx)}
+                        className="block w-full text-xs text-slate-500
+                          file:mr-3 file:py-2 file:px-4
+                          file:rounded-xl file:border-0
+                          file:text-xs file:font-bold
+                          file:bg-indigo-50 file:text-indigo-700
+                          hover:file:bg-indigo-100
+                          file:cursor-pointer cursor-pointer transition-all"
+                      />
+                    </label>
+
+                    <div className="flex items-center gap-2 my-1">
+                      <div className="h-px bg-slate-200 flex-1"></div>
+                      <span className="text-[10px] font-bold text-slate-300">または</span>
+                      <div className="h-px bg-slate-200 flex-1"></div>
+                    </div>
+
+                    {/* URL直接入力フォーム */}
                     <input
                       type="url"
                       placeholder="画像URLを直接入力"

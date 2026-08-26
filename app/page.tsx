@@ -4,10 +4,10 @@ import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { supabase, Profile } from '@/lib/supabase'
 
-// メニュー項目の型定義
+// メニュー項目の型定義 (Dashboard側と合わせて price: number | '' を許容)
 type MenuItem = {
   title: string
-  price: number
+  price: number | ''
 }
 
 type ProfileWithImage = Profile & {
@@ -20,7 +20,7 @@ type ProfileWithImage = Profile & {
 const BACKGROUND_IMAGE_URL =
   'https://cdn.discordapp.com/attachments/1325516564941897890/1542094317131403344/note_.png?ex=6a8ffabf&is=6a8ea93f&hm=e371a8d85e1cc59fc3d1b31d4f3ce16104e6d53abe04fadcb5ce1cf2fdb0c15e&'
 
-// 24時間以内に作成・更新されたか判定する関数 (24時間 = 86,400,000ミリ秒)
+// 24時間以内に作成・更新されたか判定する関数
 const isRecentlyUpdated = (updatedAt?: string | null) => {
   if (!updatedAt) return false
   const updatedTime = new Date(updatedAt).getTime()
@@ -92,26 +92,27 @@ export default function Home() {
         if (profileError) throw profileError
 
         if (profileData && isMounted) {
+          // ポートフォリオ作品画像の1枚目（sort_order順）を取得
           const { data: portfolioData } = await supabase
             .from('portfolio_items')
-            .select('user_id, image_url')
+            .select('user_id, image_url, sort_order')
             .order('sort_order', { ascending: true })
 
           const imageMap: Record<string, string> = {}
           if (portfolioData) {
             portfolioData.forEach((item) => {
-              if (!imageMap[item.user_id]) {
+              if (!imageMap[item.user_id] && item.image_url) {
                 imageMap[item.user_id] = item.image_url
               }
             })
           }
 
-          // DBの実データをそのまま使用（likes_countがnullの場合は0）
+          // サムネイルはポートフォリオ画像を優先（なければアバター画像）
           const combined: ProfileWithImage[] = profileData.map((p) => ({
             ...p,
-            thumbnail_url: p.avatar_url || imageMap[p.user_id] || null,
+            thumbnail_url: imageMap[p.user_id] || p.avatar_url || null,
             likes_count: p.likes_count ?? 0,
-            menu_items: p.menu_items || null
+            menu_items: Array.isArray(p.menu_items) ? p.menu_items : null
           }))
 
           // 初期ランダム配置 (Fisher-Yates)
@@ -237,9 +238,9 @@ export default function Home() {
   const filteredProfiles = useMemo(() => {
     const list = profiles.filter((profile) => {
       const matchesSearch =
-        profile.display_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (profile.display_name && profile.display_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (profile.status_comment && profile.status_comment.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (profile.menu_items && profile.menu_items.some((item) => item.title.toLowerCase().includes(searchTerm.toLowerCase())))
+        (profile.menu_items && profile.menu_items.some((item) => item.title && item.title.toLowerCase().includes(searchTerm.toLowerCase())))
 
       const matchesTaste =
         selectedTastes.length === 0 ||
@@ -249,10 +250,10 @@ export default function Home() {
         statusFilter === 'ALL' || profile.status === statusFilter
 
       const matchesLeadTime =
-        maxLeadTime === '' || (profile.lead_time_days && profile.lead_time_days <= Number(maxLeadTime))
+        maxLeadTime === '' || (profile.lead_time_days !== null && profile.lead_time_days !== undefined && profile.lead_time_days <= Number(maxLeadTime))
 
       const matchesPrice =
-        maxPrice === '' || (profile.price_min && profile.price_min <= Number(maxPrice))
+        maxPrice === '' || (profile.price_min !== null && profile.price_min !== undefined && profile.price_min <= Number(maxPrice))
 
       const matchesCommercial =
         !commercialOnly || profile.commercial_use_allowed === true
@@ -628,7 +629,7 @@ export default function Home() {
                             </p>
                           </div>
 
-                          {/* メニュー料金表（新規追加箇所） */}
+                          {/* メニュー料金表 */}
                           <div className="space-y-1 border-t border-slate-100 pt-1.5">
                             <span className="text-[9px] font-black text-slate-800 block">料金メニュー</span>
                             {profile.menu_items && profile.menu_items.length > 0 ? (
@@ -639,7 +640,9 @@ export default function Home() {
                                     className="flex justify-between items-center text-[10px] bg-slate-100/70 px-2 py-0.5 rounded-md"
                                   >
                                     <span className="font-extrabold text-slate-800 line-clamp-1">{menu.title}</span>
-                                    <span className="font-black text-purple-900 whitespace-nowrap">¥{menu.price.toLocaleString()}〜</span>
+                                    <span className="font-black text-purple-900 whitespace-nowrap">
+                                      {typeof menu.price === 'number' ? `¥${menu.price.toLocaleString()}〜` : '応相談'}
+                                    </span>
                                   </div>
                                 ))}
                                 {profile.menu_items.length > 3 && (
@@ -770,7 +773,9 @@ export default function Home() {
                           item.menu_items.map((m, idx) => (
                             <div key={idx} className="flex justify-between text-[10px]">
                               <span className="text-slate-600 font-bold">{m.title}</span>
-                              <span className="font-black text-purple-800">¥{m.price.toLocaleString()}〜</span>
+                              <span className="font-black text-purple-800">
+                                {typeof m.price === 'number' ? `¥${m.price.toLocaleString()}〜` : '応相談'}
+                              </span>
                             </div>
                           ))
                         ) : (
