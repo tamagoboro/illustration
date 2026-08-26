@@ -137,7 +137,7 @@ export default function Home() {
     }
   }, [isCompareOpen])
 
-  // お気に入りの追加 / 解除（DBのいいね数も同期更新）
+  // お気に入りの追加 / 解除（RPC経由で他人のいいね数も反映＆比較リストも同期）
   const toggleFavorite = async (userId: string) => {
     const isFav = favorites.includes(userId)
     const targetProfile = profiles.find((p) => p.user_id === userId)
@@ -146,7 +146,7 @@ export default function Home() {
     const currentLikes = targetProfile.likes_count ?? 0
     const newLikes = isFav ? Math.max(0, currentLikes - 1) : currentLikes + 1
 
-    // ローカルStateの即時反映
+    // 1. ローカルState（お気に入りIDリスト）の即時反映
     setFavorites((prev) => {
       const nextFavorites = isFav
         ? prev.filter((id) => id !== userId)
@@ -156,17 +156,27 @@ export default function Home() {
       return nextFavorites
     })
 
+    // 2. メインリスト（profiles）のいいね数を更新
     setProfiles((prevProfiles) =>
       prevProfiles.map((p) =>
         p.user_id === userId ? { ...p, likes_count: newLikes } : p
       )
     )
 
-    // Supabase DBへのいいね数更新
-    const { error } = await supabase
-      .from('profiles')
-      .update({ likes_count: newLikes })
-      .eq('user_id', userId)
+    // 3. 比較リスト（compareList）内のいいね数も同期更新
+    setCompareList((prevCompare) => {
+      const nextCompare = prevCompare.map((p) =>
+        p.user_id === userId ? { ...p, likes_count: newLikes } : p
+      )
+      localStorage.setItem('compare_creators', JSON.stringify(nextCompare))
+      return nextCompare
+    })
+
+    // 4. Supabase RPCを呼び出して安全に他人のいいね数をDB更新
+    const { error } = await supabase.rpc('increment_likes', {
+      target_user_id: userId,
+      increment_val: isFav ? -1 : 1,
+    })
 
     if (error) {
       console.error('いいね数の更新に失敗しました:', error)
