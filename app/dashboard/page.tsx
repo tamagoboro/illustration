@@ -24,6 +24,12 @@ const PRESET_TASTES = [
   '著作権譲渡可',
 ]
 
+// メニュー項目の型定義
+type MenuItem = {
+  title: string
+  price: number | ''
+}
+
 const safeParseInt = (val: any): number | null => {
   if (val === null || val === undefined || typeof val === 'object') return null
   const str = String(val).trim()
@@ -50,7 +56,7 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<'profile' | 'portfolio'>('profile')
   const [user, setUser] = useState<User | null>(null)
 
-  // 追加: プロフィール公開/非公開フラグ
+  // プロフィール公開/非公開フラグ
   const [isPublic, setIsPublic] = useState(true)
 
   const [displayName, setDisplayName] = useState('')
@@ -69,6 +75,12 @@ export default function Dashboard() {
   const [websiteUrl, setWebsiteUrl] = useState('')
 
   const [portfolioUrls, setPortfolioUrls] = useState<string[]>(['', '', '', ''])
+  
+  // 新規追加: メニュー項目の動的リストステート
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([
+    { title: 'アイコン制作', price: 5000 },
+    { title: 'ヘッダー制作', price: 8000 }
+  ])
 
   useEffect(() => {
     const checkUserAndFetchData = async () => {
@@ -90,7 +102,6 @@ export default function Dashboard() {
       }
 
       if (profileData) {
-        // 追加: is_publicの読み込み
         setIsPublic(profileData.is_public ?? true)
 
         setDisplayName(profileData.display_name || '')
@@ -101,6 +112,16 @@ export default function Dashboard() {
           setTastes(profileData.tastes.map((t: any) => String(t)))
         } else {
           setTastes([])
+        }
+
+        // メニュー項目の読み込み
+        if (Array.isArray(profileData.menu_items) && profileData.menu_items.length > 0) {
+          setMenuItems(
+            profileData.menu_items.map((item: any) => ({
+              title: item.title || '',
+              price: typeof item.price === 'number' ? item.price : ''
+            }))
+          )
         }
 
         const parsedLeadTime = safeParseInt(profileData.lead_time_days)
@@ -141,6 +162,28 @@ export default function Dashboard() {
   }, [router])
 
   const [priceMin, setPriceMin] = useState<string>('5000')
+
+  // メニュー操作ハンドラー
+  const handleAddMenuItem = () => {
+    setMenuItems((prev) => [...prev, { title: '', price: '' }])
+  }
+
+  const handleRemoveMenuItem = (index: number) => {
+    setMenuItems((prev) => prev.filter((_, idx) => idx !== index))
+  }
+
+  const handleMenuItemChange = (index: number, key: keyof MenuItem, value: any) => {
+    setMenuItems((prev) =>
+      prev.map((item, idx) => {
+        if (idx !== index) return item
+        if (key === 'price') {
+          const numValue = value === '' ? '' : Math.max(0, parseInt(value, 10) || 0)
+          return { ...item, price: numValue }
+        }
+        return { ...item, [key]: value }
+      })
+    )
+  }
 
   const togglePresetTaste = (tag: string) => {
     setTastes((prev) =>
@@ -215,13 +258,22 @@ export default function Dashboard() {
       ? tastes.map((t) => String(t).trim()).filter((t) => t.length > 0)
       : []
 
+    // 有効なメニュー項目のクレンジング
+    const cleanMenuItems = menuItems
+      .filter((item) => item.title.trim().length > 0 && typeof item.price === 'number')
+      .map((item) => ({
+        title: item.title.trim(),
+        price: item.price as number
+      }))
+
     const profilePayload = {
       user_id: user.id,
-      is_public: Boolean(isPublic), // 追加: 保存ペイロードに含める
+      is_public: Boolean(isPublic),
       display_name: displayName ? displayName.trim() : '',
       status: status,
       status_comment: statusComment ? statusComment.trim() : null,
       tastes: cleanTastes,
+      menu_items: cleanMenuItems,
       lead_time_days: finalLeadTimeDays,
       price_min: finalPriceMin,
       commercial_use_allowed: Boolean(commercialUseAllowed),
@@ -373,7 +425,7 @@ export default function Dashboard() {
             }`}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
             作品ギャラリー
           </button>
@@ -395,7 +447,7 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* 追加: プロフィール公開 / 非公開 設定切り替えカード */}
+            {/* プロフィール公開 / 非公開 設定切り替えカード */}
             <div className={`p-4 rounded-2xl border transition-all ${
               isPublic 
                 ? 'bg-emerald-50/50 border-emerald-200/80' 
@@ -416,7 +468,6 @@ export default function Dashboard() {
                   </p>
                 </div>
 
-                {/* トグルスイッチ */}
                 <button
                   type="button"
                   onClick={() => setIsPublic(!isPublic)}
@@ -471,6 +522,58 @@ export default function Dashboard() {
                     onChange={(e) => setPriceMin(e.target.value)}
                     className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-bold text-indigo-600"
                   />
+                </div>
+              </div>
+
+              {/* 新規追加: メニュー料金項目の設定 */}
+              <div className="space-y-3 sm:col-span-2 border-t border-slate-100 pt-6">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block">料金メニュー設定</label>
+                    <p className="text-[11px] text-slate-400 mt-0.5">一覧カードや比較画面で表示される主な料金ラインナップです</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddMenuItem}
+                    className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1"
+                  >
+                    ＋ メニューを追加
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  {menuItems.map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder="例: アイコン制作"
+                        value={item.title}
+                        onChange={(e) => handleMenuItemChange(idx, 'title', e.target.value)}
+                        className="flex-2 px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium"
+                      />
+                      <div className="relative flex-1">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-semibold">¥</span>
+                        <input
+                          type="number"
+                          step="500"
+                          placeholder="5000"
+                          value={item.price}
+                          onChange={(e) => handleMenuItemChange(idx, 'price', e.target.value)}
+                          className="w-full pl-7 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-bold text-indigo-600"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveMenuItem(idx)}
+                        className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer text-xs font-bold"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                  {menuItems.length === 0 && (
+                    <p className="text-xs text-slate-300 italic py-1">メニューが設定されていません</p>
+                  )}
                 </div>
               </div>
 
@@ -722,7 +825,7 @@ export default function Dashboard() {
                     ) : (
                       <div className="flex flex-col items-center gap-1 text-slate-300">
                         <svg className="w-8 h-8 stroke-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
                         <span className="text-[11px] font-semibold">未登録</span>
                       </div>

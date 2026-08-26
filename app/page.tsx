@@ -4,9 +4,16 @@ import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { supabase, Profile } from '@/lib/supabase'
 
+// メニュー項目の型定義
+type MenuItem = {
+  title: string
+  price: number
+}
+
 type ProfileWithImage = Profile & {
   thumbnail_url?: string | null
   likes_count?: number
+  menu_items?: MenuItem[] | null
 }
 
 // 指定の背景画像URL
@@ -103,7 +110,8 @@ export default function Home() {
           const combined: ProfileWithImage[] = profileData.map((p) => ({
             ...p,
             thumbnail_url: p.avatar_url || imageMap[p.user_id] || null,
-            likes_count: p.likes_count ?? 0
+            likes_count: p.likes_count ?? 0,
+            menu_items: p.menu_items || null
           }))
 
           // 初期ランダム配置 (Fisher-Yates)
@@ -141,7 +149,7 @@ export default function Home() {
     }
   }, [isCompareOpen])
 
-  // お気に入りの追加 / 解除（RPC経由で他人のいいね数も反映＆比較リストも同期）
+  // お気に入りの追加 / 解除
   const toggleFavorite = async (userId: string) => {
     const isFav = favorites.includes(userId)
     const targetProfile = profiles.find((p) => p.user_id === userId)
@@ -150,7 +158,6 @@ export default function Home() {
     const currentLikes = targetProfile.likes_count ?? 0
     const newLikes = isFav ? Math.max(0, currentLikes - 1) : currentLikes + 1
 
-    // 1. ローカルState（お気に入りIDリスト）の即時反映
     setFavorites((prev) => {
       const nextFavorites = isFav
         ? prev.filter((id) => id !== userId)
@@ -160,14 +167,12 @@ export default function Home() {
       return nextFavorites
     })
 
-    // 2. メインリスト（profiles）のいいね数を更新
     setProfiles((prevProfiles) =>
       prevProfiles.map((p) =>
         p.user_id === userId ? { ...p, likes_count: newLikes } : p
       )
     )
 
-    // 3. 比較リスト（compareList）内のいいね数も同期更新
     setCompareList((prevCompare) => {
       const nextCompare = prevCompare.map((p) =>
         p.user_id === userId ? { ...p, likes_count: newLikes } : p
@@ -176,7 +181,6 @@ export default function Home() {
       return nextCompare
     })
 
-    // 4. Supabase RPCを呼び出して安全に他人のいいね数をDB更新
     const { error } = await supabase.rpc('increment_likes', {
       target_user_id: userId,
       increment_val: isFav ? -1 : 1,
@@ -196,7 +200,7 @@ export default function Home() {
     )
   }
 
-  // 比較リストのトグル処理（localStorage保存付き）
+  // 比較リストのトグル処理
   const toggleCompare = (profile: ProfileWithImage) => {
     setCompareList((prev) => {
       const exists = prev.some((p) => p.user_id === profile.user_id)
@@ -234,7 +238,8 @@ export default function Home() {
     const list = profiles.filter((profile) => {
       const matchesSearch =
         profile.display_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (profile.status_comment && profile.status_comment.toLowerCase().includes(searchTerm.toLowerCase()))
+        (profile.status_comment && profile.status_comment.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (profile.menu_items && profile.menu_items.some((item) => item.title.toLowerCase().includes(searchTerm.toLowerCase())))
 
       const matchesTaste =
         selectedTastes.length === 0 ||
@@ -266,7 +271,6 @@ export default function Home() {
       )
     })
 
-    // ソート処理
     return list.sort((a, b) => {
       if (sortOption === 'price_asc') {
         return (a.price_min ?? Infinity) - (b.price_min ?? Infinity)
@@ -280,11 +284,11 @@ export default function Home() {
       if (sortOption === 'likes_asc') {
         return (a.likes_count ?? 0) - (b.likes_count ?? 0)
       }
-      return 0 // randomの場合は初期ランダム順を維持
+      return 0
     })
   }, [profiles, searchTerm, selectedTastes, statusFilter, maxLeadTime, maxPrice, commercialOnly, showFavoritesOnly, favorites, sortOption])
 
-  // テイストの抽出（メモ化）
+  // テイストの抽出
   const displayedTastes = useMemo(() => {
     return Array.from(new Set(profiles.flatMap((p) => p.tastes || [])))
       .filter((taste) =>
@@ -381,7 +385,7 @@ export default function Home() {
                 <label className="text-[11px] font-extrabold text-slate-900 block">キーワード</label>
                 <input
                   type="text"
-                  placeholder="名前、説明文など..."
+                  placeholder="名前、アイコン、立ち絵など..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -546,8 +550,6 @@ export default function Home() {
                 {filteredProfiles.map((profile) => {
                   const isFav = favorites.includes(profile.user_id)
                   const isCompared = compareList.some((p) => p.user_id === profile.user_id)
-                  
-                  // updated_at から24時間以内かをチェック
                   const isNew = isRecentlyUpdated(profile.updated_at)
 
                   return (
@@ -601,7 +603,7 @@ export default function Home() {
                         {/* オーバーレイグラデーション & 最低価格 */}
                         <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-slate-950/90 via-slate-900/50 to-transparent p-3 pt-6 flex justify-between items-end">
                           <div>
-                            <span className="text-[9px] text-slate-300 font-extrabold block">参考価格</span>
+                            <span className="text-[9px] text-slate-300 font-extrabold block">最安目安</span>
                             <span className="text-white font-black text-sm tracking-tight drop-shadow">
                               {profile.price_min ? `¥${profile.price_min.toLocaleString()}〜` : '応相談'}
                             </span>
@@ -616,16 +618,45 @@ export default function Home() {
 
                       {/* 情報本文エリア */}
                       <div className="p-3.5 space-y-2.5 flex-1 flex flex-col justify-between">
-                        <div className="space-y-1">
-                          <h3 className="font-black text-xs text-slate-950 line-clamp-1">
-                            {profile.display_name}
-                          </h3>
-                          <p className="text-[10px] text-slate-700 font-medium line-clamp-2 leading-relaxed">
-                            {profile.status_comment || 'プロフィール文は設定されていません。'}
-                          </p>
+                        <div className="space-y-2">
+                          <div className="space-y-0.5">
+                            <h3 className="font-black text-xs text-slate-950 line-clamp-1">
+                              {profile.display_name}
+                            </h3>
+                            <p className="text-[10px] text-slate-700 font-medium line-clamp-2 leading-relaxed">
+                              {profile.status_comment || 'プロフィール文は設定されていません。'}
+                            </p>
+                          </div>
+
+                          {/* メニュー料金表（新規追加箇所） */}
+                          <div className="space-y-1 border-t border-slate-100 pt-1.5">
+                            <span className="text-[9px] font-black text-slate-800 block">料金メニュー</span>
+                            {profile.menu_items && profile.menu_items.length > 0 ? (
+                              <div className="flex flex-col gap-1">
+                                {profile.menu_items.slice(0, 3).map((menu, index) => (
+                                  <div
+                                    key={index}
+                                    className="flex justify-between items-center text-[10px] bg-slate-100/70 px-2 py-0.5 rounded-md"
+                                  >
+                                    <span className="font-extrabold text-slate-800 line-clamp-1">{menu.title}</span>
+                                    <span className="font-black text-purple-900 whitespace-nowrap">¥{menu.price.toLocaleString()}〜</span>
+                                  </div>
+                                ))}
+                                {profile.menu_items.length > 3 && (
+                                  <span className="text-[8px] text-slate-500 text-right font-extrabold block">
+                                    他 {profile.menu_items.length - 3} 件のメニュー
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="text-[10px] text-slate-500 font-bold bg-slate-50 p-1.5 rounded-lg text-center">
+                                詳細料金はプロフィール参照
+                              </div>
+                            )}
+                          </div>
                         </div>
 
-                        <div className="space-y-1.5">
+                        <div className="space-y-1.5 pt-1">
                           {/* 仕様目安 */}
                           <div className="flex justify-between items-center text-[10px] text-slate-700 font-bold">
                             <span>納期目安</span>
@@ -686,14 +717,14 @@ export default function Home() {
         </div>
       )}
 
-      {/* 比較モーダル（画像表示付き） */}
+      {/* 比較モーダル */}
       {isCompareOpen && (
         <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-3xl p-6 w-full max-w-4xl shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-slate-200 pb-3">
               <div>
                 <h3 className="text-sm font-black text-slate-950">クリエイター詳細比較</h3>
-                <p className="text-[11px] text-slate-600 font-bold">選択したクリエイターの条件を一覧で比較できます</p>
+                <p className="text-[11px] text-slate-600 font-bold">選択したクリエイターのメニュー・条件を一覧で比較できます</p>
               </div>
               <button
                 onClick={() => setIsCompareOpen(false)}
@@ -707,7 +738,6 @@ export default function Home() {
               {compareList.map((item) => (
                 <div key={item.user_id} className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col justify-between space-y-3">
                   <div className="space-y-3">
-                    {/* 比較表内のサムネイル画像 */}
                     <div className="relative w-full aspect-video bg-slate-200 rounded-xl overflow-hidden">
                       {item.thumbnail_url ? (
                         <img
@@ -733,10 +763,24 @@ export default function Home() {
                     </div>
 
                     <div className="text-xs space-y-2 bg-white p-3 rounded-xl border border-slate-200">
-                      <div className="flex justify-between">
-                        <span className="text-slate-600 font-bold">最安参考価格</span>
-                        <span className="font-black text-purple-800">¥{item.price_min?.toLocaleString() || '応相談'}〜</span>
+                      {/* 比較内のメニュー一覧 */}
+                      <div className="space-y-1 pb-1 border-b border-slate-100">
+                        <span className="text-[10px] font-black text-slate-800 block">主な料金</span>
+                        {item.menu_items && item.menu_items.length > 0 ? (
+                          item.menu_items.map((m, idx) => (
+                            <div key={idx} className="flex justify-between text-[10px]">
+                              <span className="text-slate-600 font-bold">{m.title}</span>
+                              <span className="font-black text-purple-800">¥{m.price.toLocaleString()}〜</span>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="flex justify-between text-[10px]">
+                            <span className="text-slate-600 font-bold">最安価格</span>
+                            <span className="font-black text-purple-800">¥{item.price_min?.toLocaleString() || '応相談'}〜</span>
+                          </div>
+                        )}
                       </div>
+
                       <div className="flex justify-between">
                         <span className="text-slate-600 font-bold">納期目安</span>
                         <span className="font-black text-slate-900">{item.lead_time_days || 14}日以内</span>
