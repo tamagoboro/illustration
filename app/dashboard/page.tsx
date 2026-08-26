@@ -684,13 +684,7 @@ export default function Dashboard() {
                   </div>
 
                   <div className="space-y-2 pt-1">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => handleFileUpload(e, idx)}
-                      disabled={uploadingIndex === idx}
-                      className="block w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 cursor-pointer disabled:opacity-50"
-                    />
+
 
                     <input
                       type="url"
