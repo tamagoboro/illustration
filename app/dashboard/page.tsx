@@ -50,6 +50,9 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<'profile' | 'portfolio'>('profile')
   const [user, setUser] = useState<User | null>(null)
 
+  // 追加: プロフィール公開/非公開フラグ
+  const [isPublic, setIsPublic] = useState(true)
+
   const [displayName, setDisplayName] = useState('')
   const [status, setStatus] = useState<'available' | 'busy'>('available')
   const [statusComment, setStatusComment] = useState('')
@@ -57,7 +60,6 @@ export default function Dashboard() {
   const [customTasteInput, setCustomTasteInput] = useState('')
   const [leadTimeDays, setLeadTimeDays] = useState<string>('14')
   const [commercialUseAllowed, setCommercialUseAllowed] = useState(true)
-  const [priceMin, setPriceMin] = useState<string>('5000')
   const [avatarUrl, setAvatarUrl] = useState('')
 
   const [externalEstimationUrl, setExternalEstimationUrl] = useState('')
@@ -88,6 +90,9 @@ export default function Dashboard() {
       }
 
       if (profileData) {
+        // 追加: is_publicの読み込み
+        setIsPublic(profileData.is_public ?? true)
+
         setDisplayName(profileData.display_name || '')
         setStatus(profileData.status || 'available')
         setStatusComment(profileData.status_comment || '')
@@ -134,6 +139,8 @@ export default function Dashboard() {
 
     checkUserAndFetchData()
   }, [router])
+
+  const [priceMin, setPriceMin] = useState<string>('5000')
 
   const togglePresetTaste = (tag: string) => {
     setTastes((prev) =>
@@ -210,6 +217,7 @@ export default function Dashboard() {
 
     const profilePayload = {
       user_id: user.id,
+      is_public: Boolean(isPublic), // 追加: 保存ペイロードに含める
       display_name: displayName ? displayName.trim() : '',
       status: status,
       status_comment: statusComment ? statusComment.trim() : null,
@@ -385,6 +393,44 @@ export default function Dashboard() {
                   <img src={avatarUrl} alt="アバタープレビュー" className="w-full h-full object-cover" />
                 </div>
               )}
+            </div>
+
+            {/* 追加: プロフィール公開 / 非公開 設定切り替えカード */}
+            <div className={`p-4 rounded-2xl border transition-all ${
+              isPublic 
+                ? 'bg-emerald-50/50 border-emerald-200/80' 
+                : 'bg-amber-50/50 border-amber-200/80'
+            }`}>
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2.5 h-2.5 rounded-full ${isPublic ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                    <span className="text-xs font-extrabold text-slate-800">
+                      {isPublic ? '現在：公開中' : '現在：非公開（下書き）'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    {isPublic 
+                      ? '検索一覧や外部URLからプロフィールを閲覧できる状態です。' 
+                      : '検索一覧から除外され、外部からプロフィールを見ることができなくなります。'}
+                  </p>
+                </div>
+
+                {/* トグルスイッチ */}
+                <button
+                  type="button"
+                  onClick={() => setIsPublic(!isPublic)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500/20 ${
+                    isPublic ? 'bg-indigo-600' : 'bg-slate-300'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                      isPublic ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -684,8 +730,6 @@ export default function Dashboard() {
                   </div>
 
                   <div className="space-y-2 pt-1">
-
-
                     <input
                       type="url"
                       placeholder="画像URLを直接入力"
