@@ -63,6 +63,7 @@ export default function Dashboard() {
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null)
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [activeTab, setActiveTab] = useState<'profile' | 'portfolio'>('profile')
   const [user, setUser] = useState<User | null>(null)
 
@@ -244,6 +245,39 @@ export default function Dashboard() {
       img.onerror = (err) => reject(err)
       img.src = URL.createObjectURL(file)
     })
+  }
+
+  // アバターアイコンアップロード関数
+  const handleAvatarFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !user) return
+
+    try {
+      setUploadingAvatar(true)
+
+      // ブラウザ側で正方形・高解像度向けに軽量化（例: 最大幅600px）
+      const compressedBlob = await compressImage(file, 600, 0.85)
+      const fileName = `avatars/${user.id}_${Date.now()}.webp`
+
+      const { error: uploadError } = await supabase.storage
+        .from('portfolios')
+        .upload(fileName, compressedBlob, {
+          contentType: 'image/webp',
+          upsert: true,
+        })
+
+      if (uploadError) throw uploadError
+
+      const { data: publicUrlData } = supabase.storage
+        .from('portfolios')
+        .getPublicUrl(fileName)
+
+      setAvatarUrl(publicUrlData.publicUrl)
+    } catch (error: any) {
+      alert('アイコンのアップロードに失敗しました: ' + error.message)
+    } finally {
+      setUploadingAvatar(false)
+    }
   }
 
   const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>, index: number) => {
@@ -488,7 +522,7 @@ export default function Dashboard() {
                 <p className="text-xs text-slate-400 mt-1">公開プロフィールに反映される基本情報です</p>
               </div>
               {avatarUrl && (
-                <div className="w-12 h-12 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shadow-xs">
+                <div className="w-12 h-12 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shadow-xs shrink-0">
                   <img src={avatarUrl} alt="アバタープレビュー" className="w-full h-full object-cover" />
                 </div>
               )}
@@ -542,6 +576,63 @@ export default function Dashboard() {
                   onChange={(e) => setDisplayName(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
                 />
+              </div>
+
+              {/* プロフィールアイコン画像設定（ファイルアップロード / URL直接入力） */}
+              <div className="space-y-3 sm:col-span-2 p-4 rounded-2xl border border-slate-200/80 bg-slate-50/40">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-bold text-slate-700 block">プロフィールアイコン画像</label>
+                  {avatarUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setAvatarUrl('')}
+                      className="text-[11px] text-rose-500 font-bold hover:underline cursor-pointer"
+                    >
+                      アイコンを解除
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-full border border-slate-200 bg-white overflow-hidden flex items-center justify-center relative shadow-xs shrink-0">
+                    {uploadingAvatar ? (
+                      <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                    ) : avatarUrl ? (
+                      <img src={avatarUrl} alt="アバター" className="w-full h-full object-cover" />
+                    ) : (
+                      <svg className="w-8 h-8 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    )}
+                  </div>
+
+                  <div className="flex-1 space-y-2">
+                    <label className="block">
+                      <span className="sr-only">ファイルから選択</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        disabled={uploadingAvatar}
+                        onChange={handleAvatarFileUpload}
+                        className="block w-full text-xs text-slate-500
+                          file:mr-3 file:py-2 file:px-4
+                          file:rounded-xl file:border-0
+                          file:text-xs file:font-bold
+                          file:bg-indigo-50 file:text-indigo-700
+                          hover:file:bg-indigo-100
+                          file:cursor-pointer cursor-pointer transition-all"
+                      />
+                    </label>
+
+                    <input
+                      type="url"
+                      placeholder="または画像URLを直接入力 (https://...)"
+                      value={avatarUrl}
+                      onChange={(e) => setAvatarUrl(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-300 font-mono text-[11px]"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-1.5">
@@ -646,17 +737,6 @@ export default function Dashboard() {
                   />
                   <span className="text-xs font-bold text-slate-700">商用利用を可能として掲載する</span>
                 </label>
-              </div>
-
-              <div className="space-y-1.5 sm:col-span-2">
-                <label className="text-xs font-bold text-slate-700">プロフィールアイコン画像URL (任意)</label>
-                <input
-                  type="url"
-                  placeholder="https://example.com/avatar.jpg"
-                  value={avatarUrl}
-                  onChange={(e) => setAvatarUrl(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-300 font-mono text-[11px]"
-                />
               </div>
 
               <div className="space-y-1.5 sm:col-span-2">
@@ -818,7 +898,7 @@ export default function Dashboard() {
 
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || uploadingAvatar}
               className="w-full py-3.5 bg-slate-900 hover:bg-indigo-600 active:scale-[0.99] text-white font-extrabold rounded-2xl text-xs transition-all duration-200 shadow-md hover:shadow-indigo-200 cursor-pointer disabled:opacity-50"
             >
               {saving ? '保存中...' : 'プロフィール情報を保存'}
