@@ -18,7 +18,7 @@ type ProfileWithImage = Profile & {
 
 // 指定の背景画像URL
 const BACKGROUND_IMAGE_URL =
-  'https://cdn.discordapp.com/attachments/1325516564941897890/1542094317131403344/note_.png?ex=6a8ffabf&is=6a8ea93f&hm=e371a8d85e1cc59fc3d1b31d4f3ce16104e6d53abe04fadcb5ce1cf2fdb0c15e&'
+  'https://cdn.discordapp.com/attachments/1325516564941897890/1542094317131403344/note_.png?ex=6a91f4ff&is=6a90a37f&hm=fc673445db828380245b6d9e87c01edc7df16019ac27bb26814caf9126f9641a&'
 
 // 24時間以内に作成・更新されたか判定する関数
 const isRecentlyUpdated = (updatedAt?: string | null) => {
@@ -306,45 +306,51 @@ export default function Home() {
       {/* 背景オーバーレイ */}
       <div className="absolute inset-0 bg-white/20 backdrop-blur-[1px] pointer-events-none -z-10" />
 
-      {/* ヘッダー */}
-      <header className="px-6 py-4 flex justify-between items-center max-w-7xl mx-auto">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-purple-700 flex items-center justify-center text-white font-black text-xs shadow-md">
-            ✦
+      {/* 固定ヘッダー (sticky top-0) */}
+      <header className="sticky top-0 z-40 px-6 py-3.5 bg-white/80 backdrop-blur-md border-b border-white/40 shadow-xs">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-purple-700 flex items-center justify-center text-white font-black text-xs shadow-md">
+              ✦
+            </div>
+            <div>
+              <h1 className="text-xs font-black text-slate-950 tracking-wider">
+                CREATOR SEARCH
+              </h1>
+              <p className="text-[10px] text-slate-800 font-extrabold">
+                理想のイラストレーターを探す
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xs font-black text-slate-950 tracking-wider">
-              CREATOR SEARCH
-            </h1>
-            <p className="text-[10px] text-slate-800 font-extrabold">
-              理想のイラストレーターを探す
-            </p>
-          </div>
-        </div>
 
-        <div className="flex items-center gap-2.5">
-          <button
-            onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
-            className={`px-3.5 py-2 text-xs font-bold rounded-2xl border transition-all flex items-center gap-1.5 backdrop-blur-md cursor-pointer ${
-              showFavoritesOnly
-                ? 'bg-rose-600 text-white border-rose-600 shadow-md'
-                : 'bg-white/90 text-purple-900 hover:bg-white border-white/90 shadow-sm'
-            }`}
-          >
-            <span className="text-rose-600">♥</span>
-            <span>お気に入り</span>
-            {favorites.length > 0 && (
-              <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] bg-purple-800 text-white font-black">
-                {favorites.length}
-              </span>
-            )}
-          </button>
-          <Link
-            href={isLoggedIn ? '/dashboard' : '/login'}
-            className="px-4 py-2 text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-2xl shadow-md transition-all"
-          >
-            {isLoggedIn ? 'ダッシュボード' : 'ログイン / 登録'}
-          </Link>
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+              className={`px-3.5 py-2 text-xs font-bold rounded-2xl border transition-all flex items-center gap-1.5 backdrop-blur-md cursor-pointer ${
+                showFavoritesOnly
+                  ? 'bg-rose-600 text-white border-rose-600 shadow-md'
+                  : 'bg-white/90 text-purple-900 hover:bg-white border-white/90 shadow-sm'
+              }`}
+            >
+              <span className="text-rose-600">♥</span>
+              <span>お気に入り</span>
+              {favorites.length > 0 && (
+                <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] bg-purple-800 text-white font-black">
+                  {favorites.length}
+                </span>
+              )}
+            </button>
+            <Link
+              href={isLoggedIn ? '/dashboard' : '/login'}
+              className={`px-4 py-2 text-xs font-black text-white rounded-2xl shadow-md transition-all flex items-center gap-1 active:scale-95 ${
+                isLoggedIn
+                  ? 'bg-purple-700 hover:bg-purple-800'
+                  : 'bg-gradient-to-r from-purple-700 to-indigo-600 hover:from-purple-800 hover:to-indigo-700 ring-2 ring-purple-400/30'
+              }`}
+            >
+              <span>{isLoggedIn ? 'ダッシュボード' : '✦ クリエイター無料登録'}</span>
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -358,6 +364,36 @@ export default function Home() {
           自分にぴったりのクリエイター検索
         </p>
       </section>
+
+      {/* クリエイター登録促進バナー（登録率向上のための追加セクション） */}
+      {!isLoggedIn && (
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 mb-8">
+          <div className="bg-gradient-to-r from-purple-900/90 via-indigo-900/90 to-purple-900/90 backdrop-blur-md rounded-3xl p-5 sm:p-6 text-white border border-purple-400/30 shadow-xl flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="space-y-1 text-center md:text-left">
+              <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
+                <span className="text-[10px] font-extrabold bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full">
+                  掲載手数料 0円
+                </span>
+                <span className="text-[10px] font-extrabold bg-purple-400/30 text-purple-100 px-2 py-0.5 rounded-full border border-purple-300/30">
+                  ポートフォリオ1分作成
+                </span>
+              </div>
+              <h3 className="text-base sm:text-lg font-black tracking-wide">
+                イラストレーター・クリエイターの方へ：作品を掲載しませんか？
+              </h3>
+              <p className="text-xs text-purple-200 font-medium">
+                料金表やポートフォリオを登録するだけで、直接ご相談を受け付けられます。
+              </p>
+            </div>
+            <Link
+              href="/login"
+              className="px-6 py-3 bg-white text-purple-950 hover:bg-purple-50 font-black text-xs rounded-2xl shadow-lg transition-all transform hover:-translate-y-0.5 shrink-0"
+            >
+              無料で作品を登録・掲載する →
+            </Link>
+          </div>
+        </section>
+      )}
 
       {/* メインコンテンツ */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6">
@@ -537,14 +573,22 @@ export default function Home() {
                 ))}
               </div>
             ) : filteredProfiles.length === 0 ? (
-              <div className="text-center py-20 bg-white/90 backdrop-blur-md rounded-3xl border border-white p-6 shadow-md">
+              <div className="text-center py-20 bg-white/90 backdrop-blur-md rounded-3xl border border-white p-6 shadow-md space-y-4">
                 <p className="text-xs font-extrabold text-slate-800">条件に合うクリエイターが見つかりませんでした</p>
-                <button
-                  onClick={resetFilters}
-                  className="mt-3 px-4 py-2 text-xs font-extrabold text-purple-800 bg-purple-100 rounded-xl hover:bg-purple-200 cursor-pointer"
-                >
-                  条件をリセット
-                </button>
+                <div className="flex justify-center gap-3">
+                  <button
+                    onClick={resetFilters}
+                    className="px-4 py-2 text-xs font-extrabold text-purple-800 bg-purple-100 rounded-xl hover:bg-purple-200 cursor-pointer"
+                  >
+                    条件をリセット
+                  </button>
+                  <Link
+                    href="/login"
+                    className="px-4 py-2 text-xs font-extrabold text-white bg-purple-700 rounded-xl hover:bg-purple-800 shadow-md"
+                  >
+                    あなたが最初のクリエイターとして登録する
+                  </Link>
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

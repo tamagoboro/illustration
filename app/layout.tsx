@@ -1,42 +1,51 @@
 import type { Metadata } from 'next'
 import './globals.css'
 
-// 環境変数の先頭に https:// が含まれている場合にも安全に対応
 const rawSiteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
 const siteUrl = rawSiteUrl.startsWith('http') ? rawSiteUrl : `https://${rawSiteUrl}`
 
+const siteTitle = 'CREATOR SEARCH | イラスト依頼・ポートフォリオ比較プラットフォーム'
+const siteDescription = '【掲載無料・手数料0円】イラストレーターやクリエイターの料金表・納期・商用利用条件を一括比較！SNSアイコン、VTuber立ち絵、一枚絵などの依頼相談がスムーズに行える検索サイトです。'
+
 export const metadata: Metadata = {
-  // メタデータで使用するベースURLを定義
   metadataBase: new URL(siteUrl),
-
-  title: 'クリエイター検索・比較',
-  description: 'クリエイターのポートフォリオ検索・比較サービス',
-
-  // Google Search Console 所有権確認用コード
+  title: {
+    default: siteTitle,
+    template: '%s | CREATOR SEARCH',
+  },
+  description: siteDescription,
+  keywords: [
+    'イラスト依頼',
+    'クリエイター検索',
+    'ポートフォリオ',
+    'VTuber 立ち絵 依頼',
+    'アイコン作成 料金',
+    'イラストレーター 比較',
+    '商用利用 イラスト',
+    'イラストレーター',
+    'イラスト検索サイト',
+    'クリエイター検索'
+  ],
   verification: {
     google: 'ux6pHBdkGJujCh1iPf8N9sQ4-JiPnCTibobcaWsA2sE',
   },
-
-  // Twitter（X）用の表示設定
   twitter: {
     card: 'summary_large_image',
-    title: 'クリエイター検索・比較',
-    description: 'クリエイターのポートフォリオ検索・比較サービス',
-    images: ['/icon.png'], // 'public/' を削除し '/' から始める
+    title: siteTitle,
+    description: siteDescription,
+    images: ['/OGP-img.png'],
   },
-
-  // LINE, Facebook, Discord等用の共通表示設定（OGP）
   openGraph: {
-    title: 'クリエイター検索・比較',
-    description: 'クリエイターのポートフォリオ検索・比較サービス',
+    title: siteTitle,
+    description: siteDescription,
     url: siteUrl,
-    siteName: 'クリエイター検索・比較',
+    siteName: 'CREATOR SEARCH',
     images: [
       {
-        url: '/icon.png', // 'public/' を削除し '/' から始める
+        url: '/OGP-img.png',
         width: 1200,
         height: 630,
-        alt: 'クリエイター検索・比較のメインイメージ',
+        alt: 'CREATOR SEARCH メインイメージ',
       },
     ],
     locale: 'ja_JP',
@@ -49,11 +58,29 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
+  // 検索エンジン用の構造化データ (JSON-LD)
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'CREATOR SEARCH',
+    url: siteUrl,
+    description: siteDescription,
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: `${siteUrl}/?q={search_term_string}`,
+      'query-input': 'required name=search_term_string',
+    },
+  }
+
   return (
     <html lang="ja">
-      <body>
-        {children}
-      </body>
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      </head>
+      <body>{children}</body>
     </html>
   )
 }

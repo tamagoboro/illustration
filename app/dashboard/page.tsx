@@ -78,6 +78,7 @@ export default function Dashboard() {
   const [leadTimeDays, setLeadTimeDays] = useState<string>('14')
   const [commercialUseAllowed, setCommercialUseAllowed] = useState(true)
   const [avatarUrl, setAvatarUrl] = useState('')
+  const [priceMin, setPriceMin] = useState<string>('5000')
 
   const [externalEstimationUrl, setExternalEstimationUrl] = useState('')
   const [twitterUrl, setTwitterUrl] = useState('')
@@ -124,7 +125,6 @@ export default function Dashboard() {
           setTastes([])
         }
 
-        // メニュー項目の読み込み
         if (Array.isArray(profileData.menu_items) && profileData.menu_items.length > 0) {
           setMenuItems(
             profileData.menu_items.map((item: any) => ({
@@ -171,8 +171,6 @@ export default function Dashboard() {
     checkUserAndFetchData()
   }, [router])
 
-  const [priceMin, setPriceMin] = useState<string>('5000')
-
   // メニュー操作ハンドラー
   const handleAddMenuItem = () => {
     setMenuItems((prev) => [...prev, { title: '', price: '' }])
@@ -214,8 +212,14 @@ export default function Dashboard() {
     setTastes((prev) => prev.filter((t) => t !== tagToRemove))
   }
 
-  // 画像軽量化ヘルパー（最大幅1200pxにリサイズ＆WebP圧縮）
-  const compressImage = (file: File, maxWidth = 1200, quality = 0.8): Promise<Blob> => {
+  // 画像軽量化＆フォーマット自動切替処理
+  // 1枚目(index === 0)は Twitter OGP 互換重視で JPEG、それ以外は容量重視で WebP に圧縮
+  const compressImage = (
+    file: File, 
+    index: number | 'avatar', 
+    maxWidth = 1200, 
+    quality = 0.8
+  ): Promise<{ blob: Blob; mimeType: string; extension: string }> => {
     return new Promise((resolve, reject) => {
       const img = new Image()
       img.onload = () => {
@@ -232,13 +236,25 @@ export default function Dashboard() {
         const ctx = canvas.getContext('2d')
         if (!ctx) return reject(new Error('Canvas context error'))
 
+        // 1枚目(index === 0)のみ JPEG、アバターや2枚目以降は WebP
+        const isFirstImage = index === 0
+        const mimeType = isFirstImage ? 'image/jpeg' : 'image/webp'
+        const extension = isFirstImage ? 'jpg' : 'webp'
+
+        // JPEGの場合は透過背景が黒くならないように背景を白で塗る
+        if (isFirstImage) {
+          ctx.fillStyle = '#FFFFFF'
+          ctx.fillRect(0, 0, width, height)
+        }
+
         ctx.drawImage(img, 0, 0, width, height)
+
         canvas.toBlob(
           (blob) => {
-            if (blob) resolve(blob)
+            if (blob) resolve({ blob, mimeType, extension })
             else reject(new Error('Blob convert error'))
           },
-          'image/webp',
+          mimeType,
           quality
         )
       }
@@ -255,14 +271,14 @@ export default function Dashboard() {
     try {
       setUploadingAvatar(true)
 
-      // ブラウザ側で正方形・高解像度向けに軽量化（例: 最大幅600px）
-      const compressedBlob = await compressImage(file, 600, 0.85)
-      const fileName = `avatars/${user.id}_${Date.now()}.webp`
+      // アバターは WebP 形式で軽量化（最大幅600px）
+      const { blob, mimeType, extension } = await compressImage(file, 'avatar', 600, 0.85)
+      const fileName = `avatars/${user.id}_${Date.now()}.${extension}`
 
       const { error: uploadError } = await supabase.storage
         .from('portfolios')
-        .upload(fileName, compressedBlob, {
-          contentType: 'image/webp',
+        .upload(fileName, blob, {
+          contentType: mimeType,
           upsert: true,
         })
 
@@ -280,6 +296,7 @@ export default function Dashboard() {
     }
   }
 
+  // ポートフォリオ作品アップロード関数（1枚目: JPEG / 2〜4枚目: WebP）
   const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>, index: number) => {
     const file = e.target.files?.[0]
     if (!file || !user) return
@@ -287,14 +304,14 @@ export default function Dashboard() {
     try {
       setUploadingIndex(index)
 
-      // ブラウザ側で圧縮処理を実行
-      const compressedBlob = await compressImage(file, 1200, 0.8)
-      const fileName = `${user.id}/${Date.now()}_${index}.webp`
+      // index === 0 の場合は JPEG、それ以外は WebP に自動圧縮
+      const { blob, mimeType, extension } = await compressImage(file, index, 1200, 0.8)
+      const fileName = `${user.id}/${Date.now()}_${index}.${extension}`
 
       const { error: uploadError } = await supabase.storage
         .from('portfolios')
-        .upload(fileName, compressedBlob, {
-          contentType: 'image/webp',
+        .upload(fileName, blob, {
+          contentType: mimeType,
           upsert: true,
         })
 
@@ -339,7 +356,6 @@ export default function Dashboard() {
       ? tastes.map((t) => String(t).trim()).filter((t) => t.length > 0)
       : []
 
-    // 有効なメニュー項目のクレンジング (数値または空文字を正しく許可)
     const cleanMenuItems = menuItems
       .filter((item) => item.title.trim().length > 0)
       .map((item) => ({
@@ -528,7 +544,7 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* プロフィール公開 / 非公開 設定切り替えカード */}
+            {/* 公開 / 非公開 切り替え */}
             <div className={`p-4 rounded-2xl border transition-all ${
               isPublic 
                 ? 'bg-emerald-50/50 border-emerald-200/80' 
@@ -578,7 +594,7 @@ export default function Dashboard() {
                 />
               </div>
 
-              {/* プロフィールアイコン画像設定（ファイルアップロード / URL直接入力） */}
+              {/* アイコン画像設定 */}
               <div className="space-y-3 sm:col-span-2 p-4 rounded-2xl border border-slate-200/80 bg-slate-50/40">
                 <div className="flex justify-between items-center">
                   <label className="text-xs font-bold text-slate-700 block">プロフィールアイコン画像</label>
@@ -663,7 +679,7 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* メニュー料金項目の設定 */}
+              {/* メニュー料金項目 */}
               <div className="space-y-3 sm:col-span-2 border-t border-slate-100 pt-6">
                 <div className="flex justify-between items-center">
                   <div>
@@ -750,7 +766,7 @@ export default function Dashboard() {
                 />
               </div>
 
-              {/* Tag Selection Section */}
+              {/* タグ設定 */}
               <div className="space-y-4 sm:col-span-2 border-t border-slate-100 pt-6">
                 <label className="text-xs font-bold text-slate-700 block">得意なテイスト・タグ設定</label>
                 
@@ -911,7 +927,7 @@ export default function Dashboard() {
           <form onSubmit={handleSavePortfolio} className="bg-white rounded-3xl border border-slate-200/70 p-6 sm:p-8 space-y-8 shadow-xs">
             <div className="border-b border-slate-100 pb-4">
               <h2 className="font-extrabold text-slate-900 text-base">作品ギャラリーの設定</h2>
-              <p className="text-xs text-slate-400 mt-1">最大4枚まで登録可能です。1枚目の画像がカード・検索一覧の代表画像になります。</p>
+              <p className="text-xs text-slate-400 mt-1">最大4枚まで登録可能です。1枚目の画像がTwitter OGP・カード一覧の代表画像になります。</p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -920,7 +936,11 @@ export default function Dashboard() {
                   <div className="flex justify-between items-center">
                     <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                       作品 {idx + 1}
-                      {idx === 0 && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-md font-extrabold">メイン代表</span>}
+                      {idx === 0 && (
+                        <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-md font-extrabold">
+                          OGP代表 (JPEG)
+                        </span>
+                      )}
                     </label>
                     {url && (
                       <button
