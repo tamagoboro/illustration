@@ -4,13 +4,11 @@ import './globals.css'
 const rawSiteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
 const siteUrl = rawSiteUrl.startsWith('http') ? rawSiteUrl : `https://${rawSiteUrl}`
 
-// OGP画像はドメイン込みの絶対URLにする必要があります
-const ogImageUrl = `${siteUrl}/OGP-img.png`
-
 const siteTitle = 'CREATOR SEARCH | イラスト依頼・ポートフォリオ比較プラットフォーム'
 const siteDescription = '【掲載無料・手数料0円】イラストレーターやクリエイターの料金表・納期・商用利用条件を一括比較！SNSアイコン、VTuber立ち絵、一枚絵などの依頼相談がスムーズに行える検索サイトです。'
 
 export const metadata: Metadata = {
+  // metadataBase を指定しているため、画像などのパスは '/OGP-img.png' だけで自動補完されます
   metadataBase: new URL(siteUrl),
   title: {
     default: siteTitle,
@@ -32,15 +30,15 @@ export const metadata: Metadata = {
   verification: {
     google: 'ux6pHBdkGJujCh1iPf8N9sQ4-JiPnCTibobcaWsA2sE',
   },
-  // OpenGraph (LINE, Discord, Facebook, X等)
+  // OpenGraph (LINE, Discord, Facebook等)
   openGraph: {
     title: siteTitle,
     description: siteDescription,
-    url: siteUrl,
+    url: './',
     siteName: 'CREATOR SEARCH',
     images: [
       {
-        url: ogImageUrl, // 絶対パスに修正
+        url: '/OGP-img.png', // metadataBaseがあるため相対指定でOK
         width: 1200,
         height: 630,
         alt: 'CREATOR SEARCH メインイメージ',
@@ -54,7 +52,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: siteTitle,
     description: siteDescription,
-    images: [ogImageUrl], // 絶対パスに修正
+    images: ['/OGP-img.png'], // metadataBaseがあるため相対指定でOK
   },
 }
 
