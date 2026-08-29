@@ -22,6 +22,18 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     }
   }
 
+  // SEO用キーワードの動的追加
+  const dynamicKeywords = [
+    profile.display_name,
+    'イラスト依頼',
+    'ポートフォリオ',
+    ...(profile.tastes || []),
+  ]
+
+  // 追加属性に応じた検索キーワード付与
+  if (profile.ai_usage === 'none') dynamicKeywords.push('完全手描き', 'AI未使用')
+  if (profile.r18_allowed) dynamicKeywords.push('R-18', '成人向け')
+
   const title = `${profile.display_name}のイラスト料金表・ポートフォリオ`
   const description = `${profile.display_name}へのイラスト依頼・相談ページです。納期目安: ${profile.lead_time_days ?? '-'}日以内 / 商用利用: ${profile.commercial_use_allowed ? '可能' : '不可'}。実績・ポートフォリオを多数掲載中。`
   const ogImage = profile.avatar_url || '/OGP-img.png'
@@ -29,12 +41,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title,
     description,
-    keywords: [
-      profile.display_name,
-      'イラスト依頼',
-      'ポートフォリオ',
-      ...(profile.tastes || []),
-    ],
+    keywords: dynamicKeywords,
     openGraph: {
       title,
       description,

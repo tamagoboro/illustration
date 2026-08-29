@@ -80,6 +80,14 @@ export default function Dashboard() {
   const [avatarUrl, setAvatarUrl] = useState('')
   const [priceMin, setPriceMin] = useState<string>('5000')
 
+  // 追加項目に関する State
+  const [aiUsage, setAiUsage] = useState<'none' | 'partial' | 'full'>('none')
+  const [aiLearningAllowed, setAiLearningAllowed] = useState(false)
+  const [expressOptionAvailable, setExpressOptionAvailable] = useState(false)
+  const [copyrightTransferAvailable, setCopyrightTransferAvailable] = useState(false)
+  const [freeRevisionCount, setFreeRevisionCount] = useState<string>('2')
+  const [r18Allowed, setR18Allowed] = useState(false)
+
   const [externalEstimationUrl, setExternalEstimationUrl] = useState('')
   const [twitterUrl, setTwitterUrl] = useState('')
   const [instagramUrl, setInstagramUrl] = useState('')
@@ -147,6 +155,15 @@ export default function Dashboard() {
         setInstagramUrl(profileData.instagram_url || '')
         setPixivUrl(profileData.pixiv_url || '')
         setWebsiteUrl(profileData.website_url || '')
+
+        // 追加項目の読み込み
+        setAiUsage(profileData.ai_usage || 'none')
+        setAiLearningAllowed(profileData.ai_learning_allowed ?? false)
+        setExpressOptionAvailable(profileData.express_option_available ?? false)
+        setCopyrightTransferAvailable(profileData.copyright_transfer_available ?? false)
+        const parsedFreeRevision = safeParseInt(profileData.free_revision_count)
+        setFreeRevisionCount(parsedFreeRevision !== null ? String(parsedFreeRevision) : '2')
+        setR18Allowed(profileData.r18_allowed ?? false)
       }
 
       const { data: portfolioData } = await supabase
@@ -213,7 +230,6 @@ export default function Dashboard() {
   }
 
   // 画像軽量化＆フォーマット自動切替処理
-  // 1枚目(index === 0)は Twitter OGP 互換重視で JPEG、それ以外は容量重視で WebP に圧縮
   const compressImage = (
     file: File, 
     index: number | 'avatar', 
@@ -236,12 +252,10 @@ export default function Dashboard() {
         const ctx = canvas.getContext('2d')
         if (!ctx) return reject(new Error('Canvas context error'))
 
-        // 1枚目(index === 0)のみ JPEG、アバターや2枚目以降は WebP
         const isFirstImage = index === 0
         const mimeType = isFirstImage ? 'image/jpeg' : 'image/webp'
         const extension = isFirstImage ? 'jpg' : 'webp'
 
-        // JPEGの場合は透過背景が黒くならないように背景を白で塗る
         if (isFirstImage) {
           ctx.fillStyle = '#FFFFFF'
           ctx.fillRect(0, 0, width, height)
@@ -271,7 +285,6 @@ export default function Dashboard() {
     try {
       setUploadingAvatar(true)
 
-      // アバターは WebP 形式で軽量化（最大幅600px）
       const { blob, mimeType, extension } = await compressImage(file, 'avatar', 600, 0.85)
       const fileName = `avatars/${user.id}_${Date.now()}.${extension}`
 
@@ -296,7 +309,7 @@ export default function Dashboard() {
     }
   }
 
-  // ポートフォリオ作品アップロード関数（1枚目: JPEG / 2〜4枚目: WebP）
+  // ポートフォリオ作品アップロード関数
   const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>, index: number) => {
     const file = e.target.files?.[0]
     if (!file || !user) return
@@ -304,7 +317,6 @@ export default function Dashboard() {
     try {
       setUploadingIndex(index)
 
-      // index === 0 の場合は JPEG、それ以外は WebP に自動圧縮
       const { blob, mimeType, extension } = await compressImage(file, index, 1200, 0.8)
       const fileName = `${user.id}/${Date.now()}_${index}.${extension}`
 
@@ -351,6 +363,7 @@ export default function Dashboard() {
 
     const finalPriceMin = cleanInteger(priceMin)
     const finalLeadTimeDays = cleanInteger(leadTimeDays)
+    const finalFreeRevisionCount = cleanInteger(freeRevisionCount)
 
     const cleanTastes = Array.isArray(tastes) 
       ? tastes.map((t) => String(t).trim()).filter((t) => t.length > 0)
@@ -380,6 +393,13 @@ export default function Dashboard() {
       instagram_url: instagramUrl ? instagramUrl.trim() : null,
       pixiv_url: pixivUrl ? pixivUrl.trim() : null,
       website_url: websiteUrl ? websiteUrl.trim() : null,
+      // 追加項目の保存
+      ai_usage: aiUsage,
+      ai_learning_allowed: Boolean(aiLearningAllowed),
+      express_option_available: Boolean(expressOptionAvailable),
+      copyright_transfer_available: Boolean(copyrightTransferAvailable),
+      free_revision_count: finalFreeRevisionCount,
+      r18_allowed: Boolean(r18Allowed),
       updated_at: new Date().toISOString(),
     }
 
@@ -753,6 +773,137 @@ export default function Dashboard() {
                   />
                   <span className="text-xs font-bold text-slate-700">商用利用を可能として掲載する</span>
                 </label>
+              </div>
+
+              {/* 制作条件・受託範囲の設定（新設エリア） */}
+              <div className="space-y-4 sm:col-span-2 border-t border-slate-100 pt-6">
+                <div>
+                  <h3 className="text-xs font-bold text-slate-900">制作条件・受託範囲の設定</h3>
+                  <p className="text-[11px] text-slate-400 mt-0.5">依頼者とのミスマッチを防ぐための詳細条件です</p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  {/* AI使用の有無（3択切り替え） */}
+                  <div className="space-y-1.5 sm:col-span-2 bg-slate-50/60 p-3.5 rounded-2xl border border-slate-200/80">
+                    <label className="text-xs font-bold text-slate-700 block">生成AIの使用方針</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <label className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
+                        aiUsage === 'none' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-white border-slate-200 text-slate-600'
+                      }`}>
+                        <input
+                          type="radio"
+                          name="aiUsage"
+                          value="none"
+                          checked={aiUsage === 'none'}
+                          onChange={() => setAiUsage('none')}
+                          className="sr-only"
+                        />
+                        <span>完全手描き (AI不使用)</span>
+                      </label>
+                      
+                      <label className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
+                        aiUsage === 'partial' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-white border-slate-200 text-slate-600'
+                      }`}>
+                        <input
+                          type="radio"
+                          name="aiUsage"
+                          value="partial"
+                          checked={aiUsage === 'partial'}
+                          onChange={() => setAiUsage('partial')}
+                          className="sr-only"
+                        />
+                        <span>一部AI補助あり (背景等)</span>
+                      </label>
+
+                      <label className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
+                        aiUsage === 'full' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-white border-slate-200 text-slate-600'
+                      }`}>
+                        <input
+                          type="radio"
+                          name="aiUsage"
+                          value="full"
+                          checked={aiUsage === 'full'}
+                          onChange={() => setAiUsage('full')}
+                          className="sr-only"
+                        />
+                        <span>AI生成・加筆メイン</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* 無料修正回数 */}
+                  <div className="space-y-1.5 bg-slate-50/60 p-3.5 rounded-2xl border border-slate-200/80 flex flex-col justify-between">
+                    <label className="text-xs font-bold text-slate-700">無料リテイク（修正）回数</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        max="10"
+                        placeholder="2"
+                        value={freeRevisionCount}
+                        onChange={(e) => setFreeRevisionCount(e.target.value)}
+                        className="w-24 px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      />
+                      <span className="text-xs font-bold text-slate-500">回まで無料対応</span>
+                    </div>
+                  </div>
+
+                  {/* 急ぎ対応（特急納品）の有無 */}
+                  <label className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-200/80 bg-slate-50/60 cursor-pointer hover:bg-slate-100/50 transition-colors">
+                    <div>
+                      <span className="text-xs font-bold text-slate-700 block">急ぎ・特急対応</span>
+                      <span className="text-[10px] text-slate-400">短納期での相談（要相談/追加料金）</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={expressOptionAvailable}
+                      onChange={(e) => setExpressOptionAvailable(e.target.checked)}
+                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                    />
+                  </label>
+
+                  {/* 著作権譲渡の有無 */}
+                  <label className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-200/80 bg-slate-50/60 cursor-pointer hover:bg-slate-100/50 transition-colors">
+                    <div>
+                      <span className="text-xs font-bold text-slate-700 block">著作権譲渡</span>
+                      <span className="text-[10px] text-slate-400">相談または条件付きで対応可能</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={copyrightTransferAvailable}
+                      onChange={(e) => setCopyrightTransferAvailable(e.target.checked)}
+                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                    />
+                  </label>
+
+                  {/* AI学習許可の有無 */}
+                  <label className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-200/80 bg-slate-50/60 cursor-pointer hover:bg-slate-100/50 transition-colors">
+                    <div>
+                      <span className="text-xs font-bold text-slate-700 block">自身の作品のAI学習</span>
+                      <span className="text-[10px] text-slate-400">無断学習・追加学習を許可するか</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={aiLearningAllowed}
+                      onChange={(e) => setAiLearningAllowed(e.target.checked)}
+                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                    />
+                  </label>
+
+                  {/* R-18イラスト対応の有無 */}
+                  <label className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-200/80 bg-slate-50/60 cursor-pointer hover:bg-slate-100/50 transition-colors">
+                    <div>
+                      <span className="text-xs font-bold text-slate-700 block">R-18（成人向け）対応</span>
+                      <span className="text-[10px] text-slate-400">センシティブコンテンツの受託</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={r18Allowed}
+                      onChange={(e) => setR18Allowed(e.target.checked)}
+                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                    />
+                  </label>
+                </div>
               </div>
 
               <div className="space-y-1.5 sm:col-span-2">

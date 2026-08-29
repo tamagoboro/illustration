@@ -4,16 +4,23 @@ import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { supabase, Profile } from '@/lib/supabase'
 
-// メニュー項目の型定義 (Dashboard側と合わせて price: number | '' を許容)
+// メニュー項目の型定義
 type MenuItem = {
   title: string
   price: number | ''
 }
 
+// 拡張型定義（追加された制作条件フィールドを反映）
 type ProfileWithImage = Profile & {
   thumbnail_url?: string | null
   likes_count?: number
   menu_items?: MenuItem[] | null
+  ai_usage?: string | null
+  free_revision_count?: number | null
+  express_option_available?: boolean | null
+  copyright_transfer_available?: boolean | null
+  ai_learning_allowed?: boolean | null
+  r18_allowed?: boolean | null
 }
 
 // 指定の背景画像URL
@@ -51,7 +58,7 @@ export default function Home() {
   const [compareList, setCompareList] = useState<ProfileWithImage[]>([])
   const [isCompareOpen, setIsCompareOpen] = useState(false)
 
-  // 初回描画時に localStorage からお気に入り・比較リストを復元
+  // 初回描画時に localStorage から復元
   useEffect(() => {
     const storedFavs = localStorage.getItem('favorite_creators')
     if (storedFavs) {
@@ -92,7 +99,6 @@ export default function Home() {
         if (profileError) throw profileError
 
         if (profileData && isMounted) {
-          // ポートフォリオ作品画像の1枚目（sort_order順）を取得
           const { data: portfolioData } = await supabase
             .from('portfolio_items')
             .select('user_id, image_url, sort_order')
@@ -107,7 +113,6 @@ export default function Home() {
             })
           }
 
-          // サムネイルはポートフォリオ画像を優先（なければアバター画像）
           const combined: ProfileWithImage[] = profileData.map((p) => ({
             ...p,
             thumbnail_url: imageMap[p.user_id] || p.avatar_url || null,
@@ -115,7 +120,6 @@ export default function Home() {
             menu_items: Array.isArray(p.menu_items) ? p.menu_items : null
           }))
 
-          // 初期ランダム配置 (Fisher-Yates)
           const randomized = [...combined]
           for (let i = randomized.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
@@ -192,7 +196,6 @@ export default function Home() {
     }
   }
 
-  // テイスト選択のトグル処理
   const toggleTaste = (taste: string) => {
     setSelectedTastes((prev) =>
       prev.includes(taste)
@@ -201,7 +204,6 @@ export default function Home() {
     )
   }
 
-  // 比較リストのトグル処理
   const toggleCompare = (profile: ProfileWithImage) => {
     setCompareList((prev) => {
       const exists = prev.some((p) => p.user_id === profile.user_id)
@@ -234,7 +236,6 @@ export default function Home() {
     setSortOption('random')
   }
 
-  // フィルタリング＆並び替え処理（メモ化）
   const filteredProfiles = useMemo(() => {
     const list = profiles.filter((profile) => {
       const matchesSearch =
@@ -289,7 +290,6 @@ export default function Home() {
     })
   }, [profiles, searchTerm, selectedTastes, statusFilter, maxLeadTime, maxPrice, commercialOnly, showFavoritesOnly, favorites, sortOption])
 
-  // テイストの抽出
   const displayedTastes = useMemo(() => {
     return Array.from(new Set(profiles.flatMap((p) => p.tastes || [])))
       .filter((taste) =>
@@ -303,10 +303,9 @@ export default function Home() {
       className="min-h-screen text-slate-900 pb-32 font-sans antialiased relative bg-fixed bg-cover bg-center"
       style={{ backgroundImage: `url(${BACKGROUND_IMAGE_URL})` }}
     >
-      {/* 背景オーバーレイ */}
       <div className="absolute inset-0 bg-white/20 backdrop-blur-[1px] pointer-events-none -z-10" />
 
-      {/* 固定ヘッダー (sticky top-0) */}
+      {/* ヘッダー */}
       <header className="sticky top-0 z-40 px-6 py-3.5 bg-white/80 backdrop-blur-md border-b border-white/40 shadow-xs">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-2.5">
@@ -354,7 +353,7 @@ export default function Home() {
         </div>
       </header>
 
-      {/* ヒーローヘッダー */}
+      {/* ヒーロー */}
       <section className="text-center py-10 px-4 max-w-4xl mx-auto space-y-2">
         <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-wide font-serif drop-shadow-[0_1px_2px_rgba(255,255,255,0.8)]">
           『誰に頼むか決まらない…』<br />
@@ -365,7 +364,6 @@ export default function Home() {
         </p>
       </section>
 
-      {/* クリエイター登録促進バナー（登録率向上のための追加セクション） */}
       {!isLoggedIn && (
         <section className="max-w-7xl mx-auto px-4 sm:px-6 mb-8">
           <div className="bg-gradient-to-r from-purple-900/90 via-indigo-900/90 to-purple-900/90 backdrop-blur-md rounded-3xl p-5 sm:p-6 text-white border border-purple-400/30 shadow-xl flex flex-col md:flex-row justify-between items-center gap-4">
@@ -398,8 +396,7 @@ export default function Home() {
       {/* メインコンテンツ */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
-
-          {/* 検索・絞り込みサイドバー */}
+          {/* サイドバー */}
           <aside className="lg:col-span-1 space-y-6">
             <div className="bg-white/90 backdrop-blur-md p-5 rounded-3xl border border-white/80 shadow-lg shadow-purple-900/10 space-y-4">
               <div className="flex justify-between items-center pb-1">
@@ -417,7 +414,6 @@ export default function Home() {
                 </button>
               </div>
 
-              {/* キーワード検索 */}
               <div className="space-y-1">
                 <label className="text-[11px] font-extrabold text-slate-900 block">キーワード</label>
                 <input
@@ -429,7 +425,6 @@ export default function Home() {
                 />
               </div>
 
-              {/* 予算上限 */}
               <div className="space-y-1">
                 <label className="text-[11px] font-extrabold text-slate-900 block">予算上限</label>
                 <div className="flex items-center gap-2">
@@ -445,7 +440,6 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* 納期目安 */}
               <div className="space-y-1">
                 <label className="text-[11px] font-extrabold text-slate-900 block">希望納期</label>
                 <div className="flex items-center gap-2">
@@ -460,7 +454,6 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* 受付ステータス */}
               <div className="space-y-1">
                 <label className="text-[11px] font-extrabold text-slate-900 block">受付状況</label>
                 <select
@@ -474,7 +467,6 @@ export default function Home() {
                 </select>
               </div>
 
-              {/* 商用利用トグル */}
               <div className="pt-1">
                 <label className="flex items-center justify-between cursor-pointer">
                   <span className="text-[11px] font-extrabold text-slate-900">商用利用可能のみ</span>
@@ -487,7 +479,6 @@ export default function Home() {
                 </label>
               </div>
 
-              {/* テイストフィルター */}
               <div className="space-y-2 pt-2 border-t border-slate-200">
                 <div className="flex items-center justify-between">
                   <label className="text-[11px] font-extrabold text-slate-900 block">
@@ -546,7 +537,6 @@ export default function Home() {
                 該当クリエイター <span className="text-sm font-black text-purple-800 mx-1">{filteredProfiles.length}</span> 名
               </p>
 
-              {/* ソートセレクター */}
               <div className="flex items-center gap-2">
                 <span className="text-xs font-extrabold text-slate-900">並び替え:</span>
                 <select
@@ -596,6 +586,10 @@ export default function Home() {
                   const isFav = favorites.includes(profile.user_id)
                   const isCompared = compareList.some((p) => p.user_id === profile.user_id)
                   const isNew = isRecentlyUpdated(profile.updated_at)
+                  
+                  // 条件判定（完全手描き＆R-18対応）
+                  const isPureHandDrawn = profile.ai_usage === 'none'
+                  const isR18Allowed = profile.r18_allowed === true
 
                   return (
                     <div
@@ -616,8 +610,8 @@ export default function Home() {
                           </div>
                         )}
 
-                        {/* ステータスバッジ & NEWバッジ */}
-                        <div className="absolute top-2.5 left-2.5 flex items-center gap-1">
+                        {/* 左上：ステータス & NEW & 追加バッジ */}
+                        <div className="absolute top-2.5 left-2.5 flex flex-wrap items-center gap-1 max-w-[70%]">
                           {isNew && (
                             <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-pink-600 text-white shadow-md">
                               NEW
@@ -631,9 +625,23 @@ export default function Home() {
                           >
                             {profile.status === 'available' ? '即対応可' : '相談受付中'}
                           </span>
+
+                          {/* 完全手描きバッジ */}
+                          {isPureHandDrawn && (
+                            <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-indigo-600 text-white shadow-md">
+                              ✦ 完全手描き
+                            </span>
+                          )}
+
+                          {/* R-18対応バッジ */}
+                          {isR18Allowed && (
+                            <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-rose-600 text-white shadow-md">
+                              R-18 OK
+                            </span>
+                          )}
                         </div>
 
-                        {/* お気に入りボタン＆いいね数バッジ */}
+                        {/* 右上：お気に入りボタン */}
                         <button
                           type="button"
                           onClick={() => toggleFavorite(profile.user_id)}
@@ -764,7 +772,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* 比較モーダル */}
+      {/* 比較モーダル（詳細画面） */}
       {isCompareOpen && (
         <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-3xl p-6 w-full max-w-4xl shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto">
@@ -810,7 +818,7 @@ export default function Home() {
                     </div>
 
                     <div className="text-xs space-y-2 bg-white p-3 rounded-xl border border-slate-200">
-                      {/* 比較内のメニュー一覧 */}
+                      {/* メニュー一覧 */}
                       <div className="space-y-1 pb-1 border-b border-slate-100">
                         <span className="text-[10px] font-black text-slate-800 block">主な料金</span>
                         {item.menu_items && item.menu_items.length > 0 ? (
@@ -830,19 +838,59 @@ export default function Home() {
                         )}
                       </div>
 
-                      <div className="flex justify-between">
-                        <span className="text-slate-600 font-bold">納期目安</span>
-                        <span className="font-black text-slate-900">{item.lead_time_days || 14}日以内</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-600 font-bold">商用利用</span>
-                        <span className={`font-black ${item.commercial_use_allowed ? 'text-emerald-700' : 'text-slate-500'}`}>
-                          {item.commercial_use_allowed ? '可能' : '不可'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-600 font-bold">いいね数</span>
-                        <span className="font-black text-rose-600">♥ {item.likes_count ?? 0}</span>
+                      {/* 制作条件・各種対応項目の比較 */}
+                      <div className="space-y-1.5 pt-1">
+                        <div className="flex justify-between text-[10px]">
+                          <span className="text-slate-600 font-bold">AI使用方針</span>
+                          <span className="font-black text-indigo-900">
+                            {item.ai_usage === 'none' ? '完全手描き' : item.ai_usage === 'partial' ? '一部AI使用' : item.ai_usage === 'main' ? 'AIメイン' : '未設定'}
+                          </span>
+                        </div>
+
+                        <div className="flex justify-between text-[10px]">
+                          <span className="text-slate-600 font-bold">R-18対応</span>
+                          <span className={`font-black ${item.r18_allowed ? 'text-rose-600' : 'text-slate-500'}`}>
+                            {item.r18_allowed ? '可能 (R-18 OK)' : '不可'}
+                          </span>
+                        </div>
+
+                        <div className="flex justify-between text-[10px]">
+                          <span className="text-slate-600 font-bold">無料リテイク</span>
+                          <span className="font-black text-slate-900">
+                            {typeof item.free_revision_count === 'number' ? `${item.free_revision_count}回まで` : '要相談'}
+                          </span>
+                        </div>
+
+                        <div className="flex justify-between text-[10px]">
+                          <span className="text-slate-600 font-bold">納期目安</span>
+                          <span className="font-black text-slate-900">{item.lead_time_days || 14}日以内</span>
+                        </div>
+
+                        <div className="flex justify-between text-[10px]">
+                          <span className="text-slate-600 font-bold">特急対応</span>
+                          <span className={`font-black ${item.express_option_available ? 'text-amber-600' : 'text-slate-500'}`}>
+                            {item.express_option_available ? '相談可' : '不可'}
+                          </span>
+                        </div>
+
+                        <div className="flex justify-between text-[10px]">
+                          <span className="text-slate-600 font-bold">商用利用</span>
+                          <span className={`font-black ${item.commercial_use_allowed ? 'text-emerald-700' : 'text-slate-500'}`}>
+                            {item.commercial_use_allowed ? '可能' : '不可'}
+                          </span>
+                        </div>
+
+                        <div className="flex justify-between text-[10px]">
+                          <span className="text-slate-600 font-bold">著作権譲渡</span>
+                          <span className={`font-black ${item.copyright_transfer_available ? 'text-indigo-700' : 'text-slate-500'}`}>
+                            {item.copyright_transfer_available ? '相談可' : '不可'}
+                          </span>
+                        </div>
+
+                        <div className="flex justify-between text-[10px]">
+                          <span className="text-slate-600 font-bold">いいね数</span>
+                          <span className="font-black text-rose-600">♥ {item.likes_count ?? 0}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
