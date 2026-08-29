@@ -25,7 +25,7 @@ type ProfileWithImage = Profile & {
 
 // 指定の背景画像URL
 const BACKGROUND_IMAGE_URL =
-  'https://qcklfkslqtjnxufqcqyi.supabase.co/storage/v1/object/public/portfolios/OGP-img.png'
+  'https://qcklfkslqtjnxufqcqyi.supabase.co/storage/v1/object/public/portfolios/bg.png'
 // 24時間以内に作成・更新されたか判定する関数
 const isRecentlyUpdated = (updatedAt?: string | null) => {
   if (!updatedAt) return false
