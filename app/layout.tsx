@@ -8,7 +8,6 @@ const siteTitle = 'CREATOR SEARCH | イラスト依頼・ポートフォリオ�
 const siteDescription = '【掲載無料・手数料0円】イラストレーターやクリエイターの料金表・納期・商用利用条件を一括比較！SNSアイコン、VTuber立ち絵、一枚絵などの依頼相談がスムーズに行える検索サイトです。'
 
 export const metadata: Metadata = {
-  // metadataBase を指定しているため、画像などのパスは '/OGP-img.png' だけで自動補完されます
   metadataBase: new URL(siteUrl),
   title: {
     default: siteTitle,
@@ -30,15 +29,14 @@ export const metadata: Metadata = {
   verification: {
     google: 'ux6pHBdkGJujCh1iPf8N9sQ4-JiPnCTibobcaWsA2sE',
   },
-  // OpenGraph (LINE, Discord, Facebook等)
   openGraph: {
     title: siteTitle,
     description: siteDescription,
-    url: './',
+    url: siteUrl,
     siteName: 'CREATOR SEARCH',
     images: [
       {
-        url: '/OGP-img.png', // metadataBaseがあるため相対指定でOK
+        url: '/OGP-img.png',
         width: 1200,
         height: 630,
         alt: 'CREATOR SEARCH メインイメージ',
@@ -47,12 +45,11 @@ export const metadata: Metadata = {
     locale: 'ja_JP',
     type: 'website',
   },
-  // Twitter / X
   twitter: {
     card: 'summary_large_image',
     title: siteTitle,
     description: siteDescription,
-    images: ['/OGP-img.png'], // metadataBaseがあるため相対指定でOK
+    images: [`${siteUrl}/OGP-img.png`], // 絶対パスにする
   },
 }
 
@@ -61,7 +58,6 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
-  // 検索エンジン用の構造化データ (JSON-LD)
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
