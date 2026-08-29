@@ -149,7 +149,7 @@ export default function Dashboard() {
         setPriceMin(parsedPriceMin !== null ? String(parsedPriceMin) : '')
 
         setCommercialUseAllowed(profileData.commercial_use_allowed ?? true)
-        setAvatarUrl(profileData.avatar_url || '')
+        setAvatarUrl(normalizeStorageUrl(profileData.avatar_url || ''))
         setExternalEstimationUrl(profileData.external_estimation_url || '')
         setTwitterUrl(profileData.twitter_url || '')
         setInstagramUrl(profileData.instagram_url || '')
@@ -286,7 +286,8 @@ export default function Dashboard() {
       setUploadingAvatar(true)
 
       const { blob, mimeType, extension } = await compressImage(file, 'avatar', 600, 0.85)
-      const fileName = `avatars/${user.id}_${Date.now()}.${extension}`
+      // avatars/ フォルダを作らずユーザーIDフォルダー直下にアバター画像を配置
+      const fileName = `${user.id}/avatar_${Date.now()}.${extension}`
 
       const { error: uploadError } = await supabase.storage
         .from('portfolios')
@@ -301,7 +302,7 @@ export default function Dashboard() {
         .from('portfolios')
         .getPublicUrl(fileName)
 
-      setAvatarUrl(publicUrlData.publicUrl)
+      setAvatarUrl(normalizeStorageUrl(publicUrlData.publicUrl))
     } catch (error: any) {
       alert('アイコンのアップロードに失敗しました: ' + error.message)
     } finally {
@@ -334,7 +335,7 @@ export default function Dashboard() {
         .getPublicUrl(fileName)
 
       const nextUrls = [...portfolioUrls]
-      nextUrls[index] = publicUrlData.publicUrl
+      nextUrls[index] = normalizeStorageUrl(publicUrlData.publicUrl)
       setPortfolioUrls(nextUrls)
     } catch (error: any) {
       alert('画像のアップロードに失敗しました: ' + error.message)
@@ -387,7 +388,7 @@ export default function Dashboard() {
       lead_time_days: finalLeadTimeDays,
       price_min: finalPriceMin,
       commercial_use_allowed: Boolean(commercialUseAllowed),
-      avatar_url: avatarUrl ? avatarUrl.trim() : null,
+      avatar_url: avatarUrl ? normalizeStorageUrl(avatarUrl.trim()) : null,
       external_estimation_url: externalEstimationUrl ? externalEstimationUrl.trim() : null,
       twitter_url: twitterUrl ? twitterUrl.trim() : null,
       instagram_url: instagramUrl ? instagramUrl.trim() : null,
