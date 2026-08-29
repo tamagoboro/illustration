@@ -25,6 +25,9 @@ export const metadata: Metadata = {
     'イラストレーター',
     'イラスト検索サイト',
     'クリエイター検索',
+    'CREATOR SEARCH',
+    'ポートフォリオ比較',
+    'おすすめ'
   ],
   verification: {
     google: 'ux6pHBdkGJujCh1iPf8N9sQ4-JiPnCTibobcaWsA2sE',
