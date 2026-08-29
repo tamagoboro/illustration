@@ -49,7 +49,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: siteTitle,
     description: siteDescription,
-    images: [`https://media.discordapp.net/attachments/1325516564941897890/1543197350087098428/OGP-img.png.png?ex=6a93fe07&is=6a92ac87&hm=bb722b4d0c4afb55bece26438cd065e5789edf9ddf660e0b31e63af66c24954d&=&format=webp&quality=lossless`], // 絶対パスにする
+    images: [`https://qcklfkslqtjnxufqcqyi.supabase.co/storage/v1/object/public/portfolios/OGP-img.png`], // 絶対パスにする
   },
 }
 
@@ -67,7 +67,7 @@ export default function RootLayout({
     potentialAction: {
       '@type': 'SearchAction',
       target: `${siteUrl}/?q={search_term_string}`,
-      
+
       'query-input': 'required name=search_term_string',
     },
   }
