@@ -5,7 +5,7 @@ import { createClient } from '@/utils/supabase/client'
 import { Profile } from '@/types/database'
 import { useCompareStore } from '@/store/useCompareStore'
 import Link from 'next/link'
-import { ArrowLeft, Check, X, ExternalLink, Trash2, ShieldAlert, Sparkles, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Check, X, ExternalLink, Trash2, Sparkles } from 'lucide-react'
 
 // Profile型に追加項目を拡張
 type ExtendedProfile = Profile & {
@@ -100,7 +100,7 @@ export default function ComparePage() {
               gridTemplateColumns: `200px repeat(${profiles.length}, minmax(240px, 1fr))`,
             }}
           >
-            {/* 1. プロフィール・基本情報 */}
+            {/* 1. プロフィール・基本情報（バッジ配置部分） */}
             <div className="p-4 bg-slate-50 font-bold text-slate-500 text-sm flex items-center">
               クリエイター
             </div>
@@ -118,13 +118,13 @@ export default function ComparePage() {
                   alt={p.display_name}
                   className="w-20 h-20 rounded-full object-cover mb-3 border-2 border-slate-100"
                 />
-                <h3 className="font-bold text-slate-800 text-lg mb-1">{p.display_name}</h3>
+                <h3 className="font-bold text-slate-800 text-lg mb-1.5">{p.display_name}</h3>
                 
-                {/* バッジ表示 */}
+                {/* クリエイター名直下の条件付きバッジ */}
                 <div className="flex flex-wrap justify-center gap-1 mb-2">
                   {p.ai_usage === 'none' && (
                     <span className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded-full border border-indigo-200 flex items-center gap-1">
-                      <Sparkles size={10} /> 完全手描き
+                      <Sparkles size={10} /> ✦ 完全手描き
                     </span>
                   )}
                   {p.r18_allowed && (
@@ -196,7 +196,7 @@ export default function ComparePage() {
               </div>
             ))}
 
-            {/* 6. 生成AIの使用（新規項目） */}
+            {/* 6. 生成AIの使用（テーブル行追加） */}
             <div className="p-4 bg-slate-50 font-bold text-slate-500 text-sm flex items-center">
               生成AIの使用
             </div>
@@ -212,7 +212,7 @@ export default function ComparePage() {
               </div>
             ))}
 
-            {/* 7. R-18（成人向け）（新規項目） */}
+            {/* 7. R-18（成人向け）（テーブル行追加） */}
             <div className="p-4 bg-slate-50 font-bold text-slate-500 text-sm flex items-center">
               R-18（成人向け）
             </div>
@@ -228,7 +228,7 @@ export default function ComparePage() {
               </div>
             ))}
 
-            {/* 8. 無料リテイク数（新規項目） */}
+            {/* 8. 無料リテイク（テーブル行追加） */}
             <div className="p-4 bg-slate-50 font-bold text-slate-500 text-sm flex items-center">
               無料リテイク
             </div>
@@ -240,7 +240,7 @@ export default function ComparePage() {
               </div>
             ))}
 
-            {/* 9. 急ぎ・特急対応（新規項目） */}
+            {/* 9. 急ぎ・特急対応（テーブル行追加） */}
             <div className="p-4 bg-slate-50 font-bold text-slate-500 text-sm flex items-center">
               急ぎ・特急対応
             </div>
@@ -256,7 +256,7 @@ export default function ComparePage() {
               </div>
             ))}
 
-            {/* 10. 著作権譲渡（新規項目） */}
+            {/* 10. 著作権譲渡（テーブル行追加） */}
             <div className="p-4 bg-slate-50 font-bold text-slate-500 text-sm flex items-center">
               著作権譲渡
             </div>
@@ -272,7 +272,7 @@ export default function ComparePage() {
               </div>
             ))}
 
-            {/* 11. AI学習の許可（新規項目） */}
+            {/* 11. AI学習の許可（テーブル行追加） */}
             <div className="p-4 bg-slate-50 font-bold text-slate-500 text-sm flex items-center">
               AI学習の許可
             </div>
