@@ -25,8 +25,7 @@ type ProfileWithImage = Profile & {
 
 // 指定の背景画像URL
 const BACKGROUND_IMAGE_URL =
-  'https://cdn.discordapp.com/attachments/1325516564941897890/1542094317131403344/note_.png?ex=6a91f4ff&is=6a90a37f&hm=fc673445db828380245b6d9e87c01edc7df16019ac27bb26814caf9126f9641a&'
-
+  'https://qcklfkslqtjnxufqcqyi.supabase.co/storage/v1/object/public/portfolios/OGP-img.png'
 // 24時間以内に作成・更新されたか判定する関数
 const isRecentlyUpdated = (updatedAt?: string | null) => {
   if (!updatedAt) return false
