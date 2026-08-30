@@ -9,7 +9,7 @@ export default function TermsPage() {
         <div className="border-b border-slate-100 pb-4 flex justify-between items-center">
           <div>
             <h1 className="text-xl font-bold text-slate-900">利用規約</h1>
-            <p className="text-xs text-slate-400 mt-1">制定日: 2026年8月25日</p>
+            <p className="text-xs text-slate-400 mt-1">制定日: 2026年8月31日</p>
           </div>
           <Link
             href="/"
@@ -86,8 +86,25 @@ export default function TermsPage() {
             </ol>
           </section>
 
+          {/* 新設：イラストの真正性と検証に関する規定 */}
           <section className="space-y-1.5">
-            <h2 className="font-bold text-slate-900 text-sm">第7条（免責事項）</h2>
+            <h2 className="font-bold text-slate-900 text-sm">第7条（掲載コンテンツの真正性と証明）</h2>
+            <ol className="list-decimal list-inside space-y-1 pl-1">
+              <li>ユーザーが本サービス上に手書き・手作業による制作物として登録または掲載するイラスト等のコンテンツについて、生成AI等による自動生成の疑義が生じた場合、当方は当該ユーザーに対し、制作過程を示すタイムラプス動画、PSDデータ（レイヤー構造が保持されたもの）、タイムライン情報、その他制作の真正性を証明する資料（以下「証明資料」といいます。）の提出を求めることができるものとします。</li>
+              <li>ユーザーは、前項に基づき当方から証明資料の提出を求められた場合、当方が指定する期限までにこれに応じる義務を負うものとします。</li>
+              <li>ユーザーが合理的な理由なく証明資料の提出に応じない場合、または提出された資料では手作業による制作の真正性が不十分であると当方が判断した場合、当方は事前通知なく以下の措置を講じることができるものとします。
+                <ul className="list-disc list-inside space-y-0.5 pl-4 mt-1 text-slate-600">
+                  <li>該当コンテンツの掲載取り消しおよび削除</li>
+                  <li>アカウントの利用停止または削除（アカウント消失）</li>
+                  <li>本サービスおよび関連サイトの閲覧・利用権限の剥奪・ブロック</li>
+                  <li>その他当方が必要と認める法的措置</li>
+                </ul>
+              </li>
+            </ol>
+          </section>
+
+          <section className="space-y-1.5">
+            <h2 className="font-bold text-slate-900 text-sm">第8条（免責事項）</h2>
             <ol className="list-decimal list-inside space-y-1 pl-1">
               <li>当方は、本サービスに事実上または法律上の欠陥（安全性、信頼性、正確性、完全性、有効性、特定の目的への適合性、セキュリティ等に関する欠陥、エラーやバグ、権利侵害等を含みます。）がないことを明示的にも黙示的にも保証しておりません。</li>
               <li>当方は、本サービスに起因してユーザーに生じたあらゆる損害について、当方の故意または重過失による場合を除き、一切の責任を負いません。</li>
@@ -95,12 +112,12 @@ export default function TermsPage() {
           </section>
 
           <section className="space-y-1.5">
-            <h2 className="font-bold text-slate-900 text-sm">第8条（利用規約の変更）</h2>
+            <h2 className="font-bold text-slate-900 text-sm">第9条（利用規約の変更）</h2>
             <p>当方は、必要と判断した場合には、ユーザーに通知することなくいつでも本規約を変更することができるものとします。なお、変更後の本規約は、本サービス上に掲示された時点から効力を生じるものとします。</p>
           </section>
 
           <section className="space-y-1.5">
-            <h2 className="font-bold text-slate-900 text-sm">第9条（準拠法・裁判管轄）</h2>
+            <h2 className="font-bold text-slate-900 text-sm">第10条（準拠法・裁判管轄）</h2>
             <ol className="list-decimal list-inside space-y-1 pl-1">
               <li>本規約の解釈にあたっては、日本法を準拠法とします。</li>
               <li>本サービスに関して紛争が生じた場合、当方の所在地を管轄する裁判所を専属的合意管轄とします。</li>
