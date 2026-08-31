@@ -9,7 +9,7 @@ export default function TermsPage() {
         <div className="border-b border-slate-100 pb-4 flex justify-between items-center">
           <div>
             <h1 className="text-xl font-bold text-slate-900">利用規約</h1>
-            <p className="text-xs text-slate-400 mt-1">制定日: 2026年8月31日</p>
+            <p className="text-xs text-slate-400 mt-1">制定日: 2026年8月25日</p>
           </div>
           <Link
             href="/"
