@@ -1,28 +1,8 @@
 'use client'
 
-import { useState, useEffect, ChangeEvent, FormEvent, KeyboardEvent } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { User } from '@supabase/supabase-js'
-import { supabase } from '@/lib/supabase'
-
-const PRESET_TASTES = [
-  'アイコン',
-  'ヘッダー',
-  'デザイン',
-  '背景',
-  'ペット',
-  'SD・ちびキャラ',
-  'ゲーム用イラスト',
-  '一枚絵',
-  'ロゴ',
-  'VTuber向け',
-  'IRIAMライバー向け',
-  'パーツ分け可',
-  'モデリング',
-  '3D背景',
-  '著作権譲渡可',
-]
+import { supabase, Profile } from '@/lib/supabase'
 
 // メニュー項目の型定義
 type MenuItem = {
@@ -30,1390 +10,928 @@ type MenuItem = {
   price: number | ''
 }
 
-const safeParseInt = (val: any): number | null => {
-  if (val === null || val === undefined || typeof val === 'object') return null
-  const str = String(val).trim()
-  if (
-    str === '' || 
-    str === '{}' || 
-    str === '[]' || 
-    str === 'null' || 
-    str === 'undefined' || 
-    str === '[object Object]'
-  ) {
-    return null
-  }
-  const parsed = parseInt(str, 10)
-  return isNaN(parsed) ? null : parsed
+// 拡張型定義（追加された制作条件フィールドを反映）
+type ProfileWithImage = Profile & {
+  thumbnail_url?: string | null
+  likes_count?: number
+  menu_items?: MenuItem[] | null
+  ai_usage?: string | null
+  free_revision_count?: number | null
+  express_option_available?: boolean | null
+  copyright_transfer_available?: boolean | null
+  ai_learning_allowed?: boolean | null
+  r18_allowed?: boolean | null
+  available_from_text?: string | null
 }
 
-// 古いURL形式を正しいPublic URL形式に補正するヘルパー
-const normalizeStorageUrl = (url: string): string => {
-  if (!url) return ''
-  const trimmed = url.trim()
-  if (trimmed.includes('/storage/v1/object/portfolios/')) {
-    return trimmed.replace('/storage/v1/object/portfolios/', '/storage/v1/object/public/portfolios/')
-  }
-  return trimmed
-}
+// 指定の背景画像URL
+const BACKGROUND_IMAGE_URL =
+  'https://qcklfkslqtjnxufqcqyi.supabase.co/storage/v1/object/public/portfolios/bg.png'
 
-export default function Dashboard() {
-  const router = useRouter()
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [saveSuccess, setSaveSuccess] = useState<string | null>(null)
-  const [uploadingIndex, setUploadingIndex] = useState<number | null>(null)
-  const [uploadingAvatar, setUploadingAvatar] = useState(false)
-  const [activeTab, setActiveTab] = useState<'profile' | 'portfolio'>('profile')
-  const [user, setUser] = useState<User | null>(null)
-
-  // プロフィール公開/非公開フラグ
-  const [isPublic, setIsPublic] = useState(true)
-
-  const [displayName, setDisplayName] = useState('')
-  const [status, setStatus] = useState<'available' | 'busy' | 'stopped'>('available')
-  const [statusComment, setStatusComment] = useState('')
-  const [tastes, setTastes] = useState<string[]>([])
-  const [customTasteInput, setCustomTasteInput] = useState('')
-  const [leadTimeDays, setLeadTimeDays] = useState<string>('14')
-  const [commercialUseAllowed, setCommercialUseAllowed] = useState(true)
-  const [avatarUrl, setAvatarUrl] = useState('')
-  const [priceMin, setPriceMin] = useState<string>('5000')
-
-  // 追加：スケジューラー / 稼働状況設定 State
-  const [availableFromText, setAvailableFromText] = useState('10月上旬〜')
-  const [activeProjectsCount, setActiveProjectsCount] = useState<number>(1)
-  const [maxProjectsCapacity, setMaxProjectsCapacity] = useState<number>(3)
-
-  // モーダル・コピー用 State
-  const [qrModalOpen, setQrModalOpen] = useState(false)
-  const [copiedType, setCopiedType] = useState<'portfolio' | 'form' | null>(null)
-
-  // 追加項目に関する State
-  const [aiUsage, setAiUsage] = useState<'none' | 'partial' | 'full'>('none')
-  const [aiLearningAllowed, setAiLearningAllowed] = useState(false)
-  const [expressOptionAvailable, setExpressOptionAvailable] = useState(false)
-  const [copyrightTransferAvailable, setCopyrightTransferAvailable] = useState(false)
-  const [freeRevisionCount, setFreeRevisionCount] = useState<string>('2')
-  const [r18Allowed, setR18Allowed] = useState(false)
-
-  const [externalEstimationUrl, setExternalEstimationUrl] = useState('')
-  const [twitterUrl, setTwitterUrl] = useState('')
-  const [instagramUrl, setInstagramUrl] = useState('')
-  const [pixivUrl, setPixivUrl] = useState('')
-  const [websiteUrl, setWebsiteUrl] = useState('')
-
-  const [portfolioUrls, setPortfolioUrls] = useState<string[]>(['', '', '', ''])
+// 24時間以内に作成・更新されたか判定する関数
+const isRecentlyUpdated = (updatedAt?: string | null) => {
+  if (!updatedAt) return false
+  const updatedTime = new Date(updatedAt).getTime()
+  const currentTime = new Date().getTime()
   
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([
-    { title: 'アイコン制作', price: 5000 },
-    { title: 'ヘッダー制作', price: 8000 }
-  ])
+  const diffHours = (currentTime - updatedTime) / (1000 * 60 * 60)
+  return diffHours >= 0 && diffHours <= 24
+}
 
+export default function Home() {
+  const [profiles, setProfiles] = useState<ProfileWithImage[]>([])
+  const [loading, setLoading] = useState(true)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+
+  // 検索・フィルター・ソート用ステート
+  const [searchTerm, setSearchTerm] = useState('')
+  const [selectedTastes, setSelectedTastes] = useState<string[]>([])
+  const [tasteSearch, setTasteSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('ALL')
+  const [maxLeadTime, setMaxLeadTime] = useState<number | ''>('')
+  const [maxPrice, setMaxPrice] = useState<number | ''>('')
+  const [commercialOnly, setCommercialOnly] = useState(false)
+  const [expressOnly, setExpressOnly] = useState(false)
+  const [sortOption, setSortOption] = useState<'random' | 'price_asc' | 'price_desc' | 'likes_desc' | 'likes_asc'>('random')
+
+  // お気に入り・比較ステート
+  const [favorites, setFavorites] = useState<string[]>([])
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false)
+  const [compareList, setCompareList] = useState<ProfileWithImage[]>([])
+  const [isCompareOpen, setIsCompareOpen] = useState(false)
+
+  // 初回描画時に localStorage から復元
   useEffect(() => {
-    const checkUserAndFetchData = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        router.push('/login')
-        return
+    const storedFavs = localStorage.getItem('favorite_creators')
+    if (storedFavs) {
+      try {
+        setFavorites(JSON.parse(storedFavs))
+      } catch (e) {
+        console.error('Failed to load favorites from localStorage', e)
       }
-      setUser(user)
+    }
 
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle()
-
-      if (profileError) {
-        console.error('Profile fetch error:', profileError)
+    const storedCompare = localStorage.getItem('compare_creators')
+    if (storedCompare) {
+      try {
+        setCompareList(JSON.parse(storedCompare))
+      } catch (e) {
+        console.error('Failed to load compare list from localStorage', e)
       }
+    }
+  }, [])
 
-      if (profileData) {
-        setIsPublic(profileData.is_public ?? true)
+  // データ取得＆認証状態の確認
+  useEffect(() => {
+    let isMounted = true
 
-        setDisplayName(profileData.display_name || '')
-        setStatus(profileData.status || 'available')
-        setStatusComment(profileData.status_comment || '')
-        
-        if (Array.isArray(profileData.tastes)) {
-          setTastes(profileData.tastes.map((t: any) => String(t)))
-        } else {
-          setTastes([])
-        }
+    supabase.auth.getUser().then(({ data }) => {
+      if (isMounted && data?.user) setIsLoggedIn(true)
+    })
 
-        if (Array.isArray(profileData.menu_items) && profileData.menu_items.length > 0) {
-          setMenuItems(
-            profileData.menu_items.map((item: any) => ({
-              title: item.title || '',
-              price: typeof item.price === 'number' ? item.price : (item.price === '' ? '' : safeParseInt(item.price) ?? '')
-            }))
-          )
-        }
+    const fetchProfilesWithImages = async () => {
+      setLoading(true)
 
-        const parsedLeadTime = safeParseInt(profileData.lead_time_days)
-        setLeadTimeDays(parsedLeadTime !== null ? String(parsedLeadTime) : '')
+      try {
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('is_public', true)
 
-        const parsedPriceMin = safeParseInt(profileData.price_min)
-        setPriceMin(parsedPriceMin !== null ? String(parsedPriceMin) : '')
+        if (profileError) throw profileError
 
-        setCommercialUseAllowed(profileData.commercial_use_allowed ?? true)
-        setAvatarUrl(normalizeStorageUrl(profileData.avatar_url || ''))
-        setExternalEstimationUrl(profileData.external_estimation_url || '')
-        setTwitterUrl(profileData.twitter_url || '')
-        setInstagramUrl(profileData.instagram_url || '')
-        setPixivUrl(profileData.pixiv_url || '')
-        setWebsiteUrl(profileData.website_url || '')
+        if (profileData && isMounted) {
+          const { data: portfolioData } = await supabase
+            .from('portfolio_items')
+            .select('user_id, image_url, sort_order')
+            .order('sort_order', { ascending: true })
 
-        setAiUsage(profileData.ai_usage || 'none')
-        setAiLearningAllowed(profileData.ai_learning_allowed ?? false)
-        setExpressOptionAvailable(profileData.express_option_available ?? false)
-        setCopyrightTransferAvailable(profileData.copyright_transfer_available ?? false)
-        const parsedFreeRevision = safeParseInt(profileData.free_revision_count)
-        setFreeRevisionCount(parsedFreeRevision !== null ? String(parsedFreeRevision) : '2')
-        setR18Allowed(profileData.r18_allowed ?? false)
-
-        if (profileData.available_from_text) setAvailableFromText(profileData.available_from_text)
-        if (typeof profileData.active_projects_count === 'number') setActiveProjectsCount(profileData.active_projects_count)
-        if (typeof profileData.max_projects_capacity === 'number') setMaxProjectsCapacity(profileData.max_projects_capacity)
-      }
-
-      const { data: portfolioData } = await supabase
-        .from('portfolio_items')
-        .select('image_url, sort_order')
-        .eq('user_id', user.id)
-        .order('sort_order', { ascending: true })
-
-      if (portfolioData && portfolioData.length > 0) {
-        const urls = ['', '', '', '']
-        portfolioData.forEach((item) => {
-          if (item.sort_order < 4) {
-            urls[item.sort_order] = normalizeStorageUrl(item.image_url || '')
+          const imageMap: Record<string, string> = {}
+          if (portfolioData) {
+            portfolioData.forEach((item) => {
+              if (!imageMap[item.user_id] && item.image_url) {
+                imageMap[item.user_id] = item.image_url
+              }
+            })
           }
-        })
-        setPortfolioUrls(urls)
-      }
 
-      setLoading(false)
+          const combined: ProfileWithImage[] = profileData.map((p) => ({
+            ...p,
+            thumbnail_url: imageMap[p.user_id] || p.avatar_url || null,
+            likes_count: p.likes_count ?? 0,
+            menu_items: Array.isArray(p.menu_items) ? p.menu_items : null
+          }))
+
+          const randomized = [...combined]
+          for (let i = randomized.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [randomized[i], randomized[j]] = [randomized[j], randomized[i]]
+          }
+
+          setProfiles(randomized)
+        }
+      } catch (error) {
+        console.error('データの取得に失敗しました:', error)
+      } finally {
+        if (isMounted) setLoading(false)
+      }
     }
 
-    checkUserAndFetchData()
-  }, [router])
+    fetchProfilesWithImages()
 
-  // クイックコピーヘルパー
-  const handleCopy = (text: string, type: 'portfolio' | 'form') => {
-    navigator.clipboard.writeText(text)
-    setCopiedType(type)
-    setTimeout(() => setCopiedType(null), 2000)
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  // モーダル表示時の背景スクロールを防止
+  useEffect(() => {
+    if (isCompareOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = 'unset'
+    }
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [isCompareOpen])
+
+  // お気に入りの追加 / 解除
+  const toggleFavorite = async (userId: string) => {
+    const isFav = favorites.includes(userId)
+    const targetProfile = profiles.find((p) => p.user_id === userId)
+    if (!targetProfile) return
+
+    const currentLikes = targetProfile.likes_count ?? 0
+    const newLikes = isFav ? Math.max(0, currentLikes - 1) : currentLikes + 1
+
+    setFavorites((prev) => {
+      const nextFavorites = isFav
+        ? prev.filter((id) => id !== userId)
+        : [...prev, userId]
+
+      localStorage.setItem('favorite_creators', JSON.stringify(nextFavorites))
+      return nextFavorites
+    })
+
+    setProfiles((prevProfiles) =>
+      prevProfiles.map((p) =>
+        p.user_id === userId ? { ...p, likes_count: newLikes } : p
+      )
+    )
+
+    setCompareList((prevCompare) => {
+      const nextCompare = prevCompare.map((p) =>
+        p.user_id === userId ? { ...p, likes_count: newLikes } : p
+      )
+      localStorage.setItem('compare_creators', JSON.stringify(nextCompare))
+      return nextCompare
+    })
+
+    const { error } = await supabase.rpc('increment_likes', {
+      target_user_id: userId,
+      increment_val: isFav ? -1 : 1,
+    })
+
+    if (error) {
+      console.error('いいね数の更新に失敗しました:', error)
+    }
   }
 
-  // ステータス更新（ヘッダー等のクイック切替用）
-  const handleQuickStatusChange = async (newStatus: 'available' | 'busy' | 'stopped') => {
-    setStatus(newStatus)
-    if (!user) return
-    await supabase
-      .from('profiles')
-      .update({ status: newStatus, updated_at: new Date().toISOString() })
-      .eq('user_id', user.id)
-    showSuccessToast('ステータスを更新しました！')
-  }
-
-  // メニュー操作ハンドラー
-  const handleAddMenuItem = () => {
-    setMenuItems((prev) => [...prev, { title: '', price: '' }])
-  }
-
-  const handleRemoveMenuItem = (index: number) => {
-    setMenuItems((prev) => prev.filter((_, idx) => idx !== index))
-  }
-
-  const handleMenuItemChange = (index: number, key: keyof MenuItem, value: any) => {
-    setMenuItems((prev) =>
-      prev.map((item, idx) => {
-        if (idx !== index) return item
-        if (key === 'price') {
-          const numValue = value === '' ? '' : Math.max(0, parseInt(value, 10) || 0)
-          return { ...item, price: numValue }
-        }
-        return { ...item, [key]: value }
-      })
+  const toggleTaste = (taste: string) => {
+    setSelectedTastes((prev) =>
+      prev.includes(taste)
+        ? prev.filter((t) => t !== taste)
+        : [...prev, taste]
     )
   }
 
-  const togglePresetTaste = (tag: string) => {
-    setTastes((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
-    )
-  }
+  const toggleCompare = (profile: ProfileWithImage) => {
+    setCompareList((prev) => {
+      const exists = prev.some((p) => p.user_id === profile.user_id)
+      let nextList: ProfileWithImage[]
 
-  const handleAddCustomTaste = () => {
-    const trimmed = customTasteInput.trim()
-    if (!trimmed) return
-    if (!tastes.includes(trimmed)) {
-      setTastes((prev) => [...prev, trimmed])
-    }
-    setCustomTasteInput('')
-  }
-
-  const handleRemoveTaste = (tagToRemove: string) => {
-    setTastes((prev) => prev.filter((t) => t !== tagToRemove))
-  }
-
-  const compressImage = (
-    file: File, 
-    index: number | 'avatar', 
-    maxWidth = 1200, 
-    quality = 0.8
-  ): Promise<{ blob: Blob; mimeType: string; extension: string }> => {
-    return new Promise((resolve, reject) => {
-      const img = new Image()
-      const objectUrl = URL.createObjectURL(file)
-
-      img.onload = () => {
-        URL.revokeObjectURL(objectUrl)
-        let { width, height } = img
-        if (width > maxWidth) {
-          height = Math.round((height * maxWidth) / width)
-          width = maxWidth
+      if (exists) {
+        nextList = prev.filter((p) => p.user_id !== profile.user_id)
+      } else {
+        if (prev.length >= 3) {
+          alert('比較できるのは最大3名までです')
+          return prev
         }
-
-        const canvas = document.createElement('canvas')
-        canvas.width = width
-        canvas.height = height
-
-        const ctx = canvas.getContext('2d')
-        if (!ctx) return reject(new Error('Canvas context error'))
-
-        const isFirstImage = index === 0
-        const mimeType = isFirstImage ? 'image/jpeg' : 'image/webp'
-        const extension = isFirstImage ? 'jpg' : 'webp'
-
-        if (isFirstImage) {
-          ctx.fillStyle = '#FFFFFF'
-          ctx.fillRect(0, 0, width, height)
-        }
-
-        ctx.drawImage(img, 0, 0, width, height)
-
-        canvas.toBlob(
-          (blob) => {
-            if (blob) resolve({ blob, mimeType, extension })
-            else reject(new Error('Blob convert error'))
-          },
-          mimeType,
-          quality
-        )
+        nextList = [...prev, profile]
       }
-      img.onerror = (err) => {
-        URL.revokeObjectURL(objectUrl)
-        reject(err)
-      }
-      img.src = objectUrl
+
+      localStorage.setItem('compare_creators', JSON.stringify(nextList))
+      return nextList
     })
   }
 
-  const handleAvatarFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file || !user) return
-
-    try {
-      setUploadingAvatar(true)
-
-      const { blob, mimeType, extension } = await compressImage(file, 'avatar', 600, 0.85)
-      const fileName = `${user.id}/avatar_${Date.now()}.${extension}`
-
-      const { error: uploadError } = await supabase.storage
-        .from('portfolios')
-        .upload(fileName, blob, {
-          contentType: mimeType,
-          upsert: true,
-        })
-
-      if (uploadError) throw uploadError
-
-      const { data: publicUrlData } = supabase.storage
-        .from('portfolios')
-        .getPublicUrl(fileName)
-
-      setAvatarUrl(normalizeStorageUrl(publicUrlData.publicUrl))
-    } catch (error: any) {
-      alert('アイコンのアップロードに失敗しました: ' + error.message)
-    } finally {
-      setUploadingAvatar(false)
-    }
+  const resetFilters = () => {
+    setSearchTerm('')
+    setSelectedTastes([])
+    setTasteSearch('')
+    setStatusFilter('ALL')
+    setMaxLeadTime('')
+    setMaxPrice('')
+    setCommercialOnly(false)
+    setExpressOnly(false)
+    setShowFavoritesOnly(false)
+    setSortOption('random')
   }
 
-  const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>, index: number) => {
-    const file = e.target.files?.[0]
-    if (!file || !user) return
+  const filteredProfiles = useMemo(() => {
+    const list = profiles.filter((profile) => {
+      const matchesSearch =
+        (profile.display_name && profile.display_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (profile.status_comment && profile.status_comment.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (profile.menu_items && profile.menu_items.some((item) => item.title && item.title.toLowerCase().includes(searchTerm.toLowerCase())))
 
-    try {
-      setUploadingIndex(index)
+      const matchesTaste =
+        selectedTastes.length === 0 ||
+        selectedTastes.every((taste) => profile.tastes && profile.tastes.includes(taste))
 
-      const { blob, mimeType, extension } = await compressImage(file, index, 1200, 0.8)
-      const fileName = `${user.id}/${Date.now()}_${index}.${extension}`
+      const matchesStatus =
+        statusFilter === 'ALL' || profile.status === statusFilter
 
-      const { error: uploadError } = await supabase.storage
-        .from('portfolios')
-        .upload(fileName, blob, {
-          contentType: mimeType,
-          upsert: true,
-        })
+      const matchesLeadTime =
+        maxLeadTime === '' || (profile.lead_time_days !== null && profile.lead_time_days !== undefined && profile.lead_time_days <= Number(maxLeadTime))
 
-      if (uploadError) throw uploadError
+      const matchesPrice =
+        maxPrice === '' || (profile.price_min !== null && profile.price_min !== undefined && profile.price_min <= Number(maxPrice))
 
-      const { data: publicUrlData } = supabase.storage
-        .from('portfolios')
-        .getPublicUrl(fileName)
+      const matchesCommercial =
+        !commercialOnly || profile.commercial_use_allowed === true
 
-      const nextUrls = [...portfolioUrls]
-      nextUrls[index] = normalizeStorageUrl(publicUrlData.publicUrl)
-      setPortfolioUrls(nextUrls)
-    } catch (error: any) {
-      alert('画像のアップロードに失敗しました: ' + error.message)
-    } finally {
-      setUploadingIndex(null)
-    }
-  }
+      const matchesExpress =
+        !expressOnly || profile.express_option_available === true
 
-  const showSuccessToast = (msg: string) => {
-    setSaveSuccess(msg)
-    setTimeout(() => setSaveSuccess(null), 3000)
-  }
+      const matchesFavorite =
+        !showFavoritesOnly || favorites.includes(profile.user_id)
 
-  const handleSaveProfile = async (e: FormEvent) => {
-    e.preventDefault()
-    if (!user) return
-    setSaving(true)
+      return (
+        matchesSearch &&
+        matchesTaste &&
+        matchesStatus &&
+        matchesLeadTime &&
+        matchesPrice &&
+        matchesCommercial &&
+        matchesExpress &&
+        matchesFavorite
+      )
+    })
 
-    const cleanInteger = (val: any): number | null => {
-      if (val === null || val === undefined || typeof val === 'object') return null
-      const str = String(val).replace(/[{}]/g, '').trim()
-      if (str === '' || str === 'null' || str === 'undefined') return null
-      const parsed = parseInt(str, 10)
-      return isNaN(parsed) ? null : parsed
-    }
-
-    const finalPriceMin = cleanInteger(priceMin)
-    const finalLeadTimeDays = cleanInteger(leadTimeDays)
-    const finalFreeRevisionCount = cleanInteger(freeRevisionCount)
-
-    const cleanTastes = Array.isArray(tastes) 
-      ? tastes.map((t) => String(t).trim()).filter((t) => t.length > 0)
-      : []
-
-    const cleanMenuItems = menuItems
-      .filter((item) => item.title.trim().length > 0)
-      .map((item) => ({
-        title: item.title.trim(),
-        price: typeof item.price === 'number' ? item.price : ''
-      }))
-
-    const profilePayload = {
-      user_id: user.id,
-      is_public: Boolean(isPublic),
-      display_name: displayName ? displayName.trim() : '',
-      status: status,
-      status_comment: statusComment ? statusComment.trim() : null,
-      tastes: cleanTastes,
-      menu_items: cleanMenuItems,
-      lead_time_days: finalLeadTimeDays,
-      price_min: finalPriceMin,
-      commercial_use_allowed: Boolean(commercialUseAllowed),
-      avatar_url: avatarUrl ? normalizeStorageUrl(avatarUrl.trim()) : null,
-      external_estimation_url: externalEstimationUrl ? externalEstimationUrl.trim() : null,
-      twitter_url: twitterUrl ? twitterUrl.trim() : null,
-      instagram_url: instagramUrl ? instagramUrl.trim() : null,
-      pixiv_url: pixivUrl ? pixivUrl.trim() : null,
-      website_url: websiteUrl ? websiteUrl.trim() : null,
-      ai_usage: aiUsage,
-      ai_learning_allowed: Boolean(aiLearningAllowed),
-      express_option_available: Boolean(expressOptionAvailable),
-      copyright_transfer_available: Boolean(copyrightTransferAvailable),
-      free_revision_count: finalFreeRevisionCount,
-      r18_allowed: Boolean(r18Allowed),
-      available_from_text: availableFromText,
-      active_projects_count: activeProjectsCount,
-      max_projects_capacity: maxProjectsCapacity,
-      updated_at: new Date().toISOString(),
-    }
-
-    const { error } = await supabase
-      .from('profiles')
-      .upsert(profilePayload, { onConflict: 'user_id' })
-
-    setSaving(false)
-
-    if (error) {
-      console.error('保存エラー詳細:', JSON.stringify(error, null, 2))
-      alert('保存に失敗しました: ' + error.message)
-    } else {
-      showSuccessToast('プロフィール情報を更新しました！')
-    }
-  }
-
-  const handleSavePortfolio = async (e: FormEvent) => {
-    e.preventDefault()
-    if (!user) return
-    setSaving(true)
-
-    const { error: deleteError } = await supabase
-      .from('portfolio_items')
-      .delete()
-      .eq('user_id', user.id)
-
-    if (deleteError) {
-      console.error('既存ポートフォリオ削除エラー:', deleteError)
-    }
-
-    const itemsToInsert = portfolioUrls
-      .map((url, idx) => ({
-        user_id: user.id,
-        image_url: normalizeStorageUrl(url),
-        sort_order: idx,
-      }))
-      .filter((item) => item.image_url.length > 0)
-
-    if (itemsToInsert.length > 0) {
-      const { error: insertError } = await supabase
-        .from('portfolio_items')
-        .insert(itemsToInsert)
-
-      if (insertError) {
-        alert('作品情報の更新に失敗しました: ' + insertError.message)
-        setSaving(false)
-        return
+    return list.sort((a, b) => {
+      if (sortOption === 'price_asc') {
+        return (a.price_min ?? Infinity) - (b.price_min ?? Infinity)
       }
-    }
+      if (sortOption === 'price_desc') {
+        return (b.price_min ?? 0) - (a.price_min ?? 0)
+      }
+      if (sortOption === 'likes_desc') {
+        return (b.likes_count ?? 0) - (a.likes_count ?? 0)
+      }
+      if (sortOption === 'likes_asc') {
+        return (a.likes_count ?? 0) - (b.likes_count ?? 0)
+      }
+      return 0
+    })
+  }, [profiles, searchTerm, selectedTastes, statusFilter, maxLeadTime, maxPrice, commercialOnly, expressOnly, showFavoritesOnly, favorites, sortOption])
 
-    setSaving(false)
-    showSuccessToast('作品ポートフォリオを更新しました！')
-  }
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-    router.push('/')
-  }
-
-  const currentPortfolioUrl = typeof window !== 'undefined' && user ? `${window.location.origin}/${user.id}` : ''
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-xs font-bold text-slate-500 tracking-wider">設定データを読み込み中...</p>
-        </div>
-      </div>
-    )
-  }
+  const displayedTastes = useMemo(() => {
+    return Array.from(new Set(profiles.flatMap((p) => p.tastes || [])))
+      .filter((taste) =>
+        taste.toLowerCase().includes(tasteSearch.toLowerCase())
+      )
+      .slice(0, 20)
+  }, [profiles, tasteSearch])
 
   return (
-    <div className="min-h-screen bg-slate-50/60 text-slate-800 pb-24 font-sans antialiased selection:bg-indigo-500 selection:text-white">
-      {saveSuccess && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 bg-slate-900 text-white rounded-2xl shadow-2xl border border-slate-700 animate-in fade-in slide-in-from-bottom-5 duration-300">
-          <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-xs text-white font-bold">✓</div>
-          <p className="text-xs font-semibold">{saveSuccess}</p>
-        </div>
-      )}
+    <div
+      className="min-h-screen text-slate-900 pb-32 font-sans antialiased relative bg-fixed bg-cover bg-center"
+      style={{ backgroundImage: `url(${BACKGROUND_IMAGE_URL})` }}
+    >
+      <div className="absolute inset-0 bg-white/20 backdrop-blur-[1px] pointer-events-none -z-10" />
 
-      {/* 拡張ヘッダー */}
-      <header className="px-4 sm:px-6 py-3.5 bg-white/90 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-30 shadow-xs">
-        <div className="max-w-5xl mx-auto flex flex-col md:flex-row justify-between items-center gap-3">
-          <div className="flex items-center justify-between w-full md:w-auto">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-2xl bg-indigo-600 flex items-center justify-center text-white font-black text-base shadow-md shadow-indigo-200">
-                D
-              </div>
-              <div>
-                <h1 className="text-sm font-bold text-slate-900 leading-none">ダッシュボード</h1>
-                <p className="text-[11px] text-slate-400 font-medium mt-1">ポートフォリオ ＆ 見積もりフォーム管理</p>
-              </div>
+      {/* ヘッダー */}
+      <header className="sticky top-0 z-40 px-6 py-3.5 bg-white/80 backdrop-blur-md border-b border-white/40 shadow-xs">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-purple-700 flex items-center justify-center text-white font-black text-xs shadow-md">
+              ✦
             </div>
-
-            {/* モバイル用表示のプレビュー＆TOPリンク */}
-            <div className="flex items-center gap-2 md:hidden">
-              <Link
-                href="/"
-                className="px-2.5 py-1.5 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
-              >
-                TOP
-              </Link>
+            <div>
+              <h1 className="text-xs font-black text-slate-950 tracking-wider">
+                 Drawker
+              </h1>
+              <p className="text-[10px] text-slate-800 font-extrabold">
+                理想のイラストレーターを探す
+              </p>
             </div>
           </div>
 
-          <div className="flex items-center justify-between md:justify-end gap-2.5 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
-            {/* クイックステータス切替 */}
-            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
-              <button
-                type="button"
-                onClick={() => handleQuickStatusChange('available')}
-                className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
-                  status === 'available' ? 'bg-emerald-500 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                🟢 即対応可
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickStatusChange('busy')}
-                className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
-                  status === 'busy' ? 'bg-amber-500 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                🟡 相談受付中
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickStatusChange('stopped')}
-                className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
-                  status === 'stopped' ? 'bg-rose-500 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                🔴 受注停止
-              </button>
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              {user && (
-                <Link
-                  href={`/${user.id}`}
-                  target="_blank"
-                  className="px-3 py-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-all flex items-center gap-1 border border-indigo-200/60"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                  </svg>
-                  サイトを見る
-                </Link>
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+              className={`px-3.5 py-2 text-xs font-bold rounded-2xl border transition-all flex items-center gap-1.5 backdrop-blur-md cursor-pointer ${
+                showFavoritesOnly
+                  ? 'bg-rose-600 text-white border-rose-600 shadow-md'
+                  : 'bg-white/90 text-purple-900 hover:bg-white border-white/90 shadow-sm'
+              }`}
+            >
+              <span className="text-rose-600">♥</span>
+              <span>お気に入り</span>
+              {favorites.length > 0 && (
+                <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] bg-purple-800 text-white font-black">
+                  {favorites.length}
+                </span>
               )}
-
-              <Link
-                href="/"
-                className="hidden md:flex px-3 py-1.5 text-xs font-bold text-slate-600 hover:text-indigo-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all items-center gap-1"
-              >
-                サービスTOPへ
-              </Link>
-
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="px-3 py-1.5 text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition-all cursor-pointer shrink-0"
-              >
-                ログアウト
-              </button>
-            </div>
+            </button>
+            <Link
+              href={isLoggedIn ? '/dashboard' : '/login'}
+              className={`px-4 py-2 text-xs font-black text-white rounded-2xl shadow-md transition-all flex items-center gap-1 active:scale-95 ${
+                isLoggedIn
+                  ? 'bg-purple-700 hover:bg-purple-800'
+                  : 'bg-gradient-to-r from-purple-700 to-indigo-600 hover:from-purple-800 hover:to-indigo-700 ring-2 ring-purple-400/30'
+              }`}
+            >
+              <span>{isLoggedIn ? 'ダッシュボード' : '✦ クリエイター無料登録'}</span>
+            </Link>
           </div>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-        {/* クイックアクションバー (共有・QRコード) */}
-        <div className="bg-white rounded-3xl border border-slate-200/80 p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-lg shrink-0">
-              🔗
-            </div>
-            <div>
-              <h2 className="text-xs font-extrabold text-slate-900">ポートフォリオ / 見積もりリンクの共有</h2>
-              <p className="text-[11px] text-slate-400">SNS投稿や名刺・イベント等に記載するリンクをワンタップで取得</p>
-            </div>
-          </div>
+      {/* ヒーロー */}
+      <section className="text-center py-10 px-4 max-w-4xl mx-auto space-y-2">
+        <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-wide font-serif drop-shadow-[0_1px_2px_rgba(255,255,255,0.8)]">
+          『誰に頼むか決まらない…』<br />
+          そんな時間もったいない。
+        </h2>
+        <p className="text-2xl sm:text-3xl font-black text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)] tracking-widest font-serif pt-1">
+          自分にぴったりのクリエイター検索
+        </p>
+      </section>
 
-          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-            <button
-              type="button"
-              onClick={() => handleCopy(currentPortfolioUrl, 'portfolio')}
-              className="flex-1 sm:flex-none px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all cursor-pointer active:scale-95 flex items-center justify-center gap-1.5"
+      {!isLoggedIn && (
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 mb-8">
+          <div className="bg-gradient-to-r from-purple-900/90 via-indigo-900/90 to-purple-900/90 backdrop-blur-md rounded-3xl p-5 sm:p-6 text-white border border-purple-400/30 shadow-xl flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="space-y-1 text-center md:text-left">
+              <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
+                <span className="text-[10px] font-extrabold bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full">
+                  掲載手数料 0円
+                </span>
+                <span className="text-[10px] font-extrabold bg-purple-400/30 text-purple-100 px-2 py-0.5 rounded-full border border-purple-300/30">
+                  ポートフォリオ1分作成
+                </span>
+              </div>
+              <h3 className="text-base sm:text-lg font-black tracking-wide">
+                イラストレーター・クリエイターの方へ：作品を掲載しませんか？
+              </h3>
+              <p className="text-xs text-purple-200 font-medium">
+                料金表やポートフォリオを登録するだけで、直接ご相談を受け付けられます。
+              </p>
+            </div>
+            <Link
+              href="/login"
+              className="px-6 py-3 bg-white text-purple-950 hover:bg-purple-50 font-black text-xs rounded-2xl shadow-lg transition-all transform hover:-translate-y-0.5 shrink-0"
             >
-              {copiedType === 'portfolio' ? '✓ コピーしました' : 'ポートフォリオURLをコピー'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setQrModalOpen(true)}
-              className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-all cursor-pointer active:scale-95 flex items-center justify-center gap-1.5 shrink-0"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-              </svg>
-              QRコード出力
-            </button>
+              無料で作品を登録・掲載する →
+            </Link>
           </div>
-        </div>
+        </section>
+      )}
 
-        {/* タブナビゲーション */}
-        <div className="flex p-1 bg-slate-200/60 rounded-2xl max-w-lg mx-auto">
-          <button
-            type="button"
-            onClick={() => setActiveTab('profile')}
-            className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              activeTab === 'profile'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-            基本プロフィール
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('portfolio')}
-            className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              activeTab === 'portfolio'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            作品ギャラリー
-          </button>
-        </div>
-
-        {activeTab === 'profile' && (
-          <form onSubmit={handleSaveProfile} className="bg-white rounded-3xl border border-slate-200/70 p-6 sm:p-8 space-y-8 shadow-xs">
-            <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
-              <div>
-                <h2 className="font-extrabold text-slate-900 text-base">基本情報の設定</h2>
-                <p className="text-xs text-slate-400 mt-1">公開プロフィールに反映される基本情報です</p>
-              </div>
-              {avatarUrl && (
-                <div className="w-12 h-12 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shadow-xs shrink-0">
-                  <img src={avatarUrl} alt="アバタープレビュー" className="w-full h-full object-cover" />
+      {/* メインコンテンツ */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+          {/* サイドバー */}
+          <aside className="lg:col-span-1 space-y-6">
+            <div className="bg-white/90 backdrop-blur-md p-5 rounded-3xl border border-white/80 shadow-lg shadow-purple-900/10 space-y-4">
+              <div className="flex justify-between items-center pb-1">
+                <div className="flex items-center gap-1.5 text-purple-900">
+                  <span className="text-xs">⚙</span>
+                  <h2 className="font-black text-xs tracking-wider">
+                    FILTER & SEARCH
+                  </h2>
                 </div>
-              )}
-            </div>
-
-            {/* スケジューラー & 稼働キャパシティ設定エリア */}
-            <div className="p-5 rounded-2xl bg-indigo-50/40 border border-indigo-100/80 space-y-4">
-              <div>
-                <h3 className="text-xs font-extrabold text-indigo-950 flex items-center gap-1.5">
-                  <span>📅 制作スケジューラー ＆ 稼働状況設定</span>
-                </h3>
-                <p className="text-[11px] text-slate-500 mt-0.5">着手可能時期や現在抱えている案件の枠数を公開できます</p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">着手可能時期の表示テキスト</label>
-                  <input
-                    type="text"
-                    placeholder="例: 10月上旬〜 / 即日着手可能"
-                    value={availableFromText}
-                    onChange={(e) => setAvailableFromText(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <div className="flex justify-between items-center">
-                    <label className="text-xs font-bold text-slate-700">キャパシティゲージ（受任状況）</label>
-                    <span className="text-xs font-extrabold text-indigo-600">
-                      現在 {activeProjectsCount} / {maxProjectsCapacity} 件
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-slate-200">
-                      <span className="text-[10px] text-slate-400 font-bold shrink-0">進行中:</span>
-                      <input
-                        type="number"
-                        min="0"
-                        value={activeProjectsCount}
-                        onChange={(e) => setActiveProjectsCount(Math.max(0, parseInt(e.target.value, 10) || 0))}
-                        className="w-full text-xs font-bold text-slate-800 focus:outline-none"
-                      />
-                    </div>
-                    <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-slate-200">
-                      <span className="text-[10px] text-slate-400 font-bold shrink-0">最大枠:</span>
-                      <input
-                        type="number"
-                        min="1"
-                        value={maxProjectsCapacity}
-                        onChange={(e) => setMaxProjectsCapacity(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                        className="w-full text-xs font-bold text-slate-800 focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className={`p-4 rounded-2xl border transition-all ${
-              isPublic 
-                ? 'bg-emerald-50/50 border-emerald-200/80' 
-                : 'bg-amber-50/50 border-amber-200/80'
-            }`}>
-              <div className="flex items-center justify-between gap-4">
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2.5 h-2.5 rounded-full ${isPublic ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-                    <span className="text-xs font-extrabold text-slate-800">
-                      {isPublic ? '現在：公開中' : '現在：非公開（下書き）'}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 leading-relaxed">
-                    {isPublic 
-                      ? '検索一覧や外部URLからプロフィールを閲覧できる状態です。' 
-                      : '検索一覧から除外され、外部からプロフィールを見ることができなくなります。'}
-                  </p>
-                </div>
-
                 <button
-                  type="button"
-                  onClick={() => setIsPublic(!isPublic)}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500/20 ${
-                    isPublic ? 'bg-indigo-600' : 'bg-slate-300'
-                  }`}
+                  onClick={resetFilters}
+                  className="text-[11px] text-purple-700 font-extrabold hover:underline cursor-pointer"
                 >
-                  <span
-                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                      isPublic ? 'translate-x-5' : 'translate-x-0'
-                    }`}
-                  />
+                  リセット
                 </button>
               </div>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <div className="space-y-1.5 sm:col-span-2">
-                <label className="text-xs font-bold text-slate-700">表示名 (クリエイター名) <span className="text-rose-500">*</span></label>
+              <div className="space-y-1">
+                <label className="text-[11px] font-extrabold text-slate-900 block">キーワード</label>
                 <input
                   type="text"
-                  required
-                  placeholder="例: イラスト屋 たろう"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
+                  placeholder="名前、アイコン、立ち絵など..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
               </div>
 
-              <div className="space-y-3 sm:col-span-2 p-4 rounded-2xl border border-slate-200/80 bg-slate-50/40">
-                <div className="flex justify-between items-center">
-                  <label className="text-xs font-bold text-slate-700 block">プロフィールアイコン画像</label>
-                  {avatarUrl && (
-                    <button
-                      type="button"
-                      onClick={() => setAvatarUrl('')}
-                      className="text-[11px] text-rose-500 font-bold hover:underline cursor-pointer"
-                    >
-                      アイコンを解除
-                    </button>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-full border border-slate-200 bg-white overflow-hidden flex items-center justify-center relative shadow-xs shrink-0">
-                    {uploadingAvatar ? (
-                      <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                    ) : avatarUrl ? (
-                      <img src={avatarUrl} alt="アバター" className="w-full h-full object-cover" />
-                    ) : (
-                      <svg className="w-8 h-8 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                      </svg>
-                    )}
-                  </div>
-
-                  <div className="flex-1 space-y-2">
-                    <label className="block">
-                      <span className="sr-only">ファイルから選択</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        disabled={uploadingAvatar}
-                        onChange={handleAvatarFileUpload}
-                        className="block w-full text-xs text-slate-500
-                          file:mr-3 file:py-2 file:px-4
-                          file:rounded-xl file:border-0
-                          file:text-xs file:font-bold
-                          file:bg-indigo-50 file:text-indigo-700
-                          hover:file:bg-indigo-100
-                          file:cursor-pointer cursor-pointer transition-all"
-                      />
-                    </label>
-
-                    <input
-                      type="url"
-                      placeholder="または画像URLを直接入力 (https://...)"
-                      value={avatarUrl}
-                      onChange={(e) => setAvatarUrl(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-300 font-mono text-[11px]"
-                    />
-                  </div>
+              <div className="space-y-1">
+                <label className="text-[11px] font-extrabold text-slate-900 block">予算上限</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    step="1000"
+                    placeholder="指定なし"
+                    value={maxPrice}
+                    onChange={(e) => setMaxPrice(e.target.value ? Number(e.target.value) : '')}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                  <span className="text-xs text-slate-800 font-bold whitespace-nowrap">以下</span>
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">現在の受付ステータス</label>
+              <div className="space-y-1">
+                <label className="text-[11px] font-extrabold text-slate-900 block">希望納期</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    placeholder="指定なし"
+                    value={maxLeadTime}
+                    onChange={(e) => setMaxLeadTime(e.target.value ? Number(e.target.value) : '')}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                  <span className="text-xs text-slate-800 font-bold whitespace-nowrap">日以内</span>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-extrabold text-slate-900 block">受付状況</label>
                 <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value as 'available' | 'busy' | 'stopped')}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-semibold text-slate-700 cursor-pointer"
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
                 >
-                  <option value="available">🟢 即対応可</option>
-                  <option value="busy">🟡 相談受付中</option>
-                  <option value="stopped">🔴 受注停止</option>
+                  <option value="ALL">すべて表示</option>
+                  <option value="available">即対応可のみ</option>
+                  <option value="busy">相談受付中</option>
                 </select>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">参考最低価格 (円)</label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-semibold">¥</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="500"
-                    placeholder="5000"
-                    value={priceMin}
-                    onChange={(e) => setPriceMin(e.target.value)}
-                    className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-bold text-indigo-600"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-3 sm:col-span-2 border-t border-slate-100 pt-6">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 block">料金メニュー設定</label>
-                    <p className="text-[11px] text-slate-400 mt-0.5">一覧カードや比較画面で表示される主な料金ラインナップです</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleAddMenuItem}
-                    className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1"
-                  >
-                    ＋ メニューを追加
-                  </button>
-                </div>
-
-                <div className="space-y-2">
-                  {menuItems.map((item, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        placeholder="例: アイコン制作"
-                        value={item.title}
-                        onChange={(e) => handleMenuItemChange(idx, 'title', e.target.value)}
-                        className="flex-2 px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium"
-                      />
-                      <div className="relative flex-1">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-semibold">¥</span>
-                        <input
-                          type="number"
-                          step="500"
-                          placeholder="5000"
-                          value={item.price}
-                          onChange={(e) => handleMenuItemChange(idx, 'price', e.target.value)}
-                          className="w-full pl-7 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-bold text-indigo-600"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveMenuItem(idx)}
-                        className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer text-xs font-bold"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                  {menuItems.length === 0 && (
-                    <p className="text-xs text-slate-300 italic py-1">メニューが設定されていません</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">目安納期 (日数)</label>
-                <input
-                  type="number"
-                  min="1"
-                  placeholder="14"
-                  value={leadTimeDays}
-                  onChange={(e) => setLeadTimeDays(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
-                />
-              </div>
-
-              <div className="space-y-1.5 flex flex-col justify-end">
-                <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50/50 cursor-pointer hover:bg-slate-100/50 transition-colors">
+              <div className="pt-1 space-y-2">
+                <label className="flex items-center justify-between cursor-pointer">
+                  <span className="text-[11px] font-extrabold text-slate-900">商用利用可能のみ</span>
                   <input
                     type="checkbox"
-                    checked={commercialUseAllowed}
-                    onChange={(e) => setCommercialUseAllowed(e.target.checked)}
-                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                    checked={commercialOnly}
+                    onChange={(e) => setCommercialOnly(e.target.checked)}
+                    className="w-4 h-4 rounded accent-purple-700 cursor-pointer"
                   />
-                  <span className="text-xs font-bold text-slate-700">商用利用を可能として掲載する</span>
+                </label>
+                <label className="flex items-center justify-between cursor-pointer">
+                  <span className="text-[11px] font-extrabold text-slate-900">⚡ 特急対応可能のみ</span>
+                  <input
+                    type="checkbox"
+                    checked={expressOnly}
+                    onChange={(e) => setExpressOnly(e.target.checked)}
+                    className="w-4 h-4 rounded accent-purple-700 cursor-pointer"
+                  />
                 </label>
               </div>
 
-              <div className="space-y-4 sm:col-span-2 border-t border-slate-100 pt-6">
-                <div>
-                  <h3 className="text-xs font-bold text-slate-900">制作条件・受託範囲の設定</h3>
-                  <p className="text-[11px] text-slate-400 mt-0.5">依頼者とのミスマッチを防ぐための詳細条件です</p>
+              <div className="space-y-2 pt-2 border-t border-slate-200">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-extrabold text-slate-900 block">
+                    テイスト（最大20個）
+                  </label>
+                  {selectedTastes.length > 0 && (
+                    <button
+                      onClick={() => setSelectedTastes([])}
+                      className="text-[10px] text-purple-700 hover:underline font-extrabold cursor-pointer"
+                    >
+                      選択解除
+                    </button>
+                  )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                  <div className="space-y-1.5 sm:col-span-2 bg-slate-50/60 p-3.5 rounded-2xl border border-slate-200/80">
-                    <label className="text-xs font-bold text-slate-700 block">生成AIの使用方針</label>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      <label className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
-                        aiUsage === 'none' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-white border-slate-200 text-slate-600'
-                      }`}>
-                        <input
-                          type="radio"
-                          name="aiUsage"
-                          value="none"
-                          checked={aiUsage === 'none'}
-                          onChange={() => setAiUsage('none')}
-                          className="sr-only"
-                        />
-                        <span>完全手描き (AI不使用)</span>
-                      </label>
-                      
-                      <label className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
-                        aiUsage === 'partial' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-white border-slate-200 text-slate-600'
-                      }`}>
-                        <input
-                          type="radio"
-                          name="aiUsage"
-                          value="partial"
-                          checked={aiUsage === 'partial'}
-                          onChange={() => setAiUsage('partial')}
-                          className="sr-only"
-                        />
-                        <span>一部AI補助あり (背景等)</span>
-                      </label>
-
-                      <label className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
-                        aiUsage === 'full' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-white border-slate-200 text-slate-600'
-                      }`}>
-                        <input
-                          type="radio"
-                          name="aiUsage"
-                          value="full"
-                          checked={aiUsage === 'full'}
-                          onChange={() => setAiUsage('full')}
-                          className="sr-only"
-                        />
-                        <span>AI生成・加筆メイン</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5 bg-slate-50/60 p-3.5 rounded-2xl border border-slate-200/80 flex flex-col justify-between">
-                    <label className="text-xs font-bold text-slate-700">無料リテイク（修正）回数</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min="0"
-                        max="10"
-                        placeholder="2"
-                        value={freeRevisionCount}
-                        onChange={(e) => setFreeRevisionCount(e.target.value)}
-                        className="w-24 px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                      />
-                      <span className="text-xs font-bold text-slate-500">回まで無料対応</span>
-                    </div>
-                  </div>
-
-                  <label className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-200/80 bg-slate-50/60 cursor-pointer hover:bg-slate-100/50 transition-colors">
-                    <div>
-                      <span className="text-xs font-bold text-slate-700 block">急ぎ・特急対応</span>
-                      <span className="text-[10px] text-slate-400">短納期での相談（要相談/追加料金）</span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={expressOptionAvailable}
-                      onChange={(e) => setExpressOptionAvailable(e.target.checked)}
-                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
-                    />
-                  </label>
-
-                  <label className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-200/80 bg-slate-50/60 cursor-pointer hover:bg-slate-100/50 transition-colors">
-                    <div>
-                      <span className="text-xs font-bold text-slate-700 block">著作権譲渡</span>
-                      <span className="text-[10px] text-slate-400">相談または条件付きで対応可能</span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={copyrightTransferAvailable}
-                      onChange={(e) => setCopyrightTransferAvailable(e.target.checked)}
-                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
-                    />
-                  </label>
-
-                  <label className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-200/80 bg-slate-50/60 cursor-pointer hover:bg-slate-100/50 transition-colors">
-                    <div>
-                      <span className="text-xs font-bold text-slate-700 block">自身の作品のAI学習</span>
-                      <span className="text-[10px] text-slate-400">無断学習・追加学習を許可するか</span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={aiLearningAllowed}
-                      onChange={(e) => setAiLearningAllowed(e.target.checked)}
-                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
-                    />
-                  </label>
-
-                  <label className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-200/80 bg-slate-50/60 cursor-pointer hover:bg-slate-100/50 transition-colors">
-                    <div>
-                      <span className="text-xs font-bold text-slate-700 block">R-18（成人向け）対応</span>
-                      <span className="text-[10px] text-slate-400">センシティブコンテンツの受託</span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={r18Allowed}
-                      onChange={(e) => setR18Allowed(e.target.checked)}
-                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
-                    />
-                  </label>
-                </div>
-              </div>
-
-              <div className="space-y-1.5 sm:col-span-2">
-                <label className="text-xs font-bold text-slate-700">自己紹介・PRコメント</label>
-                <textarea
-                  rows={4}
-                  placeholder="作風や得意なジャンル、実績などのアピール文を入力してください"
-                  value={statusComment}
-                  onChange={(e) => setStatusComment(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all leading-relaxed font-medium"
+                <input
+                  type="text"
+                  placeholder="テイストを検索..."
+                  value={tasteSearch}
+                  onChange={(e) => setTasteSearch(e.target.value)}
+                  className="w-full px-3 py-1.5 text-[10px] rounded-lg border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
-              </div>
 
-              <div className="space-y-4 sm:col-span-2 border-t border-slate-100 pt-6">
-                <label className="text-xs font-bold text-slate-700 block">得意なテイスト・タグ設定</label>
-                
-                <div className="space-y-2">
-                  <p className="text-[11px] font-bold text-slate-400">よく使われるタグ（タップでオン/オフ）</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {PRESET_TASTES.map((tag) => {
-                      const isSelected = tastes.includes(tag)
+                <div className="flex flex-wrap gap-1 max-h-40 overflow-y-auto pt-1">
+                  {displayedTastes.length === 0 ? (
+                    <p className="text-[10px] text-slate-500 py-1 font-bold">
+                      一致するテイストが見つかりません
+                    </p>
+                  ) : (
+                    displayedTastes.map((taste) => {
+                      const isSelected = selectedTastes.includes(taste)
                       return (
                         <button
-                          key={tag}
-                          type="button"
-                          onClick={() => togglePresetTaste(tag)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer active:scale-95 ${
+                          key={taste}
+                          onClick={() => toggleTaste(taste)}
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold transition-all cursor-pointer ${
                             isSelected
-                              ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs'
-                              : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300'
+                              ? 'bg-purple-700 text-white'
+                              : 'bg-purple-100 text-purple-900 hover:bg-purple-200'
                           }`}
                         >
-                          {isSelected ? '✓ ' : '+ '}
-                          {tag}
+                          #{taste}
                         </button>
                       )
-                    })}
-                  </div>
-                </div>
-
-                <div className="space-y-2 pt-2">
-                  <p className="text-[11px] font-bold text-slate-400">オリジナルのタグを追加</p>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="例: ドット絵, 和風イラスト..."
-                      value={customTasteInput}
-                      onChange={(e) => setCustomTasteInput(e.target.value)}
-                      onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
-                        if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
-                          e.preventDefault()
-                          handleAddCustomTaste()
-                        }
-                      }}
-                      className="flex-1 px-4 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleAddCustomTaste}
-                      className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-all cursor-pointer shadow-xs active:scale-95"
-                    >
-                      追加
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-2 pt-2">
-                  <p className="text-[11px] font-bold text-slate-400">現在設定中のタグ ({tastes.length}件)</p>
-                  {tastes.length === 0 ? (
-                    <p className="text-xs text-slate-300 italic">タグが選択されていません</p>
-                  ) : (
-                    <div className="flex flex-wrap gap-1.5">
-                      {tastes.map((tag) => (
-                        <span
-                          key={tag}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-bold"
-                        >
-                          #{tag}
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveTaste(tag)}
-                            className="hover:text-rose-600 text-indigo-400 text-xs font-bold px-0.5 cursor-pointer"
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
-                    </div>
+                    })
                   )}
                 </div>
               </div>
             </div>
+          </aside>
 
-            {/* Links Section */}
-            <div className="border-t border-slate-100 pt-6 space-y-4">
-              <div>
-                <h3 className="font-bold text-slate-900 text-xs">連絡先・見積書の設定</h3>
-                <p className="text-[11px] text-slate-400 mt-0.5">詳細画面の「見積もり・相談をする」等に表示されます</p>
+          {/* メインリスト */}
+          <section className="lg:col-span-3 space-y-4">
+            <div className="flex justify-between items-center px-2 py-1 rounded-xl bg-white/60 backdrop-blur-md border border-white/80 shadow-sm">
+              <p className="text-xs font-extrabold text-slate-900">
+                該当クリエイター <span className="text-sm font-black text-purple-800 mx-1">{filteredProfiles.length}</span> 名
+              </p>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-extrabold text-slate-900">並び替え:</span>
+                <select
+                  value={sortOption}
+                  onChange={(e) => setSortOption(e.target.value as any)}
+                  className="px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-extrabold text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
+                >
+                  <option value="random">おすすめ順（標準）</option>
+                  <option value="price_asc">価格が安い順</option>
+                  <option value="price_desc">価格が高い順</option>
+                  <option value="likes_desc">いいねが多い順</option>
+                  <option value="likes_asc">いいねが少ない順</option>
+                </select>
               </div>
+            </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* 外部見積もりフォームURL / 見積書作成ページへのリンクエリア */}
-                <div className="space-y-2 sm:col-span-2 p-4 rounded-2xl bg-indigo-50/40 border border-indigo-100">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-800 flex items-center gap-2">
-                      <span>オリジナル見積書フォーム</span>
-                      {externalEstimationUrl ? (
-                        <span className="px-2 py-0.5 text-[10px] bg-emerald-100 text-emerald-700 rounded-md font-extrabold">
-                          作成済み
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 text-[10px] bg-slate-200 text-slate-600 rounded-md font-extrabold">
-                          未作成
-                        </span>
-                      )}
-                    </label>
-                    <Link
-                      href="/form-builder"
-                      className="text-xs font-bold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1"
+            {loading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {[1, 2, 3].map((n) => (
+                  <div key={n} className="bg-white/90 backdrop-blur-md rounded-3xl p-4 animate-pulse space-y-3 border border-white">
+                    <div className="aspect-square bg-slate-200/80 rounded-2xl" />
+                    <div className="h-4 bg-slate-200/80 rounded w-1/2" />
+                  </div>
+                ))}
+              </div>
+            ) : filteredProfiles.length === 0 ? (
+              <div className="text-center py-20 bg-white/90 backdrop-blur-md rounded-3xl border border-white p-6 shadow-md space-y-4">
+                <p className="text-xs font-extrabold text-slate-800">条件に合うクリエイターが見つかりませんでした</p>
+                <div className="flex justify-center gap-3">
+                  <button
+                    onClick={resetFilters}
+                    className="px-4 py-2 text-xs font-extrabold text-purple-800 bg-purple-100 rounded-xl hover:bg-purple-200 cursor-pointer"
+                  >
+                    条件をリセット
+                  </button>
+                  <Link
+                    href="/login"
+                    className="px-4 py-2 text-xs font-extrabold text-white bg-purple-700 rounded-xl hover:bg-purple-800 shadow-md"
+                  >
+                    あなたが最初のクリエイターとして登録する
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {filteredProfiles.map((profile) => {
+                  const isFav = favorites.includes(profile.user_id)
+                  const isCompared = compareList.some((p) => p.user_id === profile.user_id)
+                  const isNew = isRecentlyUpdated(profile.updated_at)
+                  
+                  // 条件判定（完全手描き＆R-18対応）
+                  const isPureHandDrawn = profile.ai_usage === 'none'
+                  const isR18Allowed = profile.r18_allowed === true
+
+                  return (
+                    <div
+                      key={profile.user_id}
+                      className="bg-white/90 backdrop-blur-md rounded-3xl border border-white shadow-lg shadow-purple-900/10 hover:shadow-xl transition-all duration-300 flex flex-col justify-between overflow-hidden group"
                     >
-                      <span>見積書を作成・編集する</span>
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </Link>
-                  </div>
+                      {/* イラスト画像エリア */}
+                      <div className="relative w-full aspect-square bg-slate-100 overflow-hidden">
+                        {profile.thumbnail_url ? (
+                          <img
+                            src={profile.thumbnail_url}
+                            alt={profile.display_name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center bg-slate-100 text-slate-400">
+                            <span className="text-[10px] font-black tracking-widest">NO PORTFOLIO</span>
+                          </div>
+                        )}
 
-                  <input
-                    type="url"
-                    placeholder="https://...（見積書作成ページで自動生成されたURLまたは外部フォームURL）"
-                    value={externalEstimationUrl}
-                    onChange={(e) => setExternalEstimationUrl(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono text-[11px]"
-                  />
-                  <p className="text-[10px] text-slate-400">
-                    ※ 自分で制作していない場合は「未作成」と表示されます。「見積書を作成・編集する」ボタンからフォームを作成してください。
-                  </p>
-                </div>
+                        {/* 左上：ステータス & NEW & 追加バッジ */}
+                        <div className="absolute top-2.5 left-2.5 flex flex-wrap items-center gap-1 max-w-[70%]">
+                          {isNew && (
+                            <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-pink-600 text-white shadow-md">
+                              NEW
+                            </span>
+                          )}
 
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">𝕏 (Twitter) URL</label>
-                  <input
-                    type="url"
-                    placeholder="https://x.com/username"
-                    value={twitterUrl}
-                    onChange={(e) => setTwitterUrl(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono text-[11px]"
-                  />
-                </div>
+                          <span
+                            className={`text-[9px] px-2.5 py-0.5 rounded-full font-black text-white shadow-md ${
+                              profile.status === 'available' ? 'bg-emerald-600' : 'bg-amber-600'
+                            }`}
+                          >
+                            {profile.status === 'available' ? '即対応可' : '相談受付中'}
+                          </span>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Instagram URL</label>
-                  <input
-                    type="url"
-                    placeholder="https://instagram.com/username"
-                    value={instagramUrl}
-                    onChange={(e) => setInstagramUrl(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono text-[11px]"
-                  />
-                </div>
+                          {/* 完全手描きバッジ */}
+                          {isPureHandDrawn && (
+                            <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-indigo-600 text-white shadow-md">
+                              ✦ 完全手描き
+                            </span>
+                          )}
 
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Pixiv URL</label>
-                  <input
-                    type="url"
-                    placeholder="https://pixiv.net/users/..."
-                    value={pixivUrl}
-                    onChange={(e) => setPixivUrl(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono text-[11px]"
-                  />
-                </div>
+                          {/* R-18対応バッジ */}
+                          {isR18Allowed && (
+                            <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-rose-600 text-white shadow-md">
+                              R-18 OK
+                            </span>
+                          )}
+                        </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">公式Webサイト URL</label>
-                  <input
-                    type="url"
-                    placeholder="https://yourportfolio.com"
-                    value={websiteUrl}
-                    onChange={(e) => setWebsiteUrl(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono text-[11px]"
-                  />
-                </div>
-              </div>
-            </div>
+                        {/* 右上：お気に入りボタン */}
+                        <button
+                          type="button"
+                          onClick={() => toggleFavorite(profile.user_id)}
+                          className={`absolute top-2.5 right-2.5 px-2.5 py-0.5 rounded-full bg-white/95 backdrop-blur-md shadow-md flex items-center gap-1 text-[11px] font-black cursor-pointer active:scale-95 transition-transform ${
+                            isFav ? 'text-rose-600' : 'text-purple-800 hover:text-rose-600'
+                          }`}
+                        >
+                          <span>♥</span>
+                          <span>{profile.likes_count ?? 0}</span>
+                        </button>
 
-            <button
-              type="submit"
-              disabled={saving || uploadingAvatar}
-              className="w-full py-3.5 bg-slate-900 hover:bg-indigo-600 active:scale-[0.99] text-white font-extrabold rounded-2xl text-xs transition-all duration-200 shadow-md hover:shadow-indigo-200 cursor-pointer disabled:opacity-50"
-            >
-              {saving ? '保存中...' : 'プロフィール情報を保存'}
-            </button>
-          </form>
-        )}
-
-        {activeTab === 'portfolio' && (
-          <form onSubmit={handleSavePortfolio} className="bg-white rounded-3xl border border-slate-200/70 p-6 sm:p-8 space-y-8 shadow-xs">
-            <div className="border-b border-slate-100 pb-4">
-              <h2 className="font-extrabold text-slate-900 text-base">作品ギャラリーの設定</h2>
-              <p className="text-xs text-slate-400 mt-1">最大4枚まで登録可能です。1枚目の画像がTwitter OGP・カード一覧の代表画像になります。</p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              {portfolioUrls.map((url, idx) => (
-                <div key={idx} className="space-y-3 p-4 rounded-2xl border border-slate-200/80 bg-slate-50/40 hover:bg-slate-50 transition-all">
-                  <div className="flex justify-between items-center">
-                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                      作品 {idx + 1}
-                      {idx === 0 && (
-                        <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-md font-extrabold">
-                          OGP代表 (JPEG)
-                        </span>
-                      )}
-                    </label>
-                    {url && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const next = [...portfolioUrls]
-                          next[idx] = ''
-                          setPortfolioUrls(next)
-                        }}
-                        className="text-[11px] text-rose-500 font-bold hover:underline cursor-pointer"
-                      >
-                        画像を削除
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="w-full aspect-[4/3] rounded-xl border border-slate-200 bg-white overflow-hidden flex items-center justify-center relative shadow-xs">
-                    {uploadingIndex === idx ? (
-                      <div className="flex flex-col items-center gap-2 text-xs font-bold text-indigo-600">
-                        <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                        圧縮＆アップロード中...
+                        {/* オーバーレイグラデーション & 最低価格 */}
+                        <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-slate-950/90 via-slate-900/50 to-transparent p-3 pt-6 flex justify-between items-end">
+                          <div>
+                            <span className="text-[9px] text-slate-300 font-extrabold block">最安目安</span>
+                            <span className="text-white font-black text-sm tracking-tight drop-shadow">
+                              {profile.price_min ? `¥${profile.price_min.toLocaleString()}〜` : '応相談'}
+                            </span>
+                          </div>
+                          {profile.commercial_use_allowed && (
+                            <span className="text-[9px] font-black bg-purple-700 text-white px-1.5 py-0.5 rounded shadow">
+                              商用利用OK
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    ) : url ? (
-                      <img
-                        src={url}
-                        alt={`プレビュー ${idx + 1}`}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex flex-col items-center gap-1 text-slate-300">
-                        <svg className="w-8 h-8 stroke-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        <span className="text-[11px] font-semibold">未登録</span>
+
+                      {/* 情報本文エリア */}
+                      <div className="p-3.5 space-y-2.5 flex-1 flex flex-col justify-between">
+                        <div className="space-y-2">
+                          <div className="space-y-0.5">
+                            <h3 className="font-black text-xs text-slate-950 line-clamp-1">
+                              {profile.display_name}
+                            </h3>
+                            <p className="text-[10px] text-slate-700 font-medium line-clamp-2 leading-relaxed">
+                              {profile.status_comment || 'プロフィール文は設定されていません。'}
+                            </p>
+                          </div>
+
+                          {/* メニュー料金表 */}
+                          <div className="space-y-1 border-t border-slate-100 pt-1.5">
+                            <span className="text-[9px] font-black text-slate-800 block">料金メニュー</span>
+                            {profile.menu_items && profile.menu_items.length > 0 ? (
+                              <div className="flex flex-col gap-1">
+                                {profile.menu_items.slice(0, 3).map((menu, index) => (
+                                  <div
+                                    key={index}
+                                    className="flex justify-between items-center text-[10px] bg-slate-100/70 px-2 py-0.5 rounded-md"
+                                  >
+                                    <span className="font-extrabold text-slate-800 line-clamp-1">{menu.title}</span>
+                                    <span className="font-black text-purple-900 whitespace-nowrap">
+                                      {typeof menu.price === 'number' ? `¥${menu.price.toLocaleString()}〜` : '応相談'}
+                                    </span>
+                                  </div>
+                                ))}
+                                {profile.menu_items.length > 3 && (
+                                  <span className="text-[8px] text-slate-500 text-right font-extrabold block">
+                                    他 {profile.menu_items.length - 3} 件のメニュー
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="text-[10px] text-slate-500 font-bold bg-slate-50 p-1.5 rounded-lg text-center">
+                                詳細料金はプロフィール参照
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5 pt-1">
+                          {/* 仕様目安・着手時期 */}
+                          <div className="flex justify-between items-center text-[10px] text-slate-700 font-bold">
+                            <span>納期目安</span>
+                            <span className="font-extrabold text-slate-900">{profile.lead_time_days || 14}日以内</span>
+                          </div>
+                          {profile.available_from_text && (
+                            <div className="flex justify-between items-center text-[10px] text-purple-900 font-bold bg-purple-50 px-2 py-0.5 rounded">
+                              <span>着手可能時期</span>
+                              <span className="font-black">{profile.available_from_text}</span>
+                            </div>
+                          )}
+
+                          {/* タグ一覧 */}
+                          <div className="flex flex-wrap gap-1">
+                            {profile.tastes?.map((taste) => (
+                              <span key={taste} className="text-[9px] font-extrabold bg-purple-100 text-purple-900 px-1.5 py-0.5 rounded">
+                                #{taste}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* アクションボタン */}
+                        <div className="flex gap-1.5 pt-1">
+                          <button
+                            onClick={() => toggleCompare(profile)}
+                            className={`flex-1 py-1.5 text-xs font-extrabold rounded-xl border transition-all cursor-pointer ${
+                              isCompared
+                                ? 'bg-purple-200 text-purple-900 border-purple-400'
+                                : 'bg-slate-100 text-purple-900 border-slate-300 hover:bg-purple-100'
+                            }`}
+                          >
+                            + 比較
+                          </button>
+                          <Link
+                            href={`/creator/${profile.user_id}`}
+                            className="flex-1 py-1.5 text-xs font-black text-center text-white bg-purple-700 hover:bg-purple-800 rounded-xl shadow-md transition-all flex items-center justify-center"
+                          >
+                            詳細を見る &gt;
+                          </Link>
+                        </div>
                       </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-2 pt-1">
-                    <label className="block">
-                      <span className="sr-only">画像を選択</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        disabled={uploadingIndex !== null}
-                        onChange={(e) => handleFileUpload(e, idx)}
-                        className="block w-full text-xs text-slate-500
-                          file:mr-3 file:py-2 file:px-4
-                          file:rounded-xl file:border-0
-                          file:text-xs file:font-bold
-                          file:bg-indigo-50 file:text-indigo-700
-                          hover:file:bg-indigo-100
-                          file:cursor-pointer cursor-pointer transition-all"
-                      />
-                    </label>
-
-                    <div className="flex items-center gap-2 my-1">
-                      <div className="h-px bg-slate-200 flex-1"></div>
-                      <span className="text-[10px] font-bold text-slate-300">または</span>
-                      <div className="h-px bg-slate-200 flex-1"></div>
                     </div>
-
-                    <input
-                      type="url"
-                      placeholder="画像URLを直接入力"
-                      value={url}
-                      onChange={(e) => {
-                        const next = [...portfolioUrls]
-                        next[idx] = e.target.value
-                        setPortfolioUrls(next)
-                      }}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-300 font-mono text-[11px]"
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <button
-              type="submit"
-              disabled={saving || uploadingIndex !== null}
-              className="w-full py-3.5 bg-slate-900 hover:bg-indigo-600 active:scale-[0.99] text-white font-extrabold rounded-2xl text-xs transition-all duration-200 shadow-md hover:shadow-indigo-200 cursor-pointer disabled:opacity-50"
-            >
-              {saving ? '保存中...' : '作品ポートフォリオを保存'}
-            </button>
-          </form>
-        )}
-
-        
+                  )
+                })}
+              </div>
+            )}
+          </section>
+        </div>
       </main>
 
-      {/* QRコード出力 モーダル */}
-      {qrModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 space-y-5 shadow-2xl text-center border border-slate-100">
-            <div>
-              <h3 className="text-base font-extrabold text-slate-900">埋め込み用 QRコード</h3>
-              <p className="text-xs text-slate-400 mt-1">イベント名刺やチラシ等にご使用いただけます</p>
-            </div>
+      {/* 比較固定バー */}
+      {compareList.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-950/95 text-white backdrop-blur-xl px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-6 z-40 border border-slate-800">
+          <div className="text-xs font-bold">
+            比較リスト: <span className="font-black text-purple-400 text-sm mx-1">{compareList.length}</span> / 3 名
+          </div>
+          <button
+            onClick={() => setIsCompareOpen(true)}
+            className="px-4 py-2 bg-purple-700 hover:bg-purple-600 text-white rounded-xl text-xs font-black transition-all shadow-md cursor-pointer"
+          >
+            比較表を開く
+          </button>
+        </div>
+      )}
 
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col items-center justify-center">
-              <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(currentPortfolioUrl)}`}
-                alt="QR Code"
-                className="w-48 h-48 rounded-lg shadow-xs"
-              />
-              <span className="text-[10px] text-slate-400 font-mono mt-3 truncate max-w-full px-2">
-                {currentPortfolioUrl}
-              </span>
-            </div>
-
-            <div className="flex gap-2">
-              <a
-                href={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(currentPortfolioUrl)}`}
-                download="portfolio_qr.png"
-                target="_blank"
-                rel="noreferrer"
-                className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-xl text-xs transition-all shadow-xs"
-              >
-                画像をダウンロード
-              </a>
+      {/* 比較モーダル（詳細画面） */}
+      {isCompareOpen && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-4xl shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b border-slate-200 pb-3">
+              <div>
+                <h3 className="text-sm font-black text-slate-950">クリエイター詳細比較</h3>
+                <p className="text-[11px] text-slate-600 font-bold">選択したクリエイターのメニュー・条件を一覧で比較できます</p>
+              </div>
               <button
-                type="button"
-                onClick={() => setQrModalOpen(false)}
-                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all"
+                onClick={() => setIsCompareOpen(false)}
+                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-700 font-extrabold text-xs transition-colors cursor-pointer"
               >
-                閉じる
+                ✕
               </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {compareList.map((item) => (
+                <div key={item.user_id} className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col justify-between space-y-3">
+                  <div className="space-y-3">
+                    <div className="relative w-full aspect-video bg-slate-200 rounded-xl overflow-hidden">
+                      {item.thumbnail_url ? (
+                        <img
+                          src={item.thumbnail_url}
+                          alt={item.display_name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-500 font-extrabold">
+                          NO IMAGE
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex justify-between items-start">
+                      <h4 className="font-black text-slate-950 text-xs">{item.display_name}</h4>
+                      <button
+                        onClick={() => toggleCompare(item)}
+                        className="text-[10px] text-rose-600 font-extrabold hover:underline cursor-pointer"
+                      >
+                        削除
+                      </button>
+                    </div>
+
+                    <div className="text-xs space-y-2 bg-white p-3 rounded-xl border border-slate-200">
+                      {/* メニュー一覧 */}
+                      <div className="space-y-1 pb-1 border-b border-slate-100">
+                        <span className="text-[10px] font-black text-slate-800 block">主な料金</span>
+                        {item.menu_items && item.menu_items.length > 0 ? (
+                          item.menu_items.map((m, idx) => (
+                            <div key={idx} className="flex justify-between text-[10px]">
+                              <span className="text-slate-600 font-bold">{m.title}</span>
+                              <span className="font-black text-purple-800">
+                                {typeof m.price === 'number' ? `¥${m.price.toLocaleString()}〜` : '応相談'}
+                              </span>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="flex justify-between text-[10px]">
+                            <span className="text-slate-600 font-bold">最安価格</span>
+                            <span className="font-black text-purple-800">¥{item.price_min?.toLocaleString() || '応相談'}〜</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 制作条件・各種対応項目の比較 */}
+                      <div className="space-y-1.5 pt-1">
+                        <div className="flex justify-between text-[10px]">
+                          <span className="text-slate-600 font-bold">着手可能時期</span>
+                          <span className="font-black text-purple-900">
+                            {item.available_from_text || '即時相談可'}
+                          </span>
+                        </div>
+
+                        <div className="flex justify-between text-[10px]">
+                          <span className="text-slate-600 font-bold">AI使用方針</span>
+                          <span className="font-black text-indigo-900">
+                            {item.ai_usage === 'none' ? '完全手描き' : item.ai_usage === 'partial' ? '一部AI使用' : item.ai_usage === 'main' ? 'AIメイン' : '未設定'}
+                          </span>
+                        </div>
+
+                        <div className="flex justify-between text-[10px]">
+                          <span className="text-slate-600 font-bold">R-18対応</span>
+                          <span className={`font-black ${item.r18_allowed ? 'text-rose-600' : 'text-slate-500'}`}>
+                            {item.r18_allowed ? '可能 (R-18 OK)' : '不可'}
+                          </span>
+                        </div>
+
+                        <div className="flex justify-between text-[10px]">
+                          <span className="text-slate-600 font-bold">無料リテイク</span>
+                          <span className="font-black text-slate-900">
+                            {typeof item.free_revision_count === 'number' ? `${item.free_revision_count}回まで` : '要相談'}
+                          </span>
+                        </div>
+
+                        <div className="flex justify-between text-[10px]">
+                          <span className="text-slate-600 font-bold">納期目安</span>
+                          <span className="font-black text-slate-900">{item.lead_time_days || 14}日以内</span>
+                        </div>
+
+                        <div className="flex justify-between text-[10px]">
+                          <span className="text-slate-600 font-bold">特急対応</span>
+                          <span className={`font-black ${item.express_option_available ? 'text-amber-600' : 'text-slate-500'}`}>
+                            {item.express_option_available ? '相談可' : '不可'}
+                          </span>
+                        </div>
+
+                        <div className="flex justify-between text-[10px]">
+                          <span className="text-slate-600 font-bold">商用利用</span>
+                          <span className={`font-black ${item.commercial_use_allowed ? 'text-emerald-700' : 'text-slate-500'}`}>
+                            {item.commercial_use_allowed ? '可能' : '不可'}
+                          </span>
+                        </div>
+
+                        <div className="flex justify-between text-[10px]">
+                          <span className="text-slate-600 font-bold">著作権譲渡</span>
+                          <span className={`font-black ${item.copyright_transfer_available ? 'text-indigo-700' : 'text-slate-500'}`}>
+                            {item.copyright_transfer_available ? '相談可' : '不可'}
+                          </span>
+                        </div>
+
+                        <div className="flex justify-between text-[10px]">
+                          <span className="text-slate-600 font-bold">いいね数</span>
+                          <span className="font-black text-rose-600">♥ {item.likes_count ?? 0}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Link
+                    href={`/creator/${item.user_id}`}
+                    className="block w-full py-2 bg-purple-700 hover:bg-purple-800 text-white text-xs font-black text-center rounded-xl shadow-md transition-all"
+                  >
+                    詳細ページへ
+                  </Link>
+                </div>
+              ))}
             </div>
           </div>
         </div>
