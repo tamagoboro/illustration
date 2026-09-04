@@ -149,7 +149,7 @@ export default function FormBuilderPage() {
 
   const addField = () => {
     const newField: Field = {
-      id: `f_${Date.now()}`,
+      id: `f_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       label: '新しい質問',
       type: 'text',
       price: 0,
@@ -165,11 +165,21 @@ export default function FormBuilderPage() {
     }))
   }
 
+  const moveField = (idx: number, direction: 'up' | 'down') => {
+    setConfig((prev) => {
+      const fields = [...prev.fields]
+      const targetIdx = direction === 'up' ? idx - 1 : idx + 1
+      if (targetIdx < 0 || targetIdx >= fields.length) return prev
+      const [movedItem] = fields.splice(idx, 1)
+      fields.splice(targetIdx, 0, movedItem)
+      return { ...prev, fields }
+    })
+  }
+
   const updateField = (idx: number, key: keyof Field, val: any) => {
     setConfig((prev) => {
       const fields = [...prev.fields]
       fields[idx] = { ...fields[idx], [key]: val }
-      // タイプ変更時のオプション補正
       if ((val === 'radio' || val === 'checkbox') && !fields[idx].options) {
         fields[idx].options = [{ label: '選択肢 1', price: 0, priceType: 'fixed' }]
       }
@@ -233,7 +243,7 @@ export default function FormBuilderPage() {
     }
   }
 
-  // 概算見積計算ロジック（固定額 + %加算）
+  // プレビュー用の概算見積計算（ラジオは最初の項目、チェックボックスは非パーセントの項目を基準計算）
   const calculateTotal = () => {
     let basePriceTotal = 0
     let extraFixedPrice = 0
@@ -244,16 +254,19 @@ export default function FormBuilderPage() {
         basePriceTotal += f.price
       }
       if (f.options && f.options.length > 0) {
-        const opt = f.options[0] // プレビュー用の簡易選択計算
-        if (opt.priceType === 'percent') {
-          percentAdditions += opt.price
-        } else {
-          extraFixedPrice += opt.price
+        if (f.type === 'radio') {
+          const firstOpt = f.options[0]
+          if (firstOpt.priceType === 'percent') {
+            percentAdditions += firstOpt.price
+          } else {
+            extraFixedPrice += firstOpt.price
+          }
         }
       }
     })
 
-    return basePriceTotal + extraFixedPrice + Math.round(basePriceTotal * (percentAdditions / 100))
+    const subtotal = basePriceTotal + extraFixedPrice
+    return subtotal + Math.round(subtotal * (percentAdditions / 100))
   }
 
   if (loading) {
@@ -263,7 +276,7 @@ export default function FormBuilderPage() {
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 flex flex-col lg:flex-row gap-6">
       
-      {/* ================= 左側：エディタエリア ================= */}
+      {/* エディタエリア */}
       <div className="w-full lg:w-7/12 space-y-6">
         
         {/* (A) 基本・デザイン設定 */}
@@ -357,17 +370,32 @@ export default function FormBuilderPage() {
             </div>
           </div>
 
-          {/* 各設問ブロック */}
           {config.fields.map((f, idx) => (
             <div key={f.id} className="bg-white rounded-2xl p-5 border-2 border-slate-100 space-y-3 shadow-xs">
               <div className="flex justify-between items-center">
                 <span className="text-xs font-black text-pink-500">項目 #{idx + 1}</span>
-                <button
-                  onClick={() => removeField(idx)}
-                  className="text-xs font-bold text-red-400 hover:text-red-600 cursor-pointer"
-                >
-                  削除
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => moveField(idx, 'up')}
+                    disabled={idx === 0}
+                    className="text-xs font-bold text-slate-400 hover:text-slate-600 disabled:opacity-30 cursor-pointer"
+                  >
+                    ▲
+                  </button>
+                  <button
+                    onClick={() => moveField(idx, 'down')}
+                    disabled={idx === config.fields.length - 1}
+                    className="text-xs font-bold text-slate-400 hover:text-slate-600 disabled:opacity-30 cursor-pointer"
+                  >
+                    ▼
+                  </button>
+                  <button
+                    onClick={() => removeField(idx)}
+                    className="text-xs font-bold text-red-400 hover:text-red-600 cursor-pointer ml-2"
+                  >
+                    削除
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-3 gap-2">
@@ -393,7 +421,6 @@ export default function FormBuilderPage() {
                 </select>
               </div>
 
-              {/* クリエイター説明文 (note) */}
               {f.type === 'note' && (
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-slate-400 block">表示する説明文テキスト</label>
@@ -407,7 +434,6 @@ export default function FormBuilderPage() {
                 </div>
               )}
 
-              {/* FAQブロック */}
               {f.type === 'faq' && (
                 <div className="space-y-2">
                   <div className="space-y-1">
@@ -433,7 +459,6 @@ export default function FormBuilderPage() {
                 </div>
               )}
 
-              {/* 通常入力（基本金額指定） */}
               {f.type !== 'note' && f.type !== 'faq' && (
                 <div className="flex items-center gap-2">
                   <label className="text-xs font-bold text-slate-500 whitespace-nowrap">基本金額:</label>
@@ -447,7 +472,6 @@ export default function FormBuilderPage() {
                 </div>
               )}
 
-              {/* 選択肢オプション（radio / checkbox） */}
               {(f.type === 'radio' || f.type === 'checkbox') && (
                 <div className="pl-2 space-y-2 pt-2 border-t border-slate-100">
                   <label className="text-[10px] font-bold text-slate-400 block">選択肢と追加金額 (固定額 または %指定)</label>
@@ -495,7 +519,6 @@ export default function FormBuilderPage() {
                 </div>
               )}
 
-              {/* 必須指定チェックボックス */}
               {f.type !== 'note' && f.type !== 'faq' && (
                 <div className="flex items-center space-x-2 pt-1">
                   <input
@@ -513,7 +536,6 @@ export default function FormBuilderPage() {
           ))}
         </div>
 
-        {/* 保存ボタン */}
         <button
           onClick={handleSave}
           disabled={saving}
@@ -523,10 +545,8 @@ export default function FormBuilderPage() {
         </button>
       </div>
 
-      {/* ================= 右側：リアルタイムスマホ風プレビュー ================= */}
+      {/* リアルタイムスマホ風プレビュー */}
       <div className="w-full lg:w-5/12 sticky top-20 h-[calc(100vh-100px)] flex flex-col space-y-2">
-        
-        {/* プレビュータブ切り替え */}
         <div className="flex bg-slate-200/80 p-1 rounded-2xl font-black text-xs">
           <button
             onClick={() => setPreviewTab('input')}
@@ -542,9 +562,7 @@ export default function FormBuilderPage() {
           </button>
         </div>
 
-        {/* スマホ本体枠 */}
         <div className="bg-white rounded-[40px] shadow-2xl border-8 border-slate-800 p-6 overflow-y-auto flex flex-col justify-between flex-1">
-          
           {previewTab === 'input' ? (
             <div className="flex flex-col justify-between h-full space-y-6">
               <div className="space-y-5">
@@ -559,7 +577,6 @@ export default function FormBuilderPage() {
                   <p className="text-xs font-bold text-slate-400 mt-1 whitespace-pre-wrap">{config.description}</p>
                 </div>
 
-                {/* 動的フィールドプレビュー */}
                 <div className="space-y-4">
                   {config.fields.map((f) => {
                     if (f.type === 'note') {
@@ -620,7 +637,6 @@ export default function FormBuilderPage() {
                 </div>
               </div>
 
-              {/* 概算見積計算バー */}
               <div
                 className="mt-6 pt-4 border-t-2 border-slate-100 flex justify-between items-center p-4 rounded-2xl"
                 style={{ backgroundColor: `${config.theme_color}10`, borderColor: `${config.theme_color}25` }}
@@ -632,7 +648,6 @@ export default function FormBuilderPage() {
               </div>
             </div>
           ) : (
-            /* 送信完了画面プレビュー */
             <div className="flex-1 flex flex-col items-center justify-center text-center p-4 space-y-4 my-auto">
               <div className="w-16 h-16 bg-pink-100 text-pink-500 rounded-full flex items-center justify-center text-3xl shadow-inner animate-bounce">
                 💌
@@ -646,7 +661,7 @@ export default function FormBuilderPage() {
         </div>
       </div>
 
-      {/* ================= 職種別テンプレート選択モーダル ================= */}
+      {/* テンプレートモーダル */}
       {showTmplModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-2xl space-y-4 max-w-lg w-full border-4 border-amber-100">
