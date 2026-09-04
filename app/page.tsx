@@ -26,6 +26,7 @@ type ProfileWithImage = Profile & {
 // 指定の背景画像URL
 const BACKGROUND_IMAGE_URL =
   'https://qcklfkslqtjnxufqcqyi.supabase.co/storage/v1/object/public/portfolios/bg.png'
+
 // 24時間以内に作成・更新されたか判定する関数
 const isRecentlyUpdated = (updatedAt?: string | null) => {
   if (!updatedAt) return false
@@ -324,7 +325,6 @@ export default function Home() {
             )}
           </button>
 
-          {/* 修正：リンク先を確実に分岐して動作させる */}
           <Link
             href={isLoggedIn ? '/dashboard' : '/login'}
             className={`px-4 py-2 text-xs font-black text-white rounded-2xl shadow-md transition-all flex items-center gap-1 cursor-pointer active:scale-95 ${
@@ -880,8 +880,9 @@ export default function Home() {
                     </div>
                   </div>
 
+                  {/* 修正箇所：hrefのルートパスを統一 */}
                   <Link
-                    href={`/creator/${item.user_id}`}
+                    href={`/${item.user_id}`}
                     className="block w-full py-2 bg-purple-700 hover:bg-purple-800 text-white text-xs font-black text-center rounded-xl shadow-md transition-all"
                   >
                     詳細ページへ
