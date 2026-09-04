@@ -1,19 +1,23 @@
-// components/estimate/EstimateModal.tsx
 'use client'
 
 import { useState, useMemo } from 'react'
 
-type Option = {
+export type Option = {
   label: string
   price: number
-  calcType?: 'add' | 'percent'
+  priceType?: 'fixed' | 'percent'
+  calcType?: 'add' | 'percent' // 互換性維持用
 }
 
-type Field = {
+export type Field = {
   id: string
-  title: string
-  type: 'radio' | 'checkbox' | 'text'
+  title?: string
+  label?: string // FormBuilderとの互換性
+  type: 'radio' | 'checkbox' | 'text' | 'textarea' | 'note' | 'faq' | 'color'
   required?: boolean
+  price?: number
+  noteText?: string
+  faqAnswer?: string
   options?: Option[]
 }
 
@@ -44,9 +48,9 @@ const DEFAULT_FORM_CONFIG: FormConfig = {
       type: 'radio',
       required: true,
       options: [
-        { label: 'SNSアイコン', price: 5000 },
-        { label: '一枚絵・メインビジュアル', price: 15000 },
-        { label: '立ち絵（全身）', price: 20000 },
+        { label: 'SNSアイコン', price: 5000, priceType: 'fixed' },
+        { label: '一枚絵・メインビジュアル', price: 15000, priceType: 'fixed' },
+        { label: '立ち絵（全身）', price: 20000, priceType: 'fixed' },
       ],
     },
     {
@@ -54,9 +58,9 @@ const DEFAULT_FORM_CONFIG: FormConfig = {
       title: '背景指定',
       type: 'radio',
       options: [
-        { label: '単色・透過・おまかせ', price: 0 },
-        { label: '簡易背景（パターン・柄）', price: 2000 },
-        { label: '描き込み背景', price: 8000 },
+        { label: '単色・透過・おまかせ', price: 0, priceType: 'fixed' },
+        { label: '簡易背景（パターン・柄）', price: 2000, priceType: 'fixed' },
+        { label: '描き込み背景', price: 8000, priceType: 'fixed' },
       ],
     },
     {
@@ -64,16 +68,16 @@ const DEFAULT_FORM_CONFIG: FormConfig = {
       title: 'オプション',
       type: 'checkbox',
       options: [
-        { label: '商用利用（配信・グッズ等）', price: 50, calcType: 'percent' },
-        { label: '表情差分 (+2種)', price: 3000 },
-        { label: '実績公開不可', price: 5000 },
-        { label: 'お急ぎ便（優先制作）', price: 30, calcType: 'percent' },
+        { label: '商用利用（配信・グッズ等）', price: 50, priceType: 'percent' },
+        { label: '表情差分 (+2種)', price: 3000, priceType: 'fixed' },
+        { label: '実績公開不可', price: 5000, priceType: 'fixed' },
+        { label: 'お急ぎ便（優先制作）', price: 30, priceType: 'percent' },
       ],
     },
     {
       id: 'f4',
       title: '詳細なご要望・キャラクター設定など',
-      type: 'text',
+      type: 'textarea',
     },
   ],
 }
@@ -117,13 +121,19 @@ export default function EstimateModal({
     let percentSum = 0
 
     activeConfig.fields.forEach((field) => {
+      // フィールド自体の基本金額加算
+      if (field.price && formAnswers[field.id]) {
+        baseSum += field.price
+      }
+
       const answer = formAnswers[field.id]
       if (!answer || !field.options) return
 
       if (field.type === 'radio') {
         const selectedOpt = field.options.find((opt) => opt.label === answer)
         if (selectedOpt) {
-          if (selectedOpt.calcType === 'percent') {
+          const isPercent = selectedOpt.priceType === 'percent' || selectedOpt.calcType === 'percent'
+          if (isPercent) {
             percentSum += selectedOpt.price
           } else {
             baseSum += selectedOpt.price
@@ -133,7 +143,8 @@ export default function EstimateModal({
         answer.forEach((selectedLabel) => {
           const selectedOpt = field.options?.find((opt) => opt.label === selectedLabel)
           if (selectedOpt) {
-            if (selectedOpt.calcType === 'percent') {
+            const isPercent = selectedOpt.priceType === 'percent' || selectedOpt.calcType === 'percent'
+            if (isPercent) {
               percentSum += selectedOpt.price
             } else {
               baseSum += selectedOpt.price
@@ -155,16 +166,20 @@ export default function EstimateModal({
     specLines.push(`-----------------------------------`)
 
     activeConfig.fields.forEach((field) => {
+      if (field.type === 'note' || field.type === 'faq') return
+
       const answer = formAnswers[field.id]
       if (!answer || (Array.isArray(answer) && answer.length === 0)) return
 
-      if (field.type === 'text') {
-        specLines.push(`■ ${field.title}:`)
+      const titleName = field.title || field.label || '項目'
+
+      if (field.type === 'text' || field.type === 'textarea') {
+        specLines.push(`■ ${titleName}:`)
         specLines.push(`   ${answer}`)
       } else if (Array.isArray(answer)) {
-        specLines.push(`■ ${field.title}: ${answer.join(', ')}`)
+        specLines.push(`■ ${titleName}: ${answer.join(', ')}`)
       } else {
-        specLines.push(`■ ${field.title}: ${answer}`)
+        specLines.push(`■ ${titleName}: ${answer}`)
       }
     })
 
@@ -195,13 +210,17 @@ export default function EstimateModal({
       }
 
       activeConfig.fields.forEach((field) => {
+        if (field.type === 'note' || field.type === 'faq') return
+
         const answer = formAnswers[field.id]
         if (!answer || (Array.isArray(answer) && answer.length === 0)) return
 
+        const titleName = field.title || field.label || '項目'
+
         if (Array.isArray(answer)) {
-          formattedAnswers.push({ label: field.title, value: answer.join(', ') })
+          formattedAnswers.push({ label: titleName, value: answer.join(', ') })
         } else {
-          formattedAnswers.push({ label: field.title, value: String(answer) })
+          formattedAnswers.push({ label: titleName, value: String(answer) })
         }
       })
 
@@ -274,107 +293,159 @@ export default function EstimateModal({
                   placeholder="例: 山田太郎"
                   value={clientName}
                   onChange={(e) => setClientName(e.target.value)}
-                  className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-800"
                 />
               </div>
 
-              {activeConfig.fields.map((field) => (
-                <div
-                  key={field.id}
-                  className="space-y-2 bg-slate-50/70 p-4 rounded-2xl border border-slate-100"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-black text-slate-800">
-                      {field.title}
-                    </span>
-                    {field.required && (
-                      <span className="text-[10px] bg-rose-100 text-rose-600 font-extrabold px-1.5 py-0.5 rounded">
-                        必須
+              {activeConfig.fields.map((field) => {
+                const titleName = field.title || field.label || '項目'
+
+                {/* 注意事項 (note) */}
+                if (field.type === 'note') {
+                  return (
+                    <div key={field.id} className="p-4 bg-amber-50/80 border border-amber-200 rounded-2xl text-amber-900 text-xs space-y-1">
+                      <span className="font-extrabold block">⚠️ {titleName}</span>
+                      <p className="whitespace-pre-wrap font-medium opacity-90">{field.noteText}</p>
+                    </div>
+                  )
+                }
+
+                {/* FAQ */}
+                if (field.type === 'faq') {
+                  return (
+                    <div key={field.id} className="p-4 bg-sky-50/80 border border-sky-200 rounded-2xl text-sky-900 text-xs space-y-1">
+                      <span className="font-extrabold block">💡 Q. {titleName}</span>
+                      <p className="whitespace-pre-wrap font-medium opacity-90">A. {field.faqAnswer}</p>
+                    </div>
+                  )
+                }
+
+                return (
+                  <div
+                    key={field.id}
+                    className="space-y-2 bg-slate-50/70 p-4 rounded-2xl border border-slate-100"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-black text-slate-800">
+                        {titleName}
                       </span>
+                      {field.required && (
+                        <span className="text-[10px] bg-rose-100 text-rose-600 font-extrabold px-1.5 py-0.5 rounded">
+                          必須
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Radio 選択肢 */}
+                    {field.type === 'radio' && field.options && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                        {field.options.map((opt, i) => {
+                          const isSelected = formAnswers[field.id] === opt.label
+                          const isPercent = opt.priceType === 'percent' || opt.calcType === 'percent'
+                          return (
+                            <label
+                              key={i}
+                              onClick={() => handleInputChange(field.id, opt.label)}
+                              className={`flex items-center justify-between p-3 rounded-xl border text-xs font-bold cursor-pointer transition ${
+                                isSelected
+                                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                                  : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                              }`}
+                            >
+                              <span>{opt.label}</span>
+                              <span
+                                className={`text-[11px] ${
+                                  isSelected ? 'text-indigo-100' : 'text-slate-400'
+                                }`}
+                              >
+                                {isPercent
+                                  ? `+${opt.price}%`
+                                  : opt.price > 0
+                                  ? `+¥${opt.price.toLocaleString()}`
+                                  : '標準'}
+                              </span>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                    {/* Checkbox 選択肢 */}
+                    {field.type === 'checkbox' && field.options && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                        {field.options.map((opt, i) => {
+                          const currentList: string[] = formAnswers[field.id] || []
+                          const isSelected = currentList.includes(opt.label)
+                          const isPercent = opt.priceType === 'percent' || opt.calcType === 'percent'
+                          return (
+                            <label
+                              key={i}
+                              onClick={() =>
+                                handleInputChange(field.id, opt.label, true)
+                              }
+                              className={`flex items-center justify-between p-3 rounded-xl border text-xs font-bold cursor-pointer transition ${
+                                isSelected
+                                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                                  : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                              }`}
+                            >
+                              <span>{opt.label}</span>
+                              <span
+                                className={`text-[11px] ${
+                                  isSelected ? 'text-indigo-100' : 'text-slate-400'
+                                }`}
+                              >
+                                {isPercent
+                                  ? `+${opt.price}%`
+                                  : `+¥${opt.price.toLocaleString()}`}
+                              </span>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                    {/* 1行テキスト */}
+                    {field.type === 'text' && (
+                      <input
+                        type="text"
+                        placeholder="ご記入ください"
+                        value={formAnswers[field.id] || ''}
+                        onChange={(e) => handleInputChange(field.id, e.target.value)}
+                        className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-800"
+                      />
+                    )}
+
+                    {/* 複数行テキスト */}
+                    {field.type === 'textarea' && (
+                      <textarea
+                        rows={3}
+                        placeholder="構図、キャラクターの特徴、納期のご希望などがあればご記入ください"
+                        value={formAnswers[field.id] || ''}
+                        onChange={(e) =>
+                          handleInputChange(field.id, e.target.value)
+                        }
+                        className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-800"
+                      />
+                    )}
+
+                    {/* カラーピッカー */}
+                    {field.type === 'color' && (
+                      <div className="flex items-center gap-3 bg-white p-2 border border-slate-200 rounded-xl">
+                        <input
+                          type="color"
+                          value={formAnswers[field.id] || '#000000'}
+                          onChange={(e) => handleInputChange(field.id, e.target.value)}
+                          className="h-8 w-12 rounded-lg border border-slate-200 cursor-pointer p-0.5 bg-white shrink-0"
+                        />
+                        <span className="text-xs font-mono font-bold text-slate-700">
+                          {formAnswers[field.id] || '#000000'}
+                        </span>
+                      </div>
                     )}
                   </div>
-
-                  {/* Radio 選択肢 */}
-                  {field.type === 'radio' && field.options && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                      {field.options.map((opt, i) => {
-                        const isSelected = formAnswers[field.id] === opt.label
-                        return (
-                          <label
-                            key={i}
-                            onClick={() => handleInputChange(field.id, opt.label)}
-                            className={`flex items-center justify-between p-3 rounded-xl border text-xs font-bold cursor-pointer transition ${
-                              isSelected
-                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                                : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
-                            }`}
-                          >
-                            <span>{opt.label}</span>
-                            <span
-                              className={`text-[11px] ${
-                                isSelected ? 'text-indigo-100' : 'text-slate-400'
-                              }`}
-                            >
-                              {opt.calcType === 'percent'
-                                ? `+${opt.price}%`
-                                : opt.price > 0
-                                ? `+¥${opt.price.toLocaleString()}`
-                                : '標準'}
-                            </span>
-                          </label>
-                        )
-                      })}
-                    </div>
-                  )}
-
-                  {/* Checkbox 選択肢 */}
-                  {field.type === 'checkbox' && field.options && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                      {field.options.map((opt, i) => {
-                        const currentList: string[] = formAnswers[field.id] || []
-                        const isSelected = currentList.includes(opt.label)
-                        return (
-                          <label
-                            key={i}
-                            onClick={() =>
-                              handleInputChange(field.id, opt.label, true)
-                            }
-                            className={`flex items-center justify-between p-3 rounded-xl border text-xs font-bold cursor-pointer transition ${
-                              isSelected
-                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                                : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
-                            }`}
-                          >
-                            <span>{opt.label}</span>
-                            <span
-                              className={`text-[11px] ${
-                                isSelected ? 'text-indigo-100' : 'text-slate-400'
-                              }`}
-                            >
-                              {opt.calcType === 'percent'
-                                ? `+${opt.price}%`
-                                : `+¥${opt.price.toLocaleString()}`}
-                            </span>
-                          </label>
-                        )
-                      })}
-                    </div>
-                  )}
-
-                  {/* Text 入力 */}
-                  {field.type === 'text' && (
-                    <textarea
-                      rows={3}
-                      placeholder="構図、キャラクターの特徴、納期のご希望などがあればご記入ください"
-                      value={formAnswers[field.id] || ''}
-                      onChange={(e) =>
-                        handleInputChange(field.id, e.target.value)
-                      }
-                      className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  )}
-                </div>
-              ))}
+                )
+              })}
             </>
           ) : (
             /* 生成結果プレビュー */
