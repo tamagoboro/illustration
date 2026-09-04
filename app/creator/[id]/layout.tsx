@@ -50,7 +50,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     .select('image_url')
     .eq('user_id', id)
     .order('sort_order', { ascending: true })
-    .limit(1)
+    .limit(0)
     .maybeSingle()
 
   const name = profile?.display_name || 'クリエイター'

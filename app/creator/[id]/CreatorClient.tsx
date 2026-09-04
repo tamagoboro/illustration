@@ -1,8 +1,29 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { supabase, Profile, PortfolioItem } from '@/lib/supabase'
+
+type Option = {
+  label: string
+  price: number
+  calcType?: 'add' | 'percent'
+}
+
+type Field = {
+  id: string
+  title: string
+  type: 'radio' | 'checkbox' | 'text'
+  required?: boolean
+  options?: Option[]
+}
+
+type FormConfig = {
+  title?: string
+  description?: string
+  themeColor?: string
+  fields: Field[]
+}
 
 type MenuItem = {
   title: string
@@ -18,7 +39,6 @@ type ExtendedProfile = Profile & {
   copyright_transfer_available?: boolean | null
   ai_learning_allowed?: boolean | null
   r18_allowed?: boolean | null
-  // 以下、コンポーネント内で使用されている型を追加
   tastes?: string[] | null
   status_comment?: string | null
   lead_time_days?: number | null
@@ -28,14 +48,80 @@ type ExtendedProfile = Profile & {
   instagram_url?: string | null
   pixiv_url?: string | null
   website_url?: string | null
+  form_config?: FormConfig | null
 }
 
-export default function CreatorClient({ id }: { id: string }) {
-  const [profile, setProfile] = useState<ExtendedProfile | null>(null)
-  const [works, setWorks] = useState<PortfolioItem[]>([])
-  const [loading, setLoading] = useState(true)
+const DEFAULT_FORM_CONFIG: FormConfig = {
+  title: '概算見積もり・仕様書作成シミュレーター',
+  description: 'ご希望の条件を選択すると、リアルタイムで概算金額と依頼仕様書が作成されます。',
+  themeColor: '#4f46e5',
+  fields: [
+    {
+      id: 'f1',
+      title: '制作種類',
+      type: 'radio',
+      required: true,
+      options: [
+        { label: 'SNSアイコン', price: 5000 },
+        { label: '一枚絵・メインビジュアル', price: 15000 },
+        { label: '立ち絵（全身）', price: 20000 },
+      ],
+    },
+    {
+      id: 'f2',
+      title: '背景指定',
+      type: 'radio',
+      options: [
+        { label: '単色・透過・おまかせ', price: 0 },
+        { label: '簡易背景（パターン・柄）', price: 2000 },
+        { label: '描き込み背景', price: 8000 },
+      ],
+    },
+    {
+      id: 'f3',
+      title: 'オプション',
+      type: 'checkbox',
+      options: [
+        { label: '商用利用（配信・グッズ等）', price: 50, calcType: 'percent' },
+        { label: '表情差分 (+2種)', price: 3000 },
+        { label: '実績公開不可', price: 5000 },
+        { label: 'お急ぎ便（優先制作）', price: 30, calcType: 'percent' },
+      ],
+    },
+    {
+      id: 'f4',
+      title: '詳細なご要望・キャラクター設定など',
+      type: 'text',
+    },
+  ],
+}
+
+export default function CreatorClient({
+  id,
+  initialProfile,
+  initialWorks = [],
+}: {
+  id: string
+  initialProfile?: ExtendedProfile | null
+  initialWorks?: PortfolioItem[]
+}) {
+  const [profile, setProfile] = useState<ExtendedProfile | null>(initialProfile || null)
+  const [works, setWorks] = useState<PortfolioItem[]>(initialWorks)
+  const [loading, setLoading] = useState(!initialProfile)
   const [isFavorite, setIsFavorite] = useState(false)
+
+  // モーダル管理（見積もり用 と 直接相談用）
+  const [isEstimateOpen, setIsEstimateOpen] = useState(false)
   const [isContactOpen, setIsContactOpen] = useState(false)
+
+  // 見積もりフォーム状態管理
+  const [formAnswers, setFormAnswers] = useState<Record<string, any>>({})
+  const [clientName, setClientName] = useState('')
+  const [generatedSpec, setGeneratedSpec] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  // PDFダウンロード状態
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false)
 
   const BACKGROUND_IMAGE_URL =
     'https://qcklfkslqtjnxufqcqyi.supabase.co/storage/v1/object/public/portfolios/bg.png'
@@ -54,7 +140,7 @@ export default function CreatorClient({ id }: { id: string }) {
 
   useEffect(() => {
     const fetchCreatorData = async () => {
-      setLoading(true)
+      if (!profile) setLoading(true)
 
       const { data: profileData } = await supabase
         .from('profiles')
@@ -64,19 +150,165 @@ export default function CreatorClient({ id }: { id: string }) {
 
       if (profileData) setProfile(profileData as ExtendedProfile)
 
-      const { data: worksData } = await supabase
-        .from('portfolio_items')
-        .select('*')
-        .eq('user_id', id)
-        .order('sort_order', { ascending: true })
+      if (works.length === 0) {
+        const { data: worksData } = await supabase
+          .from('portfolio_items')
+          .select('*')
+          .eq('user_id', id)
+          .order('sort_order', { ascending: true })
 
-      if (worksData) setWorks(worksData)
+        if (worksData) setWorks(worksData)
+      }
 
       setLoading(false)
     }
 
     fetchCreatorData()
   }, [id])
+
+  const activeFormConfig: FormConfig = useMemo(() => {
+    return profile?.form_config || DEFAULT_FORM_CONFIG
+  }, [profile])
+
+  const handleInputChange = (fieldId: string, value: any, isCheckbox = false) => {
+    setFormAnswers((prev) => {
+      if (isCheckbox) {
+        const currentList: string[] = prev[fieldId] || []
+        const exists = currentList.includes(value)
+        const updated = exists
+          ? currentList.filter((v) => v !== value)
+          : [...currentList, value]
+        return { ...prev, [fieldId]: updated }
+      }
+      return { ...prev, [fieldId]: value }
+    })
+  }
+
+  const totalPrice = useMemo(() => {
+    let baseSum = 0
+    let percentSum = 0
+
+    activeFormConfig.fields.forEach((field) => {
+      const answer = formAnswers[field.id]
+      if (!answer || !field.options) return
+
+      if (field.type === 'radio') {
+        const selectedOpt = field.options.find((opt) => opt.label === answer)
+        if (selectedOpt) {
+          if (selectedOpt.calcType === 'percent') {
+            percentSum += selectedOpt.price
+          } else {
+            baseSum += selectedOpt.price
+          }
+        }
+      } else if (field.type === 'checkbox' && Array.isArray(answer)) {
+        answer.forEach((selectedLabel) => {
+          const selectedOpt = field.options?.find((opt) => opt.label === selectedLabel)
+          if (selectedOpt) {
+            if (selectedOpt.calcType === 'percent') {
+              percentSum += selectedOpt.price
+            } else {
+              baseSum += selectedOpt.price
+            }
+          }
+        })
+      }
+    })
+
+    return baseSum + Math.round((baseSum * percentSum) / 100)
+  }, [formAnswers, activeFormConfig])
+
+  const handleGenerateSpec = () => {
+    let specLines: string[] = []
+    specLines.push(`【ご依頼・見積もり仕様書】`)
+    specLines.push(`依頼先: ${profile?.display_name || 'クリエイター'} 様`)
+    if (clientName.trim()) specLines.push(`依頼者名: ${clientName}`)
+    specLines.push(`-----------------------------------`)
+
+    activeFormConfig.fields.forEach((field) => {
+      const answer = formAnswers[field.id]
+      if (!answer || (Array.isArray(answer) && answer.length === 0)) return
+
+      if (field.type === 'text') {
+        specLines.push(`■ ${field.title}:`)
+        specLines.push(`   ${answer}`)
+      } else if (Array.isArray(answer)) {
+        specLines.push(`■ ${field.title}: ${answer.join(', ')}`)
+      } else {
+        specLines.push(`■ ${field.title}: ${answer}`)
+      }
+    })
+
+    specLines.push(`-----------------------------------`)
+    specLines.push(`■ 概算見積もり合計: ¥${totalPrice.toLocaleString()} (税込)`)
+    specLines.push(`※上記はシミュレーションによる概算です。内容により変動する場合があります。`)
+
+    setGeneratedSpec(specLines.join('\n'))
+  }
+
+  const handleCopySpec = () => {
+    if (!generatedSpec) return
+    navigator.clipboard.writeText(generatedSpec)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  // ----------------------------------------------------
+  // PDFダウンロード処理（API連携）
+  // ----------------------------------------------------
+  const handleDownloadPDF = async () => {
+    try {
+      setIsDownloadingPdf(true)
+
+      const formattedAnswers: { label: string; value: string }[] = []
+
+      if (clientName.trim()) {
+        formattedAnswers.push({ label: '依頼者名', value: clientName })
+      }
+
+      activeFormConfig.fields.forEach((field) => {
+        const answer = formAnswers[field.id]
+        if (!answer || (Array.isArray(answer) && answer.length === 0)) return
+
+        if (Array.isArray(answer)) {
+          formattedAnswers.push({ label: field.title, value: answer.join(', ') })
+        } else {
+          formattedAnswers.push({ label: field.title, value: String(answer) })
+        }
+      })
+
+      const response = await fetch('/api/estimate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          creatorName: profile?.display_name || 'クリエイター',
+          formTitle: activeFormConfig.title || '概算見積もり・仕様書',
+          answers: formattedAnswers,
+          totalPrice,
+          thanksMessage: profile?.status_comment || 'ご検討ありがとうございます。',
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('PDFの生成に失敗しました')
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `見積仕様書_${profile?.display_name || 'creator'}_${Date.now()}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error(error)
+      alert('PDFの生成中にエラーが発生しました。')
+    }finally {
+      setIsDownloadingPdf(false)
+    }
+  }
 
   const handleToggleFavorite = () => {
     const storedFavs = localStorage.getItem('favorite_creators')
@@ -144,7 +376,7 @@ export default function CreatorClient({ id }: { id: string }) {
     >
       <div className="absolute inset-0 bg-slate-900/10 backdrop-brightness-95 pointer-events-none" />
 
-      {/* 1. ナビバー */}
+      {/* ナビバー */}
       <header className="px-6 py-4 bg-white/70 backdrop-blur-xl border-b border-white/50 sticky top-0 z-30 shadow-xs">
         <div className="max-w-5xl mx-auto flex justify-between items-center">
           <Link
@@ -160,10 +392,9 @@ export default function CreatorClient({ id }: { id: string }) {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8 relative z-10">
-        {/* 2. メインプロフィールカード */}
+        {/* メインプロフィールカード */}
         <div className="bg-white/75 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-xl border border-white/80 space-y-6">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-            {/* 左側：基本情報 */}
             <div className="flex-1 space-y-4">
               <div className="flex items-start gap-4 sm:gap-5">
                 {profile.avatar_url && (
@@ -182,7 +413,6 @@ export default function CreatorClient({ id }: { id: string }) {
                       {profile.display_name}
                     </h1>
 
-                    {/* ステータスバッジ */}
                     <span
                       className={`inline-flex items-center gap-1.5 text-xs font-extrabold px-3 py-1 rounded-full border shadow-2xs ${
                         profile.status === 'available'
@@ -201,7 +431,6 @@ export default function CreatorClient({ id }: { id: string }) {
                     </span>
                   </div>
 
-                  {/* 特徴バッジ */}
                   <div className="flex flex-wrap gap-1.5">
                     {profile.ai_usage === 'none' && (
                       <span className="text-[11px] bg-indigo-600/10 text-indigo-800 font-extrabold px-3 py-0.5 rounded-full border border-indigo-200/60 shadow-2xs">
@@ -217,12 +446,10 @@ export default function CreatorClient({ id }: { id: string }) {
                 </div>
               </div>
 
-              {/* 自己紹介文 */}
               <p className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap bg-white/60 p-4 sm:p-5 rounded-2xl border border-white/80 shadow-2xs">
                 {profile.status_comment || 'プロフィールコメントはありません。'}
               </p>
 
-              {/* タグ */}
               <div className="flex flex-wrap gap-1.5">
                 {profile.tastes?.map((t) => (
                   <span
@@ -235,7 +462,7 @@ export default function CreatorClient({ id }: { id: string }) {
               </div>
             </div>
 
-            {/* 右側：価格・アクション */}
+            {/* アクションエリア */}
             <div className="w-full lg:w-80 bg-white/80 backdrop-blur-md p-5 rounded-2xl border border-white shadow-sm space-y-4 shrink-0">
               <div className="space-y-2.5 text-xs text-slate-600 pb-1">
                 {profile.price_min != null && (
@@ -266,10 +493,20 @@ export default function CreatorClient({ id }: { id: string }) {
 
               <div className="space-y-2 pt-1">
                 <button
-                  onClick={() => setIsContactOpen(true)}
+                  onClick={() => {
+                    setGeneratedSpec(null)
+                    setIsEstimateOpen(true)
+                  }}
                   className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white font-extrabold rounded-xl transition-all shadow-lg shadow-indigo-200/50 text-sm cursor-pointer flex items-center justify-center gap-2"
                 >
-                  <span>✉️</span> 見積もり・相談をする
+                  <span>🧮</span> 簡単見積もり・仕様書作成
+                </button>
+
+                <button
+                  onClick={() => setIsContactOpen(true)}
+                  className="w-full py-3 bg-white hover:bg-slate-50 text-slate-800 font-extrabold rounded-xl border border-slate-200 transition-all text-xs cursor-pointer flex items-center justify-center gap-2 shadow-2xs"
+                >
+                  <span>✉️</span> 直接相談・お問い合わせ
                 </button>
 
                 <button
@@ -290,7 +527,7 @@ export default function CreatorClient({ id }: { id: string }) {
           </div>
         </div>
 
-        {/* 3. スペックグリッド */}
+        {/* スペックグリッド */}
         <section className="bg-white/75 backdrop-blur-xl p-6 sm:p-7 rounded-3xl shadow-xl border border-white/80 space-y-5">
           <h2 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
             <span className="p-1.5 bg-white rounded-lg text-xs shadow-2xs">
@@ -363,7 +600,7 @@ export default function CreatorClient({ id }: { id: string }) {
           </div>
         </section>
 
-        {/* 4. 料金メニュー */}
+        {/* 料金目安・メニュー */}
         {profile.menu_items && profile.menu_items.length > 0 && (
           <section className="bg-white/75 backdrop-blur-xl p-6 sm:p-7 rounded-3xl shadow-xl border border-white/80 space-y-5">
             <h2 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
@@ -392,11 +629,11 @@ export default function CreatorClient({ id }: { id: string }) {
           </section>
         )}
 
-        {/* 5. ポートフォリオ */}
+        {/* ポートフォリオ作品 */}
         <section className="space-y-4">
           <div className="flex justify-between items-baseline px-1">
             <h2 className="text-base font-black text-slate-900 tracking-tight drop-shadow-xs">
-              ポートフォリオ
+              ポートフォリオ作品
             </h2>
             <span className="text-xs font-extrabold text-slate-500 bg-white/60 backdrop-blur-sm px-2.5 py-1 rounded-full border border-white">
               {works.length} 作品
@@ -433,7 +670,236 @@ export default function CreatorClient({ id }: { id: string }) {
         </section>
       </main>
 
-      {/* 6. モーダル */}
+      {/* 見積もり・仕様書作成 モーダル */}
+      {isEstimateOpen && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white/95 backdrop-blur-2xl rounded-3xl p-5 sm:p-7 w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl border border-white relative">
+            <div className="flex justify-between items-start pb-4 border-b border-slate-100 shrink-0">
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-slate-900">
+                  {activeFormConfig.title || '見積もり・仕様書作成'}
+                </h3>
+                <p className="text-xs text-slate-500">
+                  {activeFormConfig.description || '項目を選択して簡単見積もりを作成します'}
+                </p>
+              </div>
+              <button
+                onClick={() => setIsEstimateOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center text-xs font-bold transition cursor-pointer shrink-0"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="overflow-y-auto py-5 space-y-6 flex-1 pr-1">
+              {!generatedSpec ? (
+                <>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700">
+                      お名前（またはアカウント名）
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="例: 山田太郎"
+                      value={clientName}
+                      onChange={(e) => setClientName(e.target.value)}
+                      className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  {activeFormConfig.fields.map((field) => (
+                    <div
+                      key={field.id}
+                      className="space-y-2 bg-slate-50/70 p-4 rounded-2xl border border-slate-100"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-black text-slate-800">
+                          {field.title}
+                        </span>
+                        {field.required && (
+                          <span className="text-[10px] bg-rose-100 text-rose-600 font-extrabold px-1.5 py-0.5 rounded">
+                            必須
+                          </span>
+                        )}
+                      </div>
+
+                      {field.type === 'radio' && field.options && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                          {field.options.map((opt, i) => {
+                            const isSelected = formAnswers[field.id] === opt.label
+                            return (
+                              <label
+                                key={i}
+                                onClick={() => handleInputChange(field.id, opt.label)}
+                                className={`flex items-center justify-between p-3 rounded-xl border text-xs font-bold cursor-pointer transition ${
+                                  isSelected
+                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                                    : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                                }`}
+                              >
+                                <span>{opt.label}</span>
+                                <span
+                                  className={`text-[11px] ${
+                                    isSelected ? 'text-indigo-100' : 'text-slate-400'
+                                  }`}
+                                >
+                                  {opt.calcType === 'percent'
+                                    ? `+${opt.price}%`
+                                    : opt.price > 0
+                                    ? `+¥${opt.price.toLocaleString()}`
+                                    : '標準'}
+                                </span>
+                              </label>
+                            )
+                          })}
+                        </div>
+                      )}
+
+                      {field.type === 'checkbox' && field.options && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                          {field.options.map((opt, i) => {
+                            const currentList: string[] = formAnswers[field.id] || []
+                            const isSelected = currentList.includes(opt.label)
+                            return (
+                              <label
+                                key={i}
+                                onClick={() =>
+                                  handleInputChange(field.id, opt.label, true)
+                                }
+                                className={`flex items-center justify-between p-3 rounded-xl border text-xs font-bold cursor-pointer transition ${
+                                  isSelected
+                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                                    : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                                }`}
+                              >
+                                <span>{opt.label}</span>
+                                <span
+                                  className={`text-[11px] ${
+                                    isSelected ? 'text-indigo-100' : 'text-slate-400'
+                                  }`}
+                                >
+                                  {opt.calcType === 'percent'
+                                    ? `+${opt.price}%`
+                                    : `+¥${opt.price.toLocaleString()}`}
+                                </span>
+                              </label>
+                            )
+                          })}
+                        </div>
+                      )}
+
+                      {field.type === 'text' && (
+                        <textarea
+                          rows={3}
+                          placeholder="構図、キャラクターの特徴、納期のご希望などがあればご記入ください"
+                          value={formAnswers[field.id] || ''}
+                          onChange={(e) =>
+                            handleInputChange(field.id, e.target.value)
+                          }
+                          className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      )}
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <div className="space-y-4 animate-in fade-in">
+                  <div className="bg-slate-900 text-slate-100 p-4 rounded-2xl font-mono text-xs leading-relaxed whitespace-pre-wrap select-all border border-slate-800 shadow-inner">
+                    {generatedSpec}
+                  </div>
+
+                  {/* アクションボタン（テキストコピー / PDFダウンロード） */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      onClick={handleCopySpec}
+                      className="py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl transition text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                    >
+                      <span>{copied ? '✅' : '📋'}</span>
+                      <span>{copied ? 'コピー完了！' : '仕様書テキストをコピー'}</span>
+                    </button>
+
+                    <button
+                      onClick={handleDownloadPDF}
+                      disabled={isDownloadingPdf}
+                      className="py-3 bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 text-white font-extrabold rounded-xl transition text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                    >
+                      <span>📄</span>
+                      <span>{isDownloadingPdf ? 'PDF生成中...' : 'PDF形式でダウンロード'}</span>
+                    </button>
+                  </div>
+
+                  {/* 送信先SNSリンク */}
+                  <div className="pt-2 space-y-2">
+                    <p className="text-xs font-black text-slate-700">
+                      送信先のSNS・窓口を選択:
+                    </p>
+
+                    {profile.twitter_url && (
+                      <a
+                        href={profile.twitter_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-xl transition flex items-center justify-between text-xs"
+                      >
+                        <span>X (Twitter) の DM で送る</span>
+                        <span>↗</span>
+                      </a>
+                    )}
+
+                    {profile.external_estimation_url && (
+                      <a
+                        href={profile.external_estimation_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-xl transition flex items-center justify-between text-xs"
+                      >
+                        <span>外部フォーム / Webサイトで送る</span>
+                        <span>↗</span>
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {!generatedSpec && (
+              <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4 shrink-0">
+                <div className="text-center sm:text-left">
+                  <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">
+                    概算合計金額
+                  </span>
+                  <span className="text-xl sm:text-2xl font-black text-indigo-600">
+                    ¥{totalPrice.toLocaleString()}
+                    <span className="text-xs text-slate-500 font-normal ml-1">
+                      (税込)
+                    </span>
+                  </span>
+                </div>
+
+                <button
+                  onClick={handleGenerateSpec}
+                  className="w-full sm:w-auto py-3 px-6 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-extrabold rounded-xl transition text-xs shadow-lg shadow-indigo-200 cursor-pointer"
+                >
+                  この内容で仕様書を作成 ➔
+                </button>
+              </div>
+            )}
+
+            {generatedSpec && (
+              <div className="pt-3 border-t border-slate-100 flex justify-start">
+                <button
+                  onClick={() => setGeneratedSpec(null)}
+                  className="text-xs font-bold text-slate-500 hover:text-slate-800 transition flex items-center gap-1 cursor-pointer"
+                >
+                  ← 条件選択に戻る
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 直接相談・お問い合わせ モーダル */}
       {isContactOpen && (
         <div className="fixed inset-0 bg-slate-950/50 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
           <div className="bg-white/90 backdrop-blur-2xl rounded-3xl p-6 sm:p-7 w-full max-w-md shadow-2xl border border-white relative space-y-6">
@@ -446,7 +912,7 @@ export default function CreatorClient({ id }: { id: string }) {
 
             <div className="space-y-1">
               <h3 className="text-lg font-black text-slate-900">
-                {profile.display_name} へ相談・見積もり
+                {profile.display_name} へ相談・お問い合わせ
               </h3>
               <p className="text-xs text-slate-500">
                 連絡窓口を選択してください

@@ -9,10 +9,12 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@react-pdf/renderer": "^4.9.0",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.112.4",
     "lucide-react": "^0.475.0",
     "next": "^15.1.7",
+    "pdfkit": "^0.20.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "twitter-api-v2": "^1.29.1",
@@ -22,6 +24,7 @@
     "@swc/helpers": "^0.5.23",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^22.20.1",
+    "@types/pdfkit": "^0.17.6",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "autoprefixer": "^10.5.4",
