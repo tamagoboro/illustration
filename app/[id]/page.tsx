@@ -27,7 +27,9 @@ type Field = {
 type FormConfig = {
   title?: string
   description?: string
+  theme_color?: string
   themeColor?: string
+  is_accepting?: boolean
   fields: Field[]
 }
 
@@ -84,9 +86,14 @@ function CreatorClient({
     'https://qcklfkslqtjnxufqcqyi.supabase.co/storage/v1/object/public/portfolios/bg.png'
 
   useEffect(() => {
-    // 1. URLが /form-builder などの特殊パスでアクセスされた場合はエディタへリダイレクト
-    if (!id || id === 'form-builder') {
-      router.push('/form-builder') // フォーム作成画面のURL構造に合わせて適宜調整してください
+    // URLのIDが 'form-builder' だった場合はエラーを出さず編集ページへ移動させる
+    if (id === 'form-builder') {
+      router.push('/dashboard/form')
+      return
+    }
+
+    if (!id) {
+      setLoading(false)
       return
     }
 
@@ -104,7 +111,6 @@ function CreatorClient({
           }
         }
 
-        // プロファイル取得
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
           .select('*')
@@ -118,7 +124,6 @@ function CreatorClient({
           setProfile(profileData as ExtendedProfile)
         }
 
-        // ポートフォリオ作品取得
         const { data: worksData, error: worksError } = await supabase
           .from('portfolio_items')
           .select('*')
@@ -132,7 +137,6 @@ function CreatorClient({
           setWorks(worksData)
         }
 
-        // PV ログの記録
         await supabase.from('analytics_logs').insert({
           creator_id: id,
           event_type: 'pv',
