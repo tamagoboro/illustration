@@ -271,7 +271,7 @@ export default function CreatorClient({
     } catch (error) {
       console.error(error)
       alert('PDFの生成中にエラーが発生しました。')
-    } finally {
+    }  finally{
       setIsDownloadingPdf(false)
     }
   }
