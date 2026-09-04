@@ -47,7 +47,7 @@ const safeParseInt = (val: any): number | null => {
   return isNaN(parsed) ? null : parsed
 }
 
-// 古いURL形式（/object/portfolios/）を正しいPublic URL形式（/object/public/portfolios/）に補正するヘルパー
+// 古いURL形式を正しいPublic URL形式に補正するヘルパー
 const normalizeStorageUrl = (url: string): string => {
   if (!url) return ''
   const trimmed = url.trim()
@@ -156,7 +156,6 @@ export default function Dashboard() {
         setPixivUrl(profileData.pixiv_url || '')
         setWebsiteUrl(profileData.website_url || '')
 
-        // 追加項目の読み込み
         setAiUsage(profileData.ai_usage || 'none')
         setAiLearningAllowed(profileData.ai_learning_allowed ?? false)
         setExpressOptionAvailable(profileData.express_option_available ?? false)
@@ -229,7 +228,6 @@ export default function Dashboard() {
     setTastes((prev) => prev.filter((t) => t !== tagToRemove))
   }
 
-  // 画像軽量化＆フォーマット自動切替処理
   const compressImage = (
     file: File, 
     index: number | 'avatar', 
@@ -277,7 +275,6 @@ export default function Dashboard() {
     })
   }
 
-  // アバターアイコンアップロード関数
   const handleAvatarFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file || !user) return
@@ -286,7 +283,6 @@ export default function Dashboard() {
       setUploadingAvatar(true)
 
       const { blob, mimeType, extension } = await compressImage(file, 'avatar', 600, 0.85)
-      // avatars/ フォルダを作らずユーザーIDフォルダー直下にアバター画像を配置
       const fileName = `${user.id}/avatar_${Date.now()}.${extension}`
 
       const { error: uploadError } = await supabase.storage
@@ -310,7 +306,6 @@ export default function Dashboard() {
     }
   }
 
-  // ポートフォリオ作品アップロード関数
   const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>, index: number) => {
     const file = e.target.files?.[0]
     if (!file || !user) return
@@ -394,7 +389,6 @@ export default function Dashboard() {
       instagram_url: instagramUrl ? instagramUrl.trim() : null,
       pixiv_url: pixivUrl ? pixivUrl.trim() : null,
       website_url: websiteUrl ? websiteUrl.trim() : null,
-      // 追加項目の保存
       ai_usage: aiUsage,
       ai_learning_allowed: Boolean(aiLearningAllowed),
       express_option_available: Boolean(expressOptionAvailable),
@@ -474,7 +468,6 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50/60 text-slate-800 pb-24 font-sans antialiased selection:bg-indigo-500 selection:text-white">
-      {/* Toast Notification */}
       {saveSuccess && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 bg-slate-900 text-white rounded-2xl shadow-2xl border border-slate-700 animate-in fade-in slide-in-from-bottom-5 duration-300">
           <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-xs text-white font-bold">✓</div>
@@ -482,7 +475,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Header */}
       <header className="px-6 py-3.5 bg-white/80 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-30 shadow-xs">
         <div className="max-w-4xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-3">
@@ -517,7 +509,6 @@ export default function Dashboard() {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-        {/* Tab Selector */}
         <div className="flex p-1 bg-slate-200/60 rounded-2xl max-w-md mx-auto">
           <button
             type="button"
@@ -549,10 +540,8 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {/* PROFILE TAB */}
         {activeTab === 'profile' && (
           <form onSubmit={handleSaveProfile} className="bg-white rounded-3xl border border-slate-200/70 p-6 sm:p-8 space-y-8 shadow-xs">
-            {/* Header */}
             <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
               <div>
                 <h2 className="font-extrabold text-slate-900 text-base">基本情報の設定</h2>
@@ -565,7 +554,6 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* 公開 / 非公開 切り替え */}
             <div className={`p-4 rounded-2xl border transition-all ${
               isPublic 
                 ? 'bg-emerald-50/50 border-emerald-200/80' 
@@ -615,7 +603,6 @@ export default function Dashboard() {
                 />
               </div>
 
-              {/* アイコン画像設定 */}
               <div className="space-y-3 sm:col-span-2 p-4 rounded-2xl border border-slate-200/80 bg-slate-50/40">
                 <div className="flex justify-between items-center">
                   <label className="text-xs font-bold text-slate-700 block">プロフィールアイコン画像</label>
@@ -700,7 +687,6 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* メニュー料金項目 */}
               <div className="space-y-3 sm:col-span-2 border-t border-slate-100 pt-6">
                 <div className="flex justify-between items-center">
                   <div>
@@ -776,7 +762,6 @@ export default function Dashboard() {
                 </label>
               </div>
 
-              {/* 制作条件・受託範囲の設定（新設エリア） */}
               <div className="space-y-4 sm:col-span-2 border-t border-slate-100 pt-6">
                 <div>
                   <h3 className="text-xs font-bold text-slate-900">制作条件・受託範囲の設定</h3>
@@ -784,7 +769,6 @@ export default function Dashboard() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                  {/* AI使用の有無（3択切り替え） */}
                   <div className="space-y-1.5 sm:col-span-2 bg-slate-50/60 p-3.5 rounded-2xl border border-slate-200/80">
                     <label className="text-xs font-bold text-slate-700 block">生成AIの使用方針</label>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -832,7 +816,6 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  {/* 無料修正回数 */}
                   <div className="space-y-1.5 bg-slate-50/60 p-3.5 rounded-2xl border border-slate-200/80 flex flex-col justify-between">
                     <label className="text-xs font-bold text-slate-700">無料リテイク（修正）回数</label>
                     <div className="flex items-center gap-2">
@@ -849,7 +832,6 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  {/* 急ぎ対応（特急納品）の有無 */}
                   <label className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-200/80 bg-slate-50/60 cursor-pointer hover:bg-slate-100/50 transition-colors">
                     <div>
                       <span className="text-xs font-bold text-slate-700 block">急ぎ・特急対応</span>
@@ -863,7 +845,6 @@ export default function Dashboard() {
                     />
                   </label>
 
-                  {/* 著作権譲渡の有無 */}
                   <label className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-200/80 bg-slate-50/60 cursor-pointer hover:bg-slate-100/50 transition-colors">
                     <div>
                       <span className="text-xs font-bold text-slate-700 block">著作権譲渡</span>
@@ -877,7 +858,6 @@ export default function Dashboard() {
                     />
                   </label>
 
-                  {/* AI学習許可の有無 */}
                   <label className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-200/80 bg-slate-50/60 cursor-pointer hover:bg-slate-100/50 transition-colors">
                     <div>
                       <span className="text-xs font-bold text-slate-700 block">自身の作品のAI学習</span>
@@ -891,7 +871,6 @@ export default function Dashboard() {
                     />
                   </label>
 
-                  {/* R-18イラスト対応の有無 */}
                   <label className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-200/80 bg-slate-50/60 cursor-pointer hover:bg-slate-100/50 transition-colors">
                     <div>
                       <span className="text-xs font-bold text-slate-700 block">R-18（成人向け）対応</span>
@@ -918,7 +897,6 @@ export default function Dashboard() {
                 />
               </div>
 
-              {/* タグ設定 */}
               <div className="space-y-4 sm:col-span-2 border-t border-slate-100 pt-6">
                 <label className="text-xs font-bold text-slate-700 block">得意なテイスト・タグ設定</label>
                 
@@ -1002,20 +980,47 @@ export default function Dashboard() {
             {/* Links Section */}
             <div className="border-t border-slate-100 pt-6 space-y-4">
               <div>
-                <h3 className="font-bold text-slate-900 text-xs">連絡先・SNSリンクの設定</h3>
-                <p className="text-[11px] text-slate-400 mt-0.5">詳細画面の「見積もり・相談をする」モーダル等に表示されます</p>
+                <h3 className="font-bold text-slate-900 text-xs">連絡先・見積書の設定</h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">詳細画面の「見積もり・相談をする」等に表示されます</p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1 sm:col-span-2">
-                  <label className="text-xs font-bold text-slate-700">外部見積もりフォームURL</label>
+                {/* 外部見積もりフォームURL / 見積書作成ページへのリンクエリア */}
+                <div className="space-y-2 sm:col-span-2 p-4 rounded-2xl bg-indigo-50/40 border border-indigo-100">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-800 flex items-center gap-2">
+                      <span>オリジナル見積書フォーム</span>
+                      {externalEstimationUrl ? (
+                        <span className="px-2 py-0.5 text-[10px] bg-emerald-100 text-emerald-700 rounded-md font-extrabold">
+                          作成済み
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 text-[10px] bg-slate-200 text-slate-600 rounded-md font-extrabold">
+                          未作成
+                        </span>
+                      )}
+                    </label>
+                    <Link
+                      href="/from"
+                      className="text-xs font-bold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1"
+                    >
+                      <span>見積書を作成・編集する</span>
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </Link>
+                  </div>
+
                   <input
                     type="url"
-                    placeholder="https://google.form/..."
+                    placeholder="https://...（見積書作成ページで自動生成されたURLまたは外部フォームURL）"
                     value={externalEstimationUrl}
                     onChange={(e) => setExternalEstimationUrl(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono text-[11px]"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono text-[11px]"
                   />
+                  <p className="text-[10px] text-slate-400">
+                    ※ 自分で制作していない場合は「未作成」と表示されます。「見積書を作成・編集する」ボタンからフォームを作成してください。
+                  </p>
                 </div>
 
                 <div className="space-y-1">
@@ -1074,7 +1079,6 @@ export default function Dashboard() {
           </form>
         )}
 
-        {/* PORTFOLIO TAB */}
         {activeTab === 'portfolio' && (
           <form onSubmit={handleSavePortfolio} className="bg-white rounded-3xl border border-slate-200/70 p-6 sm:p-8 space-y-8 shadow-xs">
             <div className="border-b border-slate-100 pb-4">
@@ -1132,7 +1136,6 @@ export default function Dashboard() {
                   </div>
 
                   <div className="space-y-2 pt-1">
-                    {/* ファイル選択ボタン */}
                     <label className="block">
                       <span className="sr-only">画像を選択</span>
                       <input
@@ -1156,7 +1159,6 @@ export default function Dashboard() {
                       <div className="h-px bg-slate-200 flex-1"></div>
                     </div>
 
-                    {/* URL直接入力フォーム */}
                     <input
                       type="url"
                       placeholder="画像URLを直接入力"

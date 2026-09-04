@@ -51,51 +51,6 @@ type ExtendedProfile = Profile & {
   form_config?: FormConfig | null
 }
 
-const DEFAULT_FORM_CONFIG: FormConfig = {
-  title: '概算見積もり・仕様書作成シミュレーター',
-  description: 'ご希望の条件を選択すると、リアルタイムで概算金額と依頼仕様書が作成されます。',
-  themeColor: '#4f46e5',
-  fields: [
-    {
-      id: 'f1',
-      title: '制作種類',
-      type: 'radio',
-      required: true,
-      options: [
-        { label: 'SNSアイコン', price: 5000 },
-        { label: '一枚絵・メインビジュアル', price: 15000 },
-        { label: '立ち絵（全身）', price: 20000 },
-      ],
-    },
-    {
-      id: 'f2',
-      title: '背景指定',
-      type: 'radio',
-      options: [
-        { label: '単色・透過・おまかせ', price: 0 },
-        { label: '簡易背景（パターン・柄）', price: 2000 },
-        { label: '描き込み背景', price: 8000 },
-      ],
-    },
-    {
-      id: 'f3',
-      title: 'オプション',
-      type: 'checkbox',
-      options: [
-        { label: '商用利用（配信・グッズ等）', price: 50, calcType: 'percent' },
-        { label: '表情差分 (+2種)', price: 3000 },
-        { label: '実績公開不可', price: 5000 },
-        { label: 'お急ぎ便（優先制作）', price: 30, calcType: 'percent' },
-      ],
-    },
-    {
-      id: 'f4',
-      title: '詳細なご要望・キャラクター設定など',
-      type: 'text',
-    },
-  ],
-}
-
 export default function CreatorClient({
   id,
   initialProfile,
@@ -166,8 +121,13 @@ export default function CreatorClient({
     fetchCreatorData()
   }, [id])
 
-  const activeFormConfig: FormConfig = useMemo(() => {
-    return profile?.form_config || DEFAULT_FORM_CONFIG
+  // form_config が設定されていない（またはfieldsが空）場合は null を返す
+  const activeFormConfig = useMemo<FormConfig | null>(() => {
+    if (!profile?.form_config) return null
+    if (!profile.form_config.fields || profile.form_config.fields.length === 0) {
+      return null
+    }
+    return profile.form_config
   }, [profile])
 
   const handleInputChange = (fieldId: string, value: any, isCheckbox = false) => {
@@ -185,6 +145,8 @@ export default function CreatorClient({
   }
 
   const totalPrice = useMemo(() => {
+    if (!activeFormConfig) return 0
+
     let baseSum = 0
     let percentSum = 0
 
@@ -219,6 +181,8 @@ export default function CreatorClient({
   }, [formAnswers, activeFormConfig])
 
   const handleGenerateSpec = () => {
+    if (!activeFormConfig) return
+
     let specLines: string[] = []
     specLines.push(`【ご依頼・見積もり仕様書】`)
     specLines.push(`依頼先: ${profile?.display_name || 'クリエイター'} 様`)
@@ -257,6 +221,8 @@ export default function CreatorClient({
   // PDFダウンロード処理（API連携）
   // ----------------------------------------------------
   const handleDownloadPDF = async () => {
+    if (!activeFormConfig) return
+
     try {
       setIsDownloadingPdf(true)
 
@@ -305,7 +271,7 @@ export default function CreatorClient({
     } catch (error) {
       console.error(error)
       alert('PDFの生成中にエラーが発生しました。')
-    }finally {
+    } finally {
       setIsDownloadingPdf(false)
     }
   }
@@ -492,15 +458,21 @@ export default function CreatorClient({
               </div>
 
               <div className="space-y-2 pt-1">
-                <button
-                  onClick={() => {
-                    setGeneratedSpec(null)
-                    setIsEstimateOpen(true)
-                  }}
-                  className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white font-extrabold rounded-xl transition-all shadow-lg shadow-indigo-200/50 text-sm cursor-pointer flex items-center justify-center gap-2"
-                >
-                  <span>🧮</span> 簡単見積もり・仕様書作成
-                </button>
+                {activeFormConfig ? (
+                  <button
+                    onClick={() => {
+                      setGeneratedSpec(null)
+                      setIsEstimateOpen(true)
+                    }}
+                    className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white font-extrabold rounded-xl transition-all shadow-lg shadow-indigo-200/50 text-sm cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <span>🧮</span> 簡単見積もり・仕様書作成
+                  </button>
+                ) : (
+                  <div className="w-full py-3 px-3 bg-slate-100/80 text-slate-400 font-bold rounded-xl text-xs text-center border border-slate-200/60">
+                    未作成のため制作することができません
+                  </div>
+                )}
 
                 <button
                   onClick={() => setIsContactOpen(true)}
@@ -671,7 +643,7 @@ export default function CreatorClient({
       </main>
 
       {/* 見積もり・仕様書作成 モーダル */}
-      {isEstimateOpen && (
+      {isEstimateOpen && activeFormConfig && (
         <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 z-50 animate-in fade-in duration-200">
           <div className="bg-white/95 backdrop-blur-2xl rounded-3xl p-5 sm:p-7 w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl border border-white relative">
             <div className="flex justify-between items-start pb-4 border-b border-slate-100 shrink-0">
