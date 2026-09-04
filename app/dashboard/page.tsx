@@ -64,7 +64,7 @@ export default function Dashboard() {
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null)
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
-  const [activeTab, setActiveTab] = useState<'profile' | 'portfolio' | 'analytics'>('profile')
+  const [activeTab, setActiveTab] = useState<'profile' | 'portfolio'>('profile')
   const [user, setUser] = useState<User | null>(null)
 
   // プロフィール公開/非公開フラグ
@@ -671,20 +671,6 @@ export default function Dashboard() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
             作品ギャラリー
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('analytics')}
-            className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              activeTab === 'analytics'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-            アナリティクス
           </button>
         </div>
 
@@ -1388,68 +1374,7 @@ export default function Dashboard() {
           </form>
         )}
 
-        {/* アナリティクス タブ */}
-        {activeTab === 'analytics' && (
-          <div className="bg-white rounded-3xl border border-slate-200/70 p-6 sm:p-8 space-y-6 shadow-xs">
-            <div className="border-b border-slate-100 pb-4">
-              <h2 className="font-extrabold text-slate-900 text-base">アナリティクス（アクセス・反応データ）</h2>
-              <p className="text-xs text-slate-400 mt-1">ポートフォリオの閲覧数や見積もりシミュレーターの実行傾向です</p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="p-4 rounded-2xl bg-indigo-50/50 border border-indigo-100">
-                <span className="text-[11px] font-bold text-slate-500">今月の閲覧数 (PV)</span>
-                <p className="text-2xl font-black text-indigo-600 mt-1">1,280 <span className="text-xs font-normal text-slate-400">PV</span></p>
-                <span className="text-[10px] text-emerald-600 font-bold mt-1 inline-block">↑ 先月比 +18%</span>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
-                <span className="text-[11px] font-bold text-slate-500">見積もりシミュレーター実行数</span>
-                <p className="text-2xl font-black text-slate-800 mt-1">142 <span className="text-xs font-normal text-slate-400">回</span></p>
-                <span className="text-[10px] text-slate-400 font-medium mt-1 inline-block">試算完了率: 32%</span>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
-                <span className="text-[11px] font-bold text-slate-500">お気に入り登録数</span>
-                <p className="text-2xl font-black text-slate-800 mt-1">29 <span className="text-xs font-normal text-slate-400">件</span></p>
-                <span className="text-[10px] text-emerald-600 font-bold mt-1 inline-block">今週 +4</span>
-              </div>
-            </div>
-
-            <div className="space-y-3 border-t border-slate-100 pt-5">
-              <h3 className="text-xs font-extrabold text-slate-800">人気のオプション（試算された回数トップ）</h3>
-              <div className="space-y-2">
-                <div>
-                  <div className="flex justify-between text-xs font-bold mb-1">
-                    <span className="text-slate-700">商用利用オプション</span>
-                    <span className="text-indigo-600">84%</span>
-                  </div>
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-indigo-600 rounded-full" style={{ width: '84%' }}></div>
-                  </div>
-                </div>
-                <div>
-                  <div className="flex justify-between text-xs font-bold mb-1">
-                    <span className="text-slate-700">背景制作（複雑）</span>
-                    <span className="text-indigo-600">52%</span>
-                  </div>
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-indigo-500 rounded-full" style={{ width: '52%' }}></div>
-                  </div>
-                </div>
-                <div>
-                  <div className="flex justify-between text-xs font-bold mb-1">
-                    <span className="text-slate-700">特急納品 (7日以内)</span>
-                    <span className="text-indigo-600">28%</span>
-                  </div>
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-indigo-400 rounded-full" style={{ width: '28%' }}></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        
       </main>
 
       {/* QRコード出力 モーダル */}
