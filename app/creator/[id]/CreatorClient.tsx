@@ -13,7 +13,7 @@ type Option = {
 type Field = {
   id: string
   label: string
-  type: 'radio' | 'checkbox' | 'text' | 'textarea' | 'note' | 'faq'
+  type: 'radio' | 'checkbox' | 'text' | 'textarea' | 'note' | 'faq' | 'color'
   required?: boolean
   price?: number
   noteText?: string
@@ -209,7 +209,7 @@ export default function CreatorClient({
       if (!answer || (Array.isArray(answer) && answer.length === 0)) return
 
       const fieldName = field.label || '無題'
-      if (field.type === 'text' || field.type === 'textarea') {
+      if (field.type === 'text' || field.type === 'textarea' || field.type === 'color') {
         specLines.push(`■ ${fieldName}:`)
         specLines.push(`   ${answer}`)
       } else if (Array.isArray(answer)) {
@@ -713,7 +713,7 @@ export default function CreatorClient({
                       )
                     }
 
-                    // 3. 通常入力項目（ラジオ・チェックボックス・テキスト等）
+                    // 3. 通常入力項目（ラジオ・チェックボックス・テキスト・カラー等）
                     return (
                       <div key={field.id} className="space-y-1.5">
                         <label className="text-xs font-black text-slate-700 flex items-center">
@@ -756,6 +756,22 @@ export default function CreatorClient({
                             }
                             className="w-full px-3 py-2 bg-slate-50 border-2 rounded-xl text-xs font-bold focus:outline-none focus:border-pink-500"
                           />
+                        )}
+
+                        {field.type === 'color' && (
+                          <div className="flex items-center gap-3 pt-1">
+                            <input
+                              type="color"
+                              value={formAnswers[field.id] || '#3b82f6'}
+                              onChange={(e) =>
+                                setFormAnswers({ ...formAnswers, [field.id]: e.target.value })
+                              }
+                              className="h-10 w-16 rounded-xl border-2 border-slate-200 cursor-pointer p-1 bg-white shrink-0"
+                            />
+                            <span className="text-xs font-mono font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+                              {formAnswers[field.id] || '#3b82f6'}
+                            </span>
+                          </div>
                         )}
 
                         {(field.type === 'radio' || field.type === 'checkbox') &&

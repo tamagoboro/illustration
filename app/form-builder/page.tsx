@@ -57,7 +57,6 @@ type ExtendedProfile = Profile & {
   form_config?: FormConfig | null
 }
 
-// 実際の表示ロジックを担当するコンポーネント
 function CreatorClient({
   id,
   initialProfile,
@@ -69,7 +68,7 @@ function CreatorClient({
 }) {
   const [profile, setProfile] = useState<ExtendedProfile | null>(initialProfile || null)
   const [works, setWorks] = useState<PortfolioItem[]>(initialWorks)
-  const [loading, setLoading] = useState(!initialProfile)
+  const [loading, setLoading] = useState(true)
   const [isFavorite, setIsFavorite] = useState(false)
 
   const [isEstimateOpen, setIsEstimateOpen] = useState(false)
@@ -85,42 +84,59 @@ function CreatorClient({
     'https://qcklfkslqtjnxufqcqyi.supabase.co/storage/v1/object/public/portfolios/bg.png'
 
   useEffect(() => {
-    if (!id) return
-    const storedFavs = localStorage.getItem('favorite_creators')
-    if (storedFavs) {
-      try {
-        const favArray: string[] = JSON.parse(storedFavs)
-        setIsFavorite(favArray.includes(id))
-      } catch (e) {
-        console.error('Failed to parse favorites', e)
-      }
+    if (!id) {
+      setLoading(false)
+      return
     }
-  }, [id])
 
-  useEffect(() => {
-    if (!id) return
     const fetchCreatorData = async () => {
-      if (!profile) setLoading(true)
+      try {
+        setLoading(true)
 
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', id)
-        .single()
+        // お気に入りチェック
+        const storedFavs = localStorage.getItem('favorite_creators')
+        if (storedFavs) {
+          try {
+            const favArray: string[] = JSON.parse(storedFavs)
+            setIsFavorite(favArray.includes(id))
+          } catch (e) {
+            console.error('Failed to parse favorites', e)
+          }
+        }
 
-      if (profileData) setProfile(profileData as ExtendedProfile)
+        // プロフィールデータ取得
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('user_id', id)
+          .single()
 
-      if (works.length === 0) {
-        const { data: worksData } = await supabase
+        if (profileError) {
+          console.error('Profile fetch error:', profileError)
+        }
+        if (profileData) {
+          setProfile(profileData as ExtendedProfile)
+        }
+
+        // ポートフォリオデータ取得
+        const { data: worksData, error: worksError } = await supabase
           .from('portfolio_items')
           .select('*')
           .eq('user_id', id)
           .order('sort_order', { ascending: true })
 
-        if (worksData) setWorks(worksData)
+        if (worksError) {
+          console.error('Works fetch error:', worksError)
+        }
+        if (worksData) {
+          setWorks(worksData)
+        }
+      } catch (err) {
+        console.error('Unexpected error fetching creator data:', err)
+      } finally {
+        // エラーの有無にかかわらずローディングを必ず解除する
+        setLoading(false)
       }
-
-      setLoading(false)
     }
 
     fetchCreatorData()
@@ -330,7 +346,8 @@ function CreatorClient({
       >
         <div className="p-8 bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-white/60 text-center space-y-3 max-w-sm w-full">
           <p className="text-slate-700 font-bold text-sm">クリエイターが見つかりませんでした</p>
-          <Link href="/" className="text-pink-600 hover:text-pink-700 font-semibold text-xs inline-flex items-center gap-1">
+          <p className="text-xs text-slate-400">ID: {id || '（未指定）'}</p>
+          <Link href="/" className="text-pink-600 hover:text-pink-700 font-semibold text-xs inline-flex items-center gap-1 mt-2">
             ← 検索結果に戻る
           </Link>
         </div>
@@ -978,7 +995,6 @@ function CreatorClient({
   )
 }
 
-// Next.js App Router 規格に合わせた default export
 type PageProps = {
   searchParams?: Promise<{ id?: string }> | { id?: string }
 }
