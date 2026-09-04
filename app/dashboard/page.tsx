@@ -1,938 +1,1069 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import Link from 'next/link'
-import { supabase, Profile } from '@/lib/supabase'
+import { supabase, Profile, PortfolioItem } from '@/lib/supabase'
 
-// メニュー項目の型定義
+type Option = {
+  label: string
+  price: number
+  priceType?: 'fixed' | 'percent'
+}
+
+type Field = {
+  id: string
+  label: string
+  type: 'radio' | 'checkbox' | 'text' | 'textarea' | 'note' | 'faq' | 'color'
+  required?: boolean
+  price?: number
+  noteText?: string
+  faqAnswer?: string
+  options?: Option[]
+}
+
+type FormConfig = {
+  title?: string
+  description?: string
+  themeColor?: string
+  fields: Field[]
+}
+
 type MenuItem = {
   title: string
   price: number | ''
 }
 
-// 拡張型定義（追加された制作条件フィールドを反映）
-type ProfileWithImage = Profile & {
-  thumbnail_url?: string | null
-  likes_count?: number
-  menu_items?: MenuItem[] | null
+type ExtendedProfile = Profile & {
+  menu_items?: MenuItem[]
+  price_min?: number | null
   ai_usage?: string | null
   free_revision_count?: number | null
   express_option_available?: boolean | null
   copyright_transfer_available?: boolean | null
   ai_learning_allowed?: boolean | null
   r18_allowed?: boolean | null
-  available_from_text?: string | null
+  tastes?: string[] | null
+  status_comment?: string | null
+  lead_time_days?: number | null
+  commercial_use_allowed?: boolean | null
+  external_estimation_url?: string | null
+  twitter_url?: string | null
+  instagram_url?: string | null
+  pixiv_url?: string | null
+  website_url?: string | null
+  form_config?: FormConfig | null
 }
 
-// 指定の背景画像URL
-const BACKGROUND_IMAGE_URL =
-  'https://qcklfkslqtjnxufqcqyi.supabase.co/storage/v1/object/public/portfolios/bg.png'
+export default function CreatorClient({
+  id,
+  initialProfile,
+  initialWorks = [],
+}: {
+  id: string
+  initialProfile?: ExtendedProfile | null
+  initialWorks?: PortfolioItem[]
+}) {
+  const [profile, setProfile] = useState<ExtendedProfile | null>(initialProfile || null)
+  const [works, setWorks] = useState<PortfolioItem[]>(initialWorks)
+  const [loading, setLoading] = useState(!initialProfile)
+  const [isFavorite, setIsFavorite] = useState(false)
 
-// 24時間以内に作成・更新されたか判定する関数
-const isRecentlyUpdated = (updatedAt?: string | null) => {
-  if (!updatedAt) return false
-  const updatedTime = new Date(updatedAt).getTime()
-  const currentTime = new Date().getTime()
-  
-  const diffHours = (currentTime - updatedTime) / (1000 * 60 * 60)
-  return diffHours >= 0 && diffHours <= 24
-}
+  // モーダル管理
+  const [isEstimateOpen, setIsEstimateOpen] = useState(false)
+  const [isContactOpen, setIsContactOpen] = useState(false)
 
-export default function Home() {
-  const [profiles, setProfiles] = useState<ProfileWithImage[]>([])
-  const [loading, setLoading] = useState(true)
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  // フォーム選択状態管理
+  const [formAnswers, setFormAnswers] = useState<Record<string, any>>({})
+  const [clientName, setClientName] = useState('')
+  const [generatedSpec, setGeneratedSpec] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false)
 
-  // 検索・フィルター・ソート用ステート
-  const [searchTerm, setSearchTerm] = useState('')
-  const [selectedTastes, setSelectedTastes] = useState<string[]>([])
-  const [tasteSearch, setTasteSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('ALL')
-  const [maxLeadTime, setMaxLeadTime] = useState<number | ''>('')
-  const [maxPrice, setMaxPrice] = useState<number | ''>('')
-  const [commercialOnly, setCommercialOnly] = useState(false)
-  const [expressOnly, setExpressOnly] = useState(false)
-  const [sortOption, setSortOption] = useState<'random' | 'price_asc' | 'price_desc' | 'likes_desc' | 'likes_asc'>('random')
+  const BACKGROUND_IMAGE_URL =
+    'https://qcklfkslqtjnxufqcqyi.supabase.co/storage/v1/object/public/portfolios/bg.png'
 
-  // お気に入り・比較ステート
-  const [favorites, setFavorites] = useState<string[]>([])
-  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false)
-  const [compareList, setCompareList] = useState<ProfileWithImage[]>([])
-  const [isCompareOpen, setIsCompareOpen] = useState(false)
-
-  // 初回描画時に localStorage から復元
+  // お気に入り状態のローカルストレージ同期
   useEffect(() => {
+    if (!id) return
     const storedFavs = localStorage.getItem('favorite_creators')
     if (storedFavs) {
       try {
-        setFavorites(JSON.parse(storedFavs))
+        const favArray: string[] = JSON.parse(storedFavs)
+        setIsFavorite(favArray.includes(id))
       } catch (e) {
-        console.error('Failed to load favorites from localStorage', e)
+        console.error('Failed to parse favorites', e)
       }
     }
+  }, [id])
 
-    const storedCompare = localStorage.getItem('compare_creators')
-    if (storedCompare) {
-      try {
-        setCompareList(JSON.parse(storedCompare))
-      } catch (e) {
-        console.error('Failed to load compare list from localStorage', e)
-      }
-    }
-  }, [])
-
-  // データ取得＆認証状態の確認
+  // クライアント側での追加データ取得（initialProfileがない場合のみ）
   useEffect(() => {
-    let isMounted = true
+    let isSubscribed = true
 
-    supabase.auth.getUser().then(({ data }) => {
-      if (isMounted && data?.user) setIsLoggedIn(true)
-    })
+    const fetchCreatorData = async () => {
+      if (initialProfile && initialWorks.length > 0) {
+        setLoading(false)
+        return
+      }
 
-    const fetchProfilesWithImages = async () => {
       setLoading(true)
 
       try {
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('is_public', true)
+        if (!profile) {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('user_id', id)
+            .single()
 
-        if (profileError) throw profileError
+          if (isSubscribed && profileData) {
+            setProfile(profileData as ExtendedProfile)
+          }
+        }
 
-        if (profileData && isMounted) {
-          const { data: portfolioData } = await supabase
+        if (works.length === 0) {
+          const { data: worksData } = await supabase
             .from('portfolio_items')
-            .select('user_id, image_url, sort_order')
+            .select('*')
+            .eq('user_id', id)
             .order('sort_order', { ascending: true })
 
-          const imageMap: Record<string, string> = {}
-          if (portfolioData) {
-            portfolioData.forEach((item) => {
-              if (!imageMap[item.user_id] && item.image_url) {
-                imageMap[item.user_id] = item.image_url
-              }
-            })
+          if (isSubscribed && worksData) {
+            setWorks(worksData)
           }
-
-          const combined: ProfileWithImage[] = profileData.map((p) => ({
-            ...p,
-            thumbnail_url: imageMap[p.user_id] || p.avatar_url || null,
-            likes_count: p.likes_count ?? 0,
-            menu_items: Array.isArray(p.menu_items) ? p.menu_items : null
-          }))
-
-          const randomized = [...combined]
-          for (let i = randomized.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [randomized[i], randomized[j]] = [randomized[j], randomized[i]]
-          }
-
-          setProfiles(randomized)
         }
       } catch (error) {
-        console.error('データの取得に失敗しました:', error)
+        console.error('Error fetching creator data:', error)
       } finally {
-        if (isMounted) setLoading(false)
+        if (isSubscribed) setLoading(false)
       }
     }
 
-    fetchProfilesWithImages()
+    fetchCreatorData()
 
     return () => {
-      isMounted = false
+      isSubscribed = false
     }
-  }, [])
+  }, [id, initialProfile, initialWorks])
 
-  // モーダル表示時の背景スクロールを防止
-  useEffect(() => {
-    if (isCompareOpen) {
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = 'unset'
+  const activeFormConfig = useMemo<FormConfig | null>(() => {
+    if (!profile?.form_config) return null
+    if (!profile.form_config.fields || profile.form_config.fields.length === 0) {
+      return null
     }
-    return () => {
-      document.body.style.overflow = 'unset'
-    }
-  }, [isCompareOpen])
+    return profile.form_config
+  }, [profile])
 
-  // お気に入りの追加 / 解除
-  const toggleFavorite = async (userId: string) => {
-    const isFav = favorites.includes(userId)
-    const targetProfile = profiles.find((p) => p.user_id === userId)
-    if (!targetProfile) return
-
-    const currentLikes = targetProfile.likes_count ?? 0
-    const newLikes = isFav ? Math.max(0, currentLikes - 1) : currentLikes + 1
-
-    setFavorites((prev) => {
-      const nextFavorites = isFav
-        ? prev.filter((id) => id !== userId)
-        : [...prev, userId]
-
-      localStorage.setItem('favorite_creators', JSON.stringify(nextFavorites))
-      return nextFavorites
-    })
-
-    setProfiles((prevProfiles) =>
-      prevProfiles.map((p) =>
-        p.user_id === userId ? { ...p, likes_count: newLikes } : p
-      )
-    )
-
-    setCompareList((prevCompare) => {
-      const nextCompare = prevCompare.map((p) =>
-        p.user_id === userId ? { ...p, likes_count: newLikes } : p
-      )
-      localStorage.setItem('compare_creators', JSON.stringify(nextCompare))
-      return nextCompare
-    })
-
-    const { error } = await supabase.rpc('increment_likes', {
-      target_user_id: userId,
-      increment_val: isFav ? -1 : 1,
-    })
-
-    if (error) {
-      console.error('いいね数の更新に失敗しました:', error)
-    }
-  }
-
-  const toggleTaste = (taste: string) => {
-    setSelectedTastes((prev) =>
-      prev.includes(taste)
-        ? prev.filter((t) => t !== taste)
-        : [...prev, taste]
-    )
-  }
-
-  const toggleCompare = (profile: ProfileWithImage) => {
-    setCompareList((prev) => {
-      const exists = prev.some((p) => p.user_id === profile.user_id)
-      let nextList: ProfileWithImage[]
-
-      if (exists) {
-        nextList = prev.filter((p) => p.user_id !== profile.user_id)
-      } else {
-        if (prev.length >= 3) {
-          alert('比較できるのは最大3名までです')
-          return prev
+  // 単一選択・複数選択のハンドラ
+  const handleSelectOption = useCallback(
+    (fieldId: string, optionLabel: string, isCheckbox: boolean) => {
+      setFormAnswers((prev) => {
+        if (isCheckbox) {
+          const currentList: string[] = Array.isArray(prev[fieldId]) ? prev[fieldId] : []
+          const exists = currentList.includes(optionLabel)
+          const updated = exists
+            ? currentList.filter((v) => v !== optionLabel)
+            : [...currentList, optionLabel]
+          return { ...prev, [fieldId]: updated }
         }
-        nextList = [...prev, profile]
-      }
+        return { ...prev, [fieldId]: optionLabel }
+      })
+    },
+    []
+  )
 
-      localStorage.setItem('compare_creators', JSON.stringify(nextList))
-      return nextList
+  // 計算ロジック
+  const { basePriceTotal, totalPrice } = useMemo(() => {
+    if (!activeFormConfig) return { basePriceTotal: 0, totalPrice: 0 }
+
+    let baseSum = 0
+    let extraFixedPrice = 0
+    let percentSum = 0
+
+    // 各設問の基本金額を集計
+    activeFormConfig.fields.forEach((field) => {
+      if (field.price && typeof field.price === 'number' && field.type !== 'note' && field.type !== 'faq') {
+        baseSum += field.price
+      }
     })
+
+    // 選択されたオプションの金額を加算
+    activeFormConfig.fields.forEach((field) => {
+      const answer = formAnswers[field.id]
+      if (!answer || !field.options) return
+
+      if (field.type === 'radio') {
+        const selectedOpt = field.options.find((opt) => opt.label === answer)
+        if (selectedOpt && typeof selectedOpt.price === 'number') {
+          if (selectedOpt.priceType === 'percent') {
+            percentSum += selectedOpt.price
+          } else {
+            extraFixedPrice += selectedOpt.price
+          }
+        }
+      } else if (field.type === 'checkbox' && Array.isArray(answer)) {
+        answer.forEach((selectedLabel) => {
+          const selectedOpt = field.options?.find((opt) => opt.label === selectedLabel)
+          if (selectedOpt && typeof selectedOpt.price === 'number') {
+            if (selectedOpt.priceType === 'percent') {
+              percentSum += selectedOpt.price
+            } else {
+              extraFixedPrice += selectedOpt.price
+            }
+          }
+        })
+      }
+    })
+
+    const calculatedTotal =
+      baseSum + extraFixedPrice + Math.round(baseSum * (percentSum / 100))
+
+    return { basePriceTotal: baseSum, totalPrice: Math.max(0, calculatedTotal) }
+  }, [formAnswers, activeFormConfig])
+
+  const handleGenerateSpec = () => {
+    if (!activeFormConfig) return
+
+    const specLines: string[] = []
+    specLines.push(`【ご依頼・見積もり仕様書】`)
+    specLines.push(`依頼先: ${profile?.display_name || 'クリエイター'} 様`)
+    if (clientName.trim()) specLines.push(`依頼者名: ${clientName}`)
+    specLines.push(`-----------------------------------`)
+
+    activeFormConfig.fields.forEach((field) => {
+      const answer = formAnswers[field.id]
+      if (field.type === 'note' || field.type === 'faq') return
+      if (!answer || (Array.isArray(answer) && answer.length === 0)) return
+
+      const fieldName = field.label || '無題'
+      if (field.type === 'text' || field.type === 'textarea' || field.type === 'color') {
+        specLines.push(`■ ${fieldName}:`)
+        specLines.push(`   ${answer}`)
+      } else if (Array.isArray(answer)) {
+        specLines.push(`■ ${fieldName}: ${answer.join(', ')}`)
+      } else {
+        specLines.push(`■ ${fieldName}: ${answer}`)
+      }
+    })
+
+    specLines.push(`-----------------------------------`)
+    specLines.push(`■ 概算見積もり合計: ¥${totalPrice.toLocaleString()} (税込)`)
+    specLines.push(`※上記はシミュレーションによる概算です。内容により変動する場合があります。`)
+
+    setGeneratedSpec(specLines.join('\n'))
   }
 
-  const resetFilters = () => {
-    setSearchTerm('')
-    setSelectedTastes([])
-    setTasteSearch('')
-    setStatusFilter('ALL')
-    setMaxLeadTime('')
-    setMaxPrice('')
-    setCommercialOnly(false)
-    setExpressOnly(false)
-    setShowFavoritesOnly(false)
-    setSortOption('random')
+  const handleCopySpec = () => {
+    if (!generatedSpec) return
+    navigator.clipboard.writeText(generatedSpec)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
-  const filteredProfiles = useMemo(() => {
-    const list = profiles.filter((profile) => {
-      const matchesSearch =
-        (profile.display_name && profile.display_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (profile.status_comment && profile.status_comment.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (profile.menu_items && profile.menu_items.some((item) => item.title && item.title.toLowerCase().includes(searchTerm.toLowerCase())))
+  const handleDownloadPDF = async () => {
+    if (!activeFormConfig) return
 
-      const matchesTaste =
-        selectedTastes.length === 0 ||
-        selectedTastes.every((taste) => profile.tastes && profile.tastes.includes(taste))
+    try {
+      setIsDownloadingPdf(true)
+      const formattedAnswers: { label: string; value: string }[] = []
 
-      const matchesStatus =
-        statusFilter === 'ALL' || profile.status === statusFilter
-
-      const matchesLeadTime =
-        maxLeadTime === '' || (profile.lead_time_days !== null && profile.lead_time_days !== undefined && profile.lead_time_days <= Number(maxLeadTime))
-
-      const matchesPrice =
-        maxPrice === '' || (profile.price_min !== null && profile.price_min !== undefined && profile.price_min <= Number(maxPrice))
-
-      const matchesCommercial =
-        !commercialOnly || profile.commercial_use_allowed === true
-
-      const matchesExpress =
-        !expressOnly || profile.express_option_available === true
-
-      const matchesFavorite =
-        !showFavoritesOnly || favorites.includes(profile.user_id)
-
-      return (
-        matchesSearch &&
-        matchesTaste &&
-        matchesStatus &&
-        matchesLeadTime &&
-        matchesPrice &&
-        matchesCommercial &&
-        matchesExpress &&
-        matchesFavorite
-      )
-    })
-
-    return list.sort((a, b) => {
-      if (sortOption === 'price_asc') {
-        return (a.price_min ?? Infinity) - (b.price_min ?? Infinity)
+      if (clientName.trim()) {
+        formattedAnswers.push({ label: '依頼者名', value: clientName })
       }
-      if (sortOption === 'price_desc') {
-        return (b.price_min ?? 0) - (a.price_min ?? 0)
-      }
-      if (sortOption === 'likes_desc') {
-        return (b.likes_count ?? 0) - (a.likes_count ?? 0)
-      }
-      if (sortOption === 'likes_asc') {
-        return (a.likes_count ?? 0) - (b.likes_count ?? 0)
-      }
-      return 0
-    })
-  }, [profiles, searchTerm, selectedTastes, statusFilter, maxLeadTime, maxPrice, commercialOnly, expressOnly, showFavoritesOnly, favorites, sortOption])
 
-  const displayedTastes = useMemo(() => {
-    return Array.from(new Set(profiles.flatMap((p) => p.tastes || [])))
-      .filter((taste) =>
-        taste.toLowerCase().includes(tasteSearch.toLowerCase())
-      )
-      .slice(0, 20)
-  }, [profiles, tasteSearch])
+      activeFormConfig.fields.forEach((field) => {
+        if (field.type === 'note' || field.type === 'faq') return
+        const answer = formAnswers[field.id]
+        if (!answer || (Array.isArray(answer) && answer.length === 0)) return
+
+        const labelName = field.label || '無題'
+        if (Array.isArray(answer)) {
+          formattedAnswers.push({ label: labelName, value: answer.join(', ') })
+        } else {
+          formattedAnswers.push({ label: labelName, value: String(answer) })
+        }
+      })
+
+      const response = await fetch('/api/estimate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          creatorName: profile?.display_name || 'クリエイター',
+          formTitle: activeFormConfig.title || '概算見積もり・仕様書',
+          answers: formattedAnswers,
+          totalPrice,
+          thanksMessage: profile?.status_comment || 'ご検討ありがとうございます。',
+        }),
+      })
+
+      if (!response.ok) throw new Error('PDFの生成に失敗しました')
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `見積仕様書_${profile?.display_name || 'creator'}_${Date.now()}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error(error)
+      alert('PDFの生成中にエラーが発生しました。')
+    } finally {
+      setIsDownloadingPdf(false)
+    }
+  }
+
+  const handleToggleFavorite = () => {
+    const storedFavs = localStorage.getItem('favorite_creators')
+    let favArray: string[] = storedFavs ? JSON.parse(storedFavs) : []
+
+    if (favArray.includes(id)) {
+      favArray = favArray.filter((favId) => favId !== id)
+      setIsFavorite(false)
+    } else {
+      favArray.push(id)
+      setIsFavorite(true)
+    }
+
+    localStorage.setItem('favorite_creators', JSON.stringify(favArray))
+  }
+
+  if (loading) {
+    return (
+      <div
+        className="min-h-screen bg-cover bg-center bg-fixed flex flex-col items-center justify-center space-y-3"
+        style={{ backgroundImage: `url(${BACKGROUND_IMAGE_URL})` }}
+      >
+        <div className="p-8 bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-2xl flex flex-col items-center space-y-3">
+          <div className="w-8 h-8 border-3 border-pink-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs font-black text-slate-600 tracking-widest uppercase">
+            Loading...
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!profile) {
+    return (
+      <div
+        className="min-h-screen bg-cover bg-center bg-fixed flex flex-col items-center justify-center p-4"
+        style={{ backgroundImage: `url(${BACKGROUND_IMAGE_URL})` }}
+      >
+        <div className="p-8 bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-white/60 text-center space-y-3 max-w-sm w-full">
+          <p className="text-slate-700 font-bold text-sm">
+            クリエイターが見つかりませんでした
+          </p>
+          <Link
+            href="/"
+            className="text-pink-600 hover:text-pink-700 font-semibold text-xs inline-flex items-center gap-1"
+          >
+            ← 検索結果に戻る
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  const themeColor = activeFormConfig?.themeColor || '#ec4899'
+  const hasContactLinks =
+    profile.external_estimation_url ||
+    profile.twitter_url ||
+    profile.instagram_url ||
+    profile.pixiv_url ||
+    profile.website_url
 
   return (
     <div
-      className="min-h-screen text-slate-900 pb-32 font-sans antialiased relative bg-fixed bg-cover bg-center"
+      className="min-h-screen bg-cover bg-center bg-fixed text-slate-800 pb-28 relative font-sans"
       style={{ backgroundImage: `url(${BACKGROUND_IMAGE_URL})` }}
     >
-      <div className="absolute inset-0 bg-white/20 backdrop-blur-[1px] pointer-events-none -z-10" />
+      <div className="absolute inset-0 bg-slate-900/10 backdrop-brightness-95 pointer-events-none" />
 
       {/* ヘッダー */}
-      <header className="sticky top-0 z-40 px-6 py-3.5 bg-white/80 backdrop-blur-md border-b border-white/40 shadow-xs">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-purple-700 flex items-center justify-center text-white font-black text-xs shadow-md">
-              ✦
-            </div>
-            <div>
-              <h1 className="text-xs font-black text-slate-950 tracking-wider">
-                 Drawker
-              </h1>
-              <p className="text-[10px] text-slate-800 font-extrabold">
-                理想のイラストレーターを探す
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2.5">
-            <button
-              onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
-              className={`px-3.5 py-2 text-xs font-bold rounded-2xl border transition-all flex items-center gap-1.5 backdrop-blur-md cursor-pointer ${
-                showFavoritesOnly
-                  ? 'bg-rose-600 text-white border-rose-600 shadow-md'
-                  : 'bg-white/90 text-purple-900 hover:bg-white border-white/90 shadow-sm'
-              }`}
-            >
-              <span className="text-rose-600">♥</span>
-              <span>お気に入り</span>
-              {favorites.length > 0 && (
-                <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] bg-purple-800 text-white font-black">
-                  {favorites.length}
-                </span>
-              )}
-            </button>
-            <Link
-              href={isLoggedIn ? '/dashboard' : '/login'}
-              className={`px-4 py-2 text-xs font-black text-white rounded-2xl shadow-md transition-all flex items-center gap-1 active:scale-95 ${
-                isLoggedIn
-                  ? 'bg-purple-700 hover:bg-purple-800'
-                  : 'bg-gradient-to-r from-purple-700 to-indigo-600 hover:from-purple-800 hover:to-indigo-700 ring-2 ring-purple-400/30'
-              }`}
-            >
-              <span>{isLoggedIn ? 'ダッシュボード' : '✦ クリエイター無料登録'}</span>
-            </Link>
-          </div>
+      <header className="px-6 py-4 bg-white/70 backdrop-blur-xl border-b border-white/50 sticky top-0 z-30 shadow-xs">
+        <div className="max-w-5xl mx-auto flex justify-between items-center">
+          <Link
+            href="/"
+            className="text-xs font-bold text-slate-600 hover:text-pink-600 transition-colors flex items-center gap-1.5"
+          >
+            <span>←</span> 検索結果へ戻る
+          </Link>
+          <span className="text-[11px] font-black tracking-widest text-slate-400 uppercase">
+            Creator Portfolio
+          </span>
         </div>
       </header>
 
-      {/* ヒーロー */}
-      <section className="text-center py-10 px-4 max-w-4xl mx-auto space-y-2">
-        <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-wide font-serif drop-shadow-[0_1px_2px_rgba(255,255,255,0.8)]">
-          『誰に頼むか決まらない…』<br />
-          そんな時間もったいない。
-        </h2>
-        <p className="text-2xl sm:text-3xl font-black text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)] tracking-widest font-serif pt-1">
-          自分にぴったりのクリエイター検索
-        </p>
-      </section>
-
-      {!isLoggedIn && (
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 mb-8">
-          <div className="bg-gradient-to-r from-purple-900/90 via-indigo-900/90 to-purple-900/90 backdrop-blur-md rounded-3xl p-5 sm:p-6 text-white border border-purple-400/30 shadow-xl flex flex-col md:flex-row justify-between items-center gap-4">
-            <div className="space-y-1 text-center md:text-left">
-              <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
-                <span className="text-[10px] font-extrabold bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full">
-                  掲載手数料 0円
-                </span>
-                <span className="text-[10px] font-extrabold bg-purple-400/30 text-purple-100 px-2 py-0.5 rounded-full border border-purple-300/30">
-                  ポートフォリオ1分作成
-                </span>
-              </div>
-              <h3 className="text-base sm:text-lg font-black tracking-wide">
-                イラストレーター・クリエイターの方へ：作品を掲載しませんか？
-              </h3>
-              <p className="text-xs text-purple-200 font-medium">
-                料金表やポートフォリオを登録するだけで、直接ご相談を受け付けられます。
-              </p>
-            </div>
-            <Link
-              href="/login"
-              className="px-6 py-3 bg-white text-purple-950 hover:bg-purple-50 font-black text-xs rounded-2xl shadow-lg transition-all transform hover:-translate-y-0.5 shrink-0"
-            >
-              無料で作品を登録・掲載する →
-            </Link>
-          </div>
-        </section>
-      )}
-
-      {/* メインコンテンツ */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
-          {/* サイドバー */}
-          <aside className="lg:col-span-1 space-y-6">
-            <div className="bg-white/90 backdrop-blur-md p-5 rounded-3xl border border-white/80 shadow-lg shadow-purple-900/10 space-y-4">
-              <div className="flex justify-between items-center pb-1">
-                <div className="flex items-center gap-1.5 text-purple-900">
-                  <span className="text-xs">⚙</span>
-                  <h2 className="font-black text-xs tracking-wider">
-                    FILTER & SEARCH
-                  </h2>
-                </div>
-                <button
-                  onClick={resetFilters}
-                  className="text-[11px] text-purple-700 font-extrabold hover:underline cursor-pointer"
-                >
-                  リセット
-                </button>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[11px] font-extrabold text-slate-900 block">キーワード</label>
-                <input
-                  type="text"
-                  placeholder="名前、アイコン、立ち絵など..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[11px] font-extrabold text-slate-900 block">予算上限</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    step="1000"
-                    placeholder="指定なし"
-                    value={maxPrice}
-                    onChange={(e) => setMaxPrice(e.target.value ? Number(e.target.value) : '')}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  />
-                  <span className="text-xs text-slate-800 font-bold whitespace-nowrap">以下</span>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[11px] font-extrabold text-slate-900 block">希望納期</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    placeholder="指定なし"
-                    value={maxLeadTime}
-                    onChange={(e) => setMaxLeadTime(e.target.value ? Number(e.target.value) : '')}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  />
-                  <span className="text-xs text-slate-800 font-bold whitespace-nowrap">日以内</span>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[11px] font-extrabold text-slate-900 block">受付状況</label>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
-                >
-                  <option value="ALL">すべて表示</option>
-                  <option value="available">即対応可のみ</option>
-                  <option value="busy">相談受付中</option>
-                </select>
-              </div>
-
-              <div className="pt-1 space-y-2">
-                <label className="flex items-center justify-between cursor-pointer">
-                  <span className="text-[11px] font-extrabold text-slate-900">商用利用可能のみ</span>
-                  <input
-                    type="checkbox"
-                    checked={commercialOnly}
-                    onChange={(e) => setCommercialOnly(e.target.checked)}
-                    className="w-4 h-4 rounded accent-purple-700 cursor-pointer"
-                  />
-                </label>
-                <label className="flex items-center justify-between cursor-pointer">
-                  <span className="text-[11px] font-extrabold text-slate-900">⚡ 特急対応可能のみ</span>
-                  <input
-                    type="checkbox"
-                    checked={expressOnly}
-                    onChange={(e) => setExpressOnly(e.target.checked)}
-                    className="w-4 h-4 rounded accent-purple-700 cursor-pointer"
-                  />
-                </label>
-              </div>
-
-              <div className="space-y-2 pt-2 border-t border-slate-200">
-                <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-extrabold text-slate-900 block">
-                    テイスト（最大20個）
-                  </label>
-                  {selectedTastes.length > 0 && (
-                    <button
-                      onClick={() => setSelectedTastes([])}
-                      className="text-[10px] text-purple-700 hover:underline font-extrabold cursor-pointer"
-                    >
-                      選択解除
-                    </button>
-                  )}
-                </div>
-
-                <input
-                  type="text"
-                  placeholder="テイストを検索..."
-                  value={tasteSearch}
-                  onChange={(e) => setTasteSearch(e.target.value)}
-                  className="w-full px-3 py-1.5 text-[10px] rounded-lg border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                />
-
-                <div className="flex flex-wrap gap-1 max-h-40 overflow-y-auto pt-1">
-                  {displayedTastes.length === 0 ? (
-                    <p className="text-[10px] text-slate-500 py-1 font-bold">
-                      一致するテイストが見つかりません
-                    </p>
-                  ) : (
-                    displayedTastes.map((taste) => {
-                      const isSelected = selectedTastes.includes(taste)
-                      return (
-                        <button
-                          key={taste}
-                          onClick={() => toggleTaste(taste)}
-                          className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold transition-all cursor-pointer ${
-                            isSelected
-                              ? 'bg-purple-700 text-white'
-                              : 'bg-purple-100 text-purple-900 hover:bg-purple-200'
-                          }`}
-                        >
-                          #{taste}
-                        </button>
-                      )
-                    })
-                  )}
-                </div>
-              </div>
-            </div>
-          </aside>
-
-          {/* メインリスト */}
-          <section className="lg:col-span-3 space-y-4">
-            <div className="flex justify-between items-center px-2 py-1 rounded-xl bg-white/60 backdrop-blur-md border border-white/80 shadow-sm">
-              <p className="text-xs font-extrabold text-slate-900">
-                該当クリエイター <span className="text-sm font-black text-purple-800 mx-1">{filteredProfiles.length}</span> 名
-              </p>
-
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-extrabold text-slate-900">並び替え:</span>
-                <select
-                  value={sortOption}
-                  onChange={(e) => setSortOption(e.target.value as any)}
-                  className="px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-extrabold text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
-                >
-                  <option value="random">おすすめ順（標準）</option>
-                  <option value="price_asc">価格が安い順</option>
-                  <option value="price_desc">価格が高い順</option>
-                  <option value="likes_desc">いいねが多い順</option>
-                  <option value="likes_asc">いいねが少ない順</option>
-                </select>
-              </div>
-            </div>
-
-            {loading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {[1, 2, 3].map((n) => (
-                  <div key={n} className="bg-white/90 backdrop-blur-md rounded-3xl p-4 animate-pulse space-y-3 border border-white">
-                    <div className="aspect-square bg-slate-200/80 rounded-2xl" />
-                    <div className="h-4 bg-slate-200/80 rounded w-1/2" />
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8 relative z-10">
+        {/* メインプロフィール */}
+        <div className="bg-white/75 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-xl border border-white/80 space-y-6">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+            <div className="flex-1 space-y-4">
+              <div className="flex items-start gap-4 sm:gap-5">
+                {profile.avatar_url && (
+                  <div className="relative shrink-0">
+                    <img
+                      src={profile.avatar_url}
+                      alt={profile.display_name || ''}
+                      className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover ring-4 ring-white/80 shadow-md"
+                    />
                   </div>
+                )}
+
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                      {profile.display_name}
+                    </h1>
+
+                    <span
+                      className={`inline-flex items-center gap-1.5 text-xs font-extrabold px-3 py-1 rounded-full border shadow-2xs ${
+                        profile.status === 'available'
+                          ? 'bg-emerald-500/10 text-emerald-800 border-emerald-500/30'
+                          : 'bg-amber-500/10 text-amber-800 border-amber-500/30'
+                      }`}
+                    >
+                      <span
+                        className={`w-2 h-2 rounded-full ${
+                          profile.status === 'available'
+                            ? 'bg-emerald-500 animate-pulse'
+                            : 'bg-amber-500'
+                        }`}
+                      />
+                      {profile.status === 'available' ? '即対応可' : '相談受付中'}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    {profile.ai_usage === 'none' && (
+                      <span className="text-[11px] bg-pink-600/10 text-pink-800 font-extrabold px-3 py-0.5 rounded-full border border-pink-200/60 shadow-2xs">
+                        ✦ 完全手描き
+                      </span>
+                    )}
+                    {profile.r18_allowed && (
+                      <span className="text-[11px] bg-rose-500/10 text-rose-800 font-extrabold px-3 py-0.5 rounded-full border border-rose-200/60">
+                        R-18 OK
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap bg-white/60 p-4 sm:p-5 rounded-2xl border border-white/80 shadow-2xs">
+                {profile.status_comment || 'プロフィールコメントはありません。'}
+              </p>
+
+              <div className="flex flex-wrap gap-1.5">
+                {profile.tastes?.map((t) => (
+                  <span
+                    key={t}
+                    className="text-xs bg-slate-900/5 hover:bg-slate-900/10 text-slate-700 px-3 py-1 rounded-xl font-semibold transition"
+                  >
+                    #{t}
+                  </span>
                 ))}
               </div>
-            ) : filteredProfiles.length === 0 ? (
-              <div className="text-center py-20 bg-white/90 backdrop-blur-md rounded-3xl border border-white p-6 shadow-md space-y-4">
-                <p className="text-xs font-extrabold text-slate-800">条件に合うクリエイターが見つかりませんでした</p>
-                <div className="flex justify-center gap-3">
-                  <button
-                    onClick={resetFilters}
-                    className="px-4 py-2 text-xs font-extrabold text-purple-800 bg-purple-100 rounded-xl hover:bg-purple-200 cursor-pointer"
-                  >
-                    条件をリセット
-                  </button>
-                  <Link
-                    href="/login"
-                    className="px-4 py-2 text-xs font-extrabold text-white bg-purple-700 rounded-xl hover:bg-purple-800 shadow-md"
-                  >
-                    あなたが最初のクリエイターとして登録する
-                  </Link>
+            </div>
+
+            {/* サイド操作枠 */}
+            <div className="w-full lg:w-80 bg-white/80 backdrop-blur-md p-5 rounded-2xl border border-white shadow-sm space-y-4 shrink-0">
+              <div className="space-y-2.5 text-xs text-slate-600 pb-1">
+                {profile.price_min != null && (
+                  <div className="flex justify-between items-baseline bg-pink-50/50 p-3 rounded-xl border border-pink-100/80">
+                    <span className="font-bold text-slate-500">最低参考価格</span>
+                    <span className="font-black text-pink-600 text-lg">
+                      ¥{profile.price_min.toLocaleString()}〜
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center px-1">
+                  <span>目安納期</span>
+                  <span className="font-extrabold text-slate-900">
+                    {profile.lead_time_days ? `${profile.lead_time_days} 日以内` : '要相談'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center px-1">
+                  <span>商用利用</span>
+                  <span className="font-extrabold text-slate-900">
+                    {profile.commercial_use_allowed ? '可能' : '不可'}
+                  </span>
                 </div>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {filteredProfiles.map((profile) => {
-                  const isFav = favorites.includes(profile.user_id)
-                  const isCompared = compareList.some((p) => p.user_id === profile.user_id)
-                  const isNew = isRecentlyUpdated(profile.updated_at)
-                  
-                  // 条件判定（完全手描き＆R-18対応）
-                  const isPureHandDrawn = profile.ai_usage === 'none'
-                  const isR18Allowed = profile.r18_allowed === true
 
-                  return (
-                    <div
-                      key={profile.user_id}
-                      className="bg-white/90 backdrop-blur-md rounded-3xl border border-white shadow-lg shadow-purple-900/10 hover:shadow-xl transition-all duration-300 flex flex-col justify-between overflow-hidden group"
-                    >
-                      {/* イラスト画像エリア */}
-                      <div className="relative w-full aspect-square bg-slate-100 overflow-hidden">
-                        {profile.thumbnail_url ? (
-                          <img
-                            src={profile.thumbnail_url}
-                            alt={profile.display_name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex flex-col items-center justify-center bg-slate-100 text-slate-400">
-                            <span className="text-[10px] font-black tracking-widest">NO PORTFOLIO</span>
-                          </div>
-                        )}
+              <div className="space-y-2 pt-1">
+                {activeFormConfig ? (
+                  <button
+                    onClick={() => {
+                      setGeneratedSpec(null)
+                      setIsEstimateOpen(true)
+                    }}
+                    style={{ backgroundColor: themeColor }}
+                    className="w-full py-3.5 hover:opacity-90 active:scale-[0.98] text-white font-extrabold rounded-xl transition-all shadow-lg text-sm cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <span>🧮</span> 簡単見積もり・仕様書作成
+                  </button>
+                ) : (
+                  <div className="w-full py-3 px-3 bg-slate-100/80 text-slate-400 font-bold rounded-xl text-xs text-center border border-slate-200/60">
+                    見積もりフォーム未設定
+                  </div>
+                )}
 
-                        {/* 左上：ステータス & NEW & 追加バッジ */}
-                        <div className="absolute top-2.5 left-2.5 flex flex-wrap items-center gap-1 max-w-[70%]">
-                          {isNew && (
-                            <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-pink-600 text-white shadow-md">
-                              NEW
-                            </span>
-                          )}
+                <button
+                  onClick={() => setIsContactOpen(true)}
+                  className="w-full py-3 bg-white hover:bg-slate-50 text-slate-800 font-extrabold rounded-xl border border-slate-200 transition-all text-xs cursor-pointer flex items-center justify-center gap-2 shadow-2xs"
+                >
+                  <span>✉️</span> 直接相談・お問い合わせ
+                </button>
 
-                          <span
-                            className={`text-[9px] px-2.5 py-0.5 rounded-full font-black text-white shadow-md ${
-                              profile.status === 'available' ? 'bg-emerald-600' : 'bg-amber-600'
-                            }`}
-                          >
-                            {profile.status === 'available' ? '即対応可' : '相談受付中'}
-                          </span>
-
-                          {/* 完全手描きバッジ */}
-                          {isPureHandDrawn && (
-                            <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-indigo-600 text-white shadow-md">
-                              ✦ 完全手描き
-                            </span>
-                          )}
-
-                          {/* R-18対応バッジ */}
-                          {isR18Allowed && (
-                            <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-rose-600 text-white shadow-md">
-                              R-18 OK
-                            </span>
-                          )}
-                        </div>
-
-                        {/* 右上：お気に入りボタン */}
-                        <button
-                          type="button"
-                          onClick={() => toggleFavorite(profile.user_id)}
-                          className={`absolute top-2.5 right-2.5 px-2.5 py-0.5 rounded-full bg-white/95 backdrop-blur-md shadow-md flex items-center gap-1 text-[11px] font-black cursor-pointer active:scale-95 transition-transform ${
-                            isFav ? 'text-rose-600' : 'text-purple-800 hover:text-rose-600'
-                          }`}
-                        >
-                          <span>♥</span>
-                          <span>{profile.likes_count ?? 0}</span>
-                        </button>
-
-                        {/* オーバーレイグラデーション & 最低価格 */}
-                        <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-slate-950/90 via-slate-900/50 to-transparent p-3 pt-6 flex justify-between items-end">
-                          <div>
-                            <span className="text-[9px] text-slate-300 font-extrabold block">最安目安</span>
-                            <span className="text-white font-black text-sm tracking-tight drop-shadow">
-                              {profile.price_min ? `¥${profile.price_min.toLocaleString()}〜` : '応相談'}
-                            </span>
-                          </div>
-                          {profile.commercial_use_allowed && (
-                            <span className="text-[9px] font-black bg-purple-700 text-white px-1.5 py-0.5 rounded shadow">
-                              商用利用OK
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* 情報本文エリア */}
-                      <div className="p-3.5 space-y-2.5 flex-1 flex flex-col justify-between">
-                        <div className="space-y-2">
-                          <div className="space-y-0.5">
-                            <h3 className="font-black text-xs text-slate-950 line-clamp-1">
-                              {profile.display_name}
-                            </h3>
-                            <p className="text-[10px] text-slate-700 font-medium line-clamp-2 leading-relaxed">
-                              {profile.status_comment || 'プロフィール文は設定されていません。'}
-                            </p>
-                          </div>
-
-                          {/* メニュー料金表 */}
-                          <div className="space-y-1 border-t border-slate-100 pt-1.5">
-                            <span className="text-[9px] font-black text-slate-800 block">料金メニュー</span>
-                            {profile.menu_items && profile.menu_items.length > 0 ? (
-                              <div className="flex flex-col gap-1">
-                                {profile.menu_items.slice(0, 3).map((menu, index) => (
-                                  <div
-                                    key={index}
-                                    className="flex justify-between items-center text-[10px] bg-slate-100/70 px-2 py-0.5 rounded-md"
-                                  >
-                                    <span className="font-extrabold text-slate-800 line-clamp-1">{menu.title}</span>
-                                    <span className="font-black text-purple-900 whitespace-nowrap">
-                                      {typeof menu.price === 'number' ? `¥${menu.price.toLocaleString()}〜` : '応相談'}
-                                    </span>
-                                  </div>
-                                ))}
-                                {profile.menu_items.length > 3 && (
-                                  <span className="text-[8px] text-slate-500 text-right font-extrabold block">
-                                    他 {profile.menu_items.length - 3} 件のメニュー
-                                  </span>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="text-[10px] text-slate-500 font-bold bg-slate-50 p-1.5 rounded-lg text-center">
-                                詳細料金はプロフィール参照
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="space-y-1.5 pt-1">
-                          {/* 仕様目安・着手時期 */}
-                          <div className="flex justify-between items-center text-[10px] text-slate-700 font-bold">
-                            <span>納期目安</span>
-                            <span className="font-extrabold text-slate-900">{profile.lead_time_days || 14}日以内</span>
-                          </div>
-                          {profile.available_from_text && (
-                            <div className="flex justify-between items-center text-[10px] text-purple-900 font-bold bg-purple-50 px-2 py-0.5 rounded">
-                              <span>着手可能時期</span>
-                              <span className="font-black">{profile.available_from_text}</span>
-                            </div>
-                          )}
-
-                          {/* タグ一覧 */}
-                          <div className="flex flex-wrap gap-1">
-                            {profile.tastes?.map((taste) => (
-                              <span key={taste} className="text-[9px] font-extrabold bg-purple-100 text-purple-900 px-1.5 py-0.5 rounded">
-                                #{taste}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* アクションボタン */}
-                        <div className="flex gap-1.5 pt-1">
-                          <button
-                            onClick={() => toggleCompare(profile)}
-                            className={`flex-1 py-1.5 text-xs font-extrabold rounded-xl border transition-all cursor-pointer ${
-                              isCompared
-                                ? 'bg-purple-200 text-purple-900 border-purple-400'
-                                : 'bg-slate-100 text-purple-900 border-slate-300 hover:bg-purple-100'
-                            }`}
-                          >
-                            + 比較
-                          </button>
-                          <Link
-                            href={`/creator/${profile.user_id}`}
-                            className="flex-1 py-1.5 text-xs font-black text-center text-white bg-purple-700 hover:bg-purple-800 rounded-xl shadow-md transition-all flex items-center justify-center"
-                          >
-                            詳細を見る &gt;
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
+                <button
+                  onClick={handleToggleFavorite}
+                  className={`w-full py-2.5 text-xs font-bold rounded-xl border transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                    isFavorite
+                      ? 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100'
+                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <span>{isFavorite ? '❤️' : '🤍'}</span>
+                  <span>{isFavorite ? 'お気に入り登録済み' : 'お気に入りに追加'}</span>
+                </button>
               </div>
-            )}
-          </section>
+            </div>
+          </div>
         </div>
+
+        {/* 条件 */}
+        <section className="bg-white/75 backdrop-blur-xl p-6 sm:p-7 rounded-3xl shadow-xl border border-white/80 space-y-5">
+          <h2 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+            <span className="p-1.5 bg-white rounded-lg text-xs shadow-2xs">⚙️</span> 制作・受付条件
+          </h2>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {[
+              {
+                label: '生成AIの使用',
+                value:
+                  profile.ai_usage === 'none'
+                    ? '完全手描き（未使用）'
+                    : profile.ai_usage === 'partial'
+                    ? '一部AI補助あり'
+                    : profile.ai_usage === 'main'
+                    ? 'AIメイン制作'
+                    : '未指定',
+                highlight: profile.ai_usage === 'none',
+              },
+              {
+                label: 'R-18（成人向け）',
+                value: profile.r18_allowed ? '対応可能' : '不可',
+                highlight: !!profile.r18_allowed,
+              },
+              {
+                label: '無料リテイク',
+                value:
+                  typeof profile.free_revision_count === 'number'
+                    ? `${profile.free_revision_count} 回まで無料`
+                    : '要相談',
+                highlight: false,
+              },
+              {
+                label: '急ぎ・特急対応',
+                value: profile.express_option_available ? '対応可能' : '不可',
+                highlight: !!profile.express_option_available,
+              },
+              {
+                label: '著作権譲渡',
+                value: profile.copyright_transfer_available ? '相談・譲渡可能' : '不可',
+                highlight: !!profile.copyright_transfer_available,
+              },
+              {
+                label: 'AI学習の許可',
+                value: profile.ai_learning_allowed ? '許可' : '禁止（不可）',
+                highlight: !profile.ai_learning_allowed,
+              },
+            ].map((spec, i) => (
+              <div
+                key={i}
+                className="p-3.5 bg-white/60 rounded-2xl border border-white/80 space-y-1 shadow-2xs"
+              >
+                <span className="text-[11px] font-bold text-slate-400 block">
+                  {spec.label}
+                </span>
+                <span
+                  className={`text-xs font-extrabold block ${
+                    spec.highlight ? 'text-pink-600' : 'text-slate-800'
+                  }`}
+                >
+                  {spec.value}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* メニュー */}
+        {profile.menu_items && profile.menu_items.length > 0 && (
+          <section className="bg-white/75 backdrop-blur-xl p-6 sm:p-7 rounded-3xl shadow-xl border border-white/80 space-y-5">
+            <h2 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+              <span className="p-1.5 bg-white rounded-lg text-xs shadow-2xs">🏷️</span> 料金目安・メニュー
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {profile.menu_items.map((item, index) => (
+                <div
+                  key={index}
+                  className="p-4 bg-white/60 border border-white/80 rounded-2xl flex justify-between items-center hover:bg-white transition shadow-2xs"
+                >
+                  <span className="text-xs font-bold text-slate-700">{item.title}</span>
+                  <span className="text-xs font-black text-pink-600 bg-pink-50/80 px-2.5 py-1 rounded-lg border border-pink-100">
+                    {typeof item.price === 'number'
+                      ? `¥${item.price.toLocaleString()}〜`
+                      : '要相談'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ポートフォリオ */}
+        <section className="space-y-4">
+          <div className="flex justify-between items-baseline px-1">
+            <h2 className="text-base font-black text-slate-900 tracking-tight drop-shadow-xs">
+              ポートフォリオ作品
+            </h2>
+            <span className="text-xs font-extrabold text-slate-500 bg-white/60 backdrop-blur-sm px-2.5 py-1 rounded-full border border-white">
+              {works.length} 作品
+            </span>
+          </div>
+
+          {works.length === 0 ? (
+            <div className="bg-white/75 backdrop-blur-xl p-12 rounded-3xl border border-white/80 text-center text-xs font-bold text-slate-400">
+              まだ作品が登録されていません
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+              {works.map((work) => (
+                <div
+                  key={work.id}
+                  className="group relative aspect-square bg-white/40 rounded-2xl overflow-hidden shadow-lg border border-white/80 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl"
+                >
+                  <img
+                    src={work.image_url}
+                    alt={work.title || ''}
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  />
+                  {work.title && (
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-3 flex items-end">
+                      <p className="text-xs font-bold text-white truncate">{work.title}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       </main>
 
-      {/* 比較固定バー */}
-      {compareList.length > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-950/95 text-white backdrop-blur-xl px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-6 z-40 border border-slate-800">
-          <div className="text-xs font-bold">
-            比較リスト: <span className="font-black text-purple-400 text-sm mx-1">{compareList.length}</span> / 3 名
-          </div>
-          <button
-            onClick={() => setIsCompareOpen(true)}
-            className="px-4 py-2 bg-purple-700 hover:bg-purple-600 text-white rounded-xl text-xs font-black transition-all shadow-md cursor-pointer"
-          >
-            比較表を開く
-          </button>
-        </div>
-      )}
-
-      {/* 比較モーダル（詳細画面） */}
-      {isCompareOpen && (
-        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-3xl p-6 w-full max-w-4xl shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center border-b border-slate-200 pb-3">
+      {/* フォーム入力モーダル */}
+      {isEstimateOpen && activeFormConfig && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-5 sm:p-7 w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl border-4 border-amber-100 relative">
+            <div className="flex justify-between items-start pb-4 border-b border-slate-100 shrink-0">
               <div>
-                <h3 className="text-sm font-black text-slate-950">クリエイター詳細比較</h3>
-                <p className="text-[11px] text-slate-600 font-bold">選択したクリエイターのメニュー・条件を一覧で比較できます</p>
+                <h3 className="text-base sm:text-lg font-black text-slate-800">
+                  {activeFormConfig.title || 'ご依頼・お仕事申請フォーム'}
+                </h3>
+                {activeFormConfig.description && (
+                  <p className="text-xs font-bold text-slate-400 mt-1 whitespace-pre-wrap">
+                    {activeFormConfig.description}
+                  </p>
+                )}
               </div>
               <button
-                onClick={() => setIsCompareOpen(false)}
-                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-700 font-extrabold text-xs transition-colors cursor-pointer"
+                onClick={() => setIsEstimateOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center text-xs font-bold transition cursor-pointer shrink-0"
               >
                 ✕
               </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {compareList.map((item) => (
-                <div key={item.user_id} className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col justify-between space-y-3">
-                  <div className="space-y-3">
-                    <div className="relative w-full aspect-video bg-slate-200 rounded-xl overflow-hidden">
-                      {item.thumbnail_url ? (
-                        <img
-                          src={item.thumbnail_url}
-                          alt={item.display_name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-500 font-extrabold">
-                          NO IMAGE
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex justify-between items-start">
-                      <h4 className="font-black text-slate-950 text-xs">{item.display_name}</h4>
-                      <button
-                        onClick={() => toggleCompare(item)}
-                        className="text-[10px] text-rose-600 font-extrabold hover:underline cursor-pointer"
-                      >
-                        削除
-                      </button>
-                    </div>
-
-                    <div className="text-xs space-y-2 bg-white p-3 rounded-xl border border-slate-200">
-                      {/* メニュー一覧 */}
-                      <div className="space-y-1 pb-1 border-b border-slate-100">
-                        <span className="text-[10px] font-black text-slate-800 block">主な料金</span>
-                        {item.menu_items && item.menu_items.length > 0 ? (
-                          item.menu_items.map((m, idx) => (
-                            <div key={idx} className="flex justify-between text-[10px]">
-                              <span className="text-slate-600 font-bold">{m.title}</span>
-                              <span className="font-black text-purple-800">
-                                {typeof m.price === 'number' ? `¥${m.price.toLocaleString()}〜` : '応相談'}
-                              </span>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="flex justify-between text-[10px]">
-                            <span className="text-slate-600 font-bold">最安価格</span>
-                            <span className="font-black text-purple-800">¥{item.price_min?.toLocaleString() || '応相談'}〜</span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* 制作条件・各種対応項目の比較 */}
-                      <div className="space-y-1.5 pt-1">
-                        <div className="flex justify-between text-[10px]">
-                          <span className="text-slate-600 font-bold">着手可能時期</span>
-                          <span className="font-black text-purple-900">
-                            {item.available_from_text || '即時相談可'}
-                          </span>
-                        </div>
-
-                        <div className="flex justify-between text-[10px]">
-                          <span className="text-slate-600 font-bold">AI使用方針</span>
-                          <span className="font-black text-indigo-900">
-                            {item.ai_usage === 'none' ? '完全手描き' : item.ai_usage === 'partial' ? '一部AI使用' : item.ai_usage === 'main' ? 'AIメイン' : '未設定'}
-                          </span>
-                        </div>
-
-                        <div className="flex justify-between text-[10px]">
-                          <span className="text-slate-600 font-bold">R-18対応</span>
-                          <span className={`font-black ${item.r18_allowed ? 'text-rose-600' : 'text-slate-500'}`}>
-                            {item.r18_allowed ? '可能 (R-18 OK)' : '不可'}
-                          </span>
-                        </div>
-
-                        <div className="flex justify-between text-[10px]">
-                          <span className="text-slate-600 font-bold">無料リテイク</span>
-                          <span className="font-black text-slate-900">
-                            {typeof item.free_revision_count === 'number' ? `${item.free_revision_count}回まで` : '要相談'}
-                          </span>
-                        </div>
-
-                        <div className="flex justify-between text-[10px]">
-                          <span className="text-slate-600 font-bold">納期目安</span>
-                          <span className="font-black text-slate-900">{item.lead_time_days || 14}日以内</span>
-                        </div>
-
-                        <div className="flex justify-between text-[10px]">
-                          <span className="text-slate-600 font-bold">特急対応</span>
-                          <span className={`font-black ${item.express_option_available ? 'text-amber-600' : 'text-slate-500'}`}>
-                            {item.express_option_available ? '相談可' : '不可'}
-                          </span>
-                        </div>
-
-                        <div className="flex justify-between text-[10px]">
-                          <span className="text-slate-600 font-bold">商用利用</span>
-                          <span className={`font-black ${item.commercial_use_allowed ? 'text-emerald-700' : 'text-slate-500'}`}>
-                            {item.commercial_use_allowed ? '可能' : '不可'}
-                          </span>
-                        </div>
-
-                        <div className="flex justify-between text-[10px]">
-                          <span className="text-slate-600 font-bold">著作権譲渡</span>
-                          <span className={`font-black ${item.copyright_transfer_available ? 'text-indigo-700' : 'text-slate-500'}`}>
-                            {item.copyright_transfer_available ? '相談可' : '不可'}
-                          </span>
-                        </div>
-
-                        <div className="flex justify-between text-[10px]">
-                          <span className="text-slate-600 font-bold">いいね数</span>
-                          <span className="font-black text-rose-600">♥ {item.likes_count ?? 0}</span>
-                        </div>
-                      </div>
-                    </div>
+            <div className="overflow-y-auto py-5 space-y-5 flex-1 pr-1">
+              {!generatedSpec ? (
+                <>
+                  <div className="space-y-1">
+                    <label className="text-xs font-black text-slate-700">
+                      お名前（またはアカウント名）
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="例: 山田太郎"
+                      value={clientName}
+                      onChange={(e) => setClientName(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border-2 rounded-xl text-xs font-bold focus:outline-none focus:border-pink-500"
+                    />
                   </div>
 
-                  <Link
-                    href={`/creator/${item.user_id}`}
-                    className="block w-full py-2 bg-purple-700 hover:bg-purple-800 text-white text-xs font-black text-center rounded-xl shadow-md transition-all"
-                  >
-                    詳細ページへ
-                  </Link>
+                  {activeFormConfig.fields.map((field) => {
+                    const fieldTitle = field.label || '無題の質問'
+
+                    if (field.type === 'note') {
+                      return (
+                        <div
+                          key={field.id}
+                          className="bg-amber-50/60 border-2 border-amber-200/60 p-4 rounded-2xl text-xs text-amber-900 font-bold whitespace-pre-wrap"
+                        >
+                          <div className="font-black mb-1 text-amber-800">
+                            📌 {fieldTitle}
+                          </div>
+                          {field.noteText || ''}
+                        </div>
+                      )
+                    }
+
+                    if (field.type === 'faq') {
+                      return (
+                        <div
+                          key={field.id}
+                          className="bg-sky-50/60 border-2 border-sky-100 p-4 rounded-2xl space-y-1"
+                        >
+                          <div className="text-xs font-black text-sky-900">
+                            ❓ {fieldTitle}
+                          </div>
+                          <div className="text-xs font-bold text-slate-600 pl-4 border-l-2 border-sky-300 whitespace-pre-wrap">
+                            {field.faqAnswer || ''}
+                          </div>
+                        </div>
+                      )
+                    }
+
+                    return (
+                      <div key={field.id} className="space-y-1.5">
+                        <label className="text-xs font-black text-slate-700 flex items-center">
+                          <span>{fieldTitle}</span>
+                          {field.required && (
+                            <span className="text-rose-500 font-bold ml-1">*</span>
+                          )}
+                          {field.price && field.price > 0 ? (
+                            <span
+                              className="text-[10px] font-black px-2 py-0.5 rounded-full ml-2"
+                              style={{
+                                color: themeColor,
+                                backgroundColor: `${themeColor}15`,
+                              }}
+                            >
+                              +¥{field.price.toLocaleString()}
+                            </span>
+                          ) : null}
+                        </label>
+
+                        {field.type === 'text' && (
+                          <input
+                            type="text"
+                            placeholder="入力欄"
+                            value={formAnswers[field.id] || ''}
+                            onChange={(e) =>
+                              setFormAnswers({ ...formAnswers, [field.id]: e.target.value })
+                            }
+                            className="w-full px-3 py-2 bg-slate-50 border-2 rounded-xl text-xs font-bold focus:outline-none focus:border-pink-500"
+                          />
+                        )}
+
+                        {field.type === 'textarea' && (
+                          <textarea
+                            rows={3}
+                            placeholder="詳細をご記入ください"
+                            value={formAnswers[field.id] || ''}
+                            onChange={(e) =>
+                              setFormAnswers({ ...formAnswers, [field.id]: e.target.value })
+                            }
+                            className="w-full px-3 py-2 bg-slate-50 border-2 rounded-xl text-xs font-bold focus:outline-none focus:border-pink-500"
+                          />
+                        )}
+
+                        {field.type === 'color' && (
+                          <div className="flex items-center gap-3 pt-1">
+                            <input
+                              type="color"
+                              value={formAnswers[field.id] || '#3b82f6'}
+                              onChange={(e) =>
+                                setFormAnswers({ ...formAnswers, [field.id]: e.target.value })
+                              }
+                              className="h-10 w-16 rounded-xl border-2 border-slate-200 cursor-pointer p-1 bg-white shrink-0"
+                            />
+                            <span className="text-xs font-mono font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+                              {formAnswers[field.id] || '#3b82f6'}
+                            </span>
+                          </div>
+                        )}
+
+                        {(field.type === 'radio' || field.type === 'checkbox') &&
+                          field.options && (
+                            <div className="space-y-1.5">
+                              {field.options.map((opt, optIdx) => {
+                                const isPercent = opt.priceType === 'percent'
+                                const isCheckbox = field.type === 'checkbox'
+                                const selectedVal = formAnswers[field.id]
+                                const isSelected = isCheckbox
+                                  ? Array.isArray(selectedVal) &&
+                                    selectedVal.includes(opt.label)
+                                  : selectedVal === opt.label
+
+                                let priceTag = ''
+                                if (opt.price > 0) {
+                                  if (isPercent) {
+                                    const calcVal = Math.round(
+                                      basePriceTotal * (opt.price / 100)
+                                    )
+                                    priceTag = `+${opt.price}% ${
+                                      calcVal > 0 ? `(+¥${calcVal.toLocaleString()})` : ''
+                                    }`
+                                  } else {
+                                    priceTag = `+¥${opt.price.toLocaleString()}`
+                                  }
+                                }
+
+                                return (
+                                  <div
+                                    key={optIdx}
+                                    onClick={() =>
+                                      handleSelectOption(field.id, opt.label, isCheckbox)
+                                    }
+                                    className={`flex items-center justify-between text-xs font-bold px-3 py-2 rounded-xl cursor-pointer transition select-none ${
+                                      isSelected
+                                        ? 'bg-slate-800 text-white shadow-xs'
+                                        : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/60'
+                                    }`}
+                                  >
+                                    <div className="flex items-center space-x-2">
+                                      <input
+                                        type={field.type}
+                                        checked={isSelected}
+                                        readOnly
+                                        className="pointer-events-none"
+                                        style={{ accentColor: themeColor }}
+                                      />
+                                      <span>{opt.label}</span>
+                                    </div>
+
+                                    {priceTag && (
+                                      <span
+                                        className="text-[10px] font-black"
+                                        style={{
+                                          color: isSelected ? '#ffffff' : themeColor,
+                                        }}
+                                      >
+                                        {priceTag}
+                                      </span>
+                                    )}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+                      </div>
+                    )
+                  })}
+                </>
+              ) : (
+                <div className="space-y-4 animate-in fade-in">
+                  <div className="bg-slate-900 text-slate-100 p-4 rounded-2xl font-mono text-xs leading-relaxed whitespace-pre-wrap select-all border border-slate-800 shadow-inner">
+                    {generatedSpec}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      onClick={handleCopySpec}
+                      className="py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl transition text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                    >
+                      <span>{copied ? '✅' : '📋'}</span>
+                      <span>{copied ? 'コピー完了！' : '仕様書テキストをコピー'}</span>
+                    </button>
+
+                    <button
+                      onClick={handleDownloadPDF}
+                      disabled={isDownloadingPdf}
+                      className="py-3 bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 text-white font-extrabold rounded-xl transition text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                    >
+                      <span>📄</span>
+                      <span>{isDownloadingPdf ? 'PDF生成中...' : 'PDF形式でダウンロード'}</span>
+                    </button>
+                  </div>
+
+                  <div className="pt-2 space-y-2">
+                    <p className="text-xs font-black text-slate-700">
+                      送信先のSNS・窓口を選択:
+                    </p>
+                    {profile.twitter_url && (
+                      <a
+                        href={profile.twitter_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-xl transition flex items-center justify-between text-xs"
+                      >
+                        <span>X (Twitter) の DM で送る</span>
+                        <span>↗</span>
+                      </a>
+                    )}
+                    {profile.external_estimation_url && (
+                      <a
+                        href={profile.external_estimation_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full py-3 px-4 bg-pink-600 hover:bg-pink-700 text-white font-extrabold rounded-xl transition flex items-center justify-between text-xs"
+                      >
+                        <span>外部フォーム / Webサイトで送る</span>
+                        <span>↗</span>
+                      </a>
+                    )}
+                  </div>
                 </div>
-              ))}
+              )}
             </div>
+
+            {!generatedSpec && (
+              <div
+                className="mt-2 pt-4 border-t-2 border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4 p-4 rounded-2xl shrink-0"
+                style={{
+                  backgroundColor: `${themeColor}10`,
+                  borderColor: `${themeColor}25`,
+                }}
+              >
+                <div className="text-center sm:text-left">
+                  <span className="text-xs font-black text-slate-600 block">
+                    概算見積金額
+                  </span>
+                  <span
+                    className="text-xl sm:text-2xl font-black"
+                    style={{ color: themeColor }}
+                  >
+                    ¥{totalPrice.toLocaleString()}
+                  </span>
+                </div>
+
+                <button
+                  onClick={handleGenerateSpec}
+                  style={{ backgroundColor: themeColor }}
+                  className="w-full sm:w-auto py-3 px-6 hover:opacity-90 active:scale-95 text-white font-black text-xs rounded-xl transition shadow-md cursor-pointer"
+                >
+                  この内容で仕様書を作成 ➔
+                </button>
+              </div>
+            )}
+
+            {generatedSpec && (
+              <div className="pt-3 border-t border-slate-100 flex justify-start">
+                <button
+                  onClick={() => setGeneratedSpec(null)}
+                  className="text-xs font-bold text-slate-500 hover:text-slate-800 transition flex items-center gap-1 cursor-pointer"
+                >
+                  ← 条件選択に戻る
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 相談・お問い合わせ モーダル */}
+      {isContactOpen && (
+        <div className="fixed inset-0 bg-slate-950/50 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white/90 backdrop-blur-2xl rounded-3xl p-6 sm:p-7 w-full max-w-md shadow-2xl border border-white relative space-y-6">
+            <button
+              onClick={() => setIsContactOpen(false)}
+              className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100/80 hover:bg-slate-200 text-slate-500 flex items-center justify-center text-xs font-bold transition cursor-pointer"
+            >
+              ✕
+            </button>
+
+            <div className="space-y-1">
+              <h3 className="text-lg font-black text-slate-900">
+                {profile.display_name} へ相談・お問い合わせ
+              </h3>
+              <p className="text-xs text-slate-500">連絡窓口を選択してください</p>
+            </div>
+
+            <div className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">
+              {profile.external_estimation_url && (
+                <a
+                  href={profile.external_estimation_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3.5 px-4 bg-pink-600 hover:bg-pink-700 text-white font-extrabold rounded-2xl transition flex items-center justify-between text-xs shadow-md shadow-pink-200"
+                >
+                  <span>📋 外部見積もりフォーム</span>
+                  <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-md">
+                    開く ↗
+                  </span>
+                </a>
+              )}
+
+              {profile.twitter_url && (
+                <a
+                  href={profile.twitter_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3.5 px-4 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-2xl transition flex items-center justify-between text-xs shadow-md"
+                >
+                  <span>X (Twitter) で相談・DM</span>
+                  <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-md">
+                    開く ↗
+                  </span>
+                </a>
+              )}
+
+              {profile.instagram_url && (
+                <a
+                  href={profile.instagram_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3.5 px-4 bg-gradient-to-r from-purple-600 to-pink-500 hover:opacity-95 text-white font-extrabold rounded-2xl transition flex items-center justify-between text-xs shadow-md"
+                >
+                  <span>📸 Instagram で相談・DM</span>
+                  <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-md">
+                    開く ↗
+                  </span>
+                </a>
+              )}
+
+              {profile.pixiv_url && (
+                <a
+                  href={profile.pixiv_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3.5 px-4 bg-blue-500 hover:bg-blue-600 text-white font-extrabold rounded-2xl transition flex items-center justify-between text-xs shadow-md"
+                >
+                  <span>🎨 Pixiv メッセージ</span>
+                  <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-md">
+                    開く ↗
+                  </span>
+                </a>
+              )}
+
+              {profile.website_url && (
+                <a
+                  href={profile.website_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3.5 px-4 bg-white/80 text-slate-800 border border-slate-200 font-extrabold rounded-2xl hover:bg-white transition flex items-center justify-between text-xs shadow-xs"
+                >
+                  <span>🌐 公式Webサイト</span>
+                  <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">
+                    開く ↗
+                  </span>
+                </a>
+              )}
+
+              {!hasContactLinks && (
+                <div className="text-center py-8 text-xs font-bold text-slate-400 bg-white/50 rounded-2xl border border-dashed border-slate-200">
+                  連絡先・SNSリンクが登録されていません
+                </div>
+              )}
+            </div>
+
+            <p className="text-[10px] text-slate-400 text-center font-bold">
+              ※ 新しいタブで外部ページが開きます
+            </p>
           </div>
         </div>
       )}
