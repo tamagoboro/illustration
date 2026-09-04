@@ -8,13 +8,13 @@ type Option = {
   label: string
   price: number
   priceType?: 'fixed' | 'percent'
-  calcType?: 'add' | 'percent' // 互換性のため維持
+  calcType?: 'add' | 'percent'
 }
 
 type Field = {
   id: string
   label?: string
-  title?: string // 互換性のため維持
+  title?: string
   type: 'radio' | 'checkbox' | 'text' | 'textarea' | 'color' | 'note' | 'faq'
   price?: number
   noteText?: string
@@ -57,7 +57,8 @@ type ExtendedProfile = Profile & {
   form_config?: FormConfig | null
 }
 
-export default function CreatorClient({
+// 実際の表示ロジックを担当するコンポーネント
+function CreatorClient({
   id,
   initialProfile,
   initialWorks = [],
@@ -71,23 +72,20 @@ export default function CreatorClient({
   const [loading, setLoading] = useState(!initialProfile)
   const [isFavorite, setIsFavorite] = useState(false)
 
-  // モーダル管理（見積もり用 と 直接相談用）
   const [isEstimateOpen, setIsEstimateOpen] = useState(false)
   const [isContactOpen, setIsContactOpen] = useState(false)
 
-  // 見積もりフォーム状態管理
   const [formAnswers, setFormAnswers] = useState<Record<string, any>>({})
   const [clientName, setClientName] = useState('')
   const [generatedSpec, setGeneratedSpec] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
-
-  // PDFダウンロード状態
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false)
 
   const BACKGROUND_IMAGE_URL =
     'https://qcklfkslqtjnxufqcqyi.supabase.co/storage/v1/object/public/portfolios/bg.png'
 
   useEffect(() => {
+    if (!id) return
     const storedFavs = localStorage.getItem('favorite_creators')
     if (storedFavs) {
       try {
@@ -100,6 +98,7 @@ export default function CreatorClient({
   }, [id])
 
   useEffect(() => {
+    if (!id) return
     const fetchCreatorData = async () => {
       if (!profile) setLoading(true)
 
@@ -127,7 +126,6 @@ export default function CreatorClient({
     fetchCreatorData()
   }, [id])
 
-  // form_config の取得
   const activeFormConfig = useMemo<FormConfig | null>(() => {
     if (!profile?.form_config) return null
     if (!profile.form_config.fields || profile.form_config.fields.length === 0) {
@@ -150,7 +148,6 @@ export default function CreatorClient({
     })
   }
 
-  // 1. 基本料金の合計（ベース額）
   const basePriceTotal = useMemo(() => {
     if (!activeFormConfig) return 0
     let total = 0
@@ -162,7 +159,6 @@ export default function CreatorClient({
     return total
   }, [activeFormConfig])
 
-  // 2. 合計金額の動的計算（ベース額 + 選択肢固定額 + パーセント加算）
   const totalPrice = useMemo(() => {
     if (!activeFormConfig) return 0
 
@@ -202,7 +198,6 @@ export default function CreatorClient({
     return basePriceTotal + fixedAdditions + percentAmount
   }, [formAnswers, activeFormConfig, basePriceTotal])
 
-  // 仕様書テキストの作成
   const handleGenerateSpec = () => {
     if (!activeFormConfig) return
 
@@ -243,7 +238,6 @@ export default function CreatorClient({
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // PDFダウンロード
   const handleDownloadPDF = async () => {
     if (!activeFormConfig) return
 
@@ -358,7 +352,6 @@ export default function CreatorClient({
     >
       <div className="absolute inset-0 bg-slate-900/10 backdrop-brightness-95 pointer-events-none" />
 
-      {/* ヘッダー */}
       <header className="px-6 py-4 bg-white/70 backdrop-blur-xl border-b border-white/50 sticky top-0 z-30 shadow-xs">
         <div className="max-w-5xl mx-auto flex justify-between items-center">
           <Link
@@ -374,7 +367,6 @@ export default function CreatorClient({
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8 relative z-10">
-        {/* メインプロフィールカード */}
         <div className="bg-white/75 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-xl border border-white/80 space-y-6">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
             <div className="flex-1 space-y-4">
@@ -444,7 +436,6 @@ export default function CreatorClient({
               </div>
             </div>
 
-            {/* サイド操作枠 */}
             <div className="w-full lg:w-80 bg-white/80 backdrop-blur-md p-5 rounded-2xl border border-white shadow-sm space-y-4 shrink-0">
               <div className="space-y-2.5 text-xs text-slate-600 pb-1">
                 {profile.price_min != null && (
@@ -509,7 +500,6 @@ export default function CreatorClient({
           </div>
         </div>
 
-        {/* スペック情報 */}
         <section className="bg-white/75 backdrop-blur-xl p-6 sm:p-7 rounded-3xl shadow-xl border border-white/80 space-y-5">
           <h2 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
             <span className="p-1.5 bg-white rounded-lg text-xs shadow-2xs">⚙️</span> 制作・受付条件
@@ -568,7 +558,6 @@ export default function CreatorClient({
           </div>
         </section>
 
-        {/* 料金目安 */}
         {profile.menu_items && profile.menu_items.length > 0 && (
           <section className="bg-white/75 backdrop-blur-xl p-6 sm:p-7 rounded-3xl shadow-xl border border-white/80 space-y-5">
             <h2 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
@@ -590,7 +579,6 @@ export default function CreatorClient({
           </section>
         )}
 
-        {/* ポートフォリオ */}
         <section className="space-y-4">
           <div className="flex justify-between items-baseline px-1">
             <h2 className="text-base font-black text-slate-900 tracking-tight drop-shadow-xs">ポートフォリオ作品</h2>
@@ -627,7 +615,6 @@ export default function CreatorClient({
         </section>
       </main>
 
-      {/* 見積もり・仕様書作成 モーダル */}
       {isEstimateOpen && activeFormConfig && (
         <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 z-50 animate-in fade-in duration-200">
           <div className="bg-white/95 backdrop-blur-2xl rounded-3xl p-5 sm:p-7 w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl border border-white relative">
@@ -665,7 +652,6 @@ export default function CreatorClient({
                   {activeFormConfig.fields.map((field) => {
                     const title = field.label || field.title || '無題の項目'
 
-                    // 特殊項目: クリエイター説明文 (note)
                     if (field.type === 'note') {
                       return (
                         <div key={field.id} className="bg-amber-50/60 border-2 border-amber-200/60 p-4 rounded-2xl text-xs text-amber-900 font-bold whitespace-pre-wrap">
@@ -675,7 +661,6 @@ export default function CreatorClient({
                       )
                     }
 
-                    // 特殊項目: よくある質問 (faq)
                     if (field.type === 'faq') {
                       return (
                         <div key={field.id} className="bg-sky-50/60 border-2 border-sky-100 p-4 rounded-2xl space-y-1">
@@ -687,7 +672,6 @@ export default function CreatorClient({
                       )
                     }
 
-                    // 通常項目（テキスト / ラジオ / チェックボックス / カラー等）
                     return (
                       <div key={field.id} className="space-y-2 bg-slate-50/70 p-4 rounded-2xl border border-slate-100">
                         <div className="flex items-center justify-between mb-2">
@@ -899,7 +883,6 @@ export default function CreatorClient({
         </div>
       )}
 
-      {/* お問い合わせ モーダル */}
       {isContactOpen && (
         <div className="fixed inset-0 bg-slate-950/50 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
           <div className="bg-white/90 backdrop-blur-2xl rounded-3xl p-6 sm:p-7 w-full max-w-md shadow-2xl border border-white relative space-y-6">
@@ -993,4 +976,16 @@ export default function CreatorClient({
       )}
     </div>
   )
+}
+
+// Next.js App Router 規格に合わせた default export
+type PageProps = {
+  searchParams?: Promise<{ id?: string }> | { id?: string }
+}
+
+export default async function Page({ searchParams }: PageProps) {
+  const resolvedSearchParams = await searchParams
+  const id = resolvedSearchParams?.id || ''
+
+  return <CreatorClient id={id} />
 }
