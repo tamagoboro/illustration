@@ -319,7 +319,7 @@ export default function Home() {
             </div>
             <div className="flex flex-col">
               <span className="text-sm font-black tracking-tight text-slate-800 group-hover:text-purple-700 transition-colors">
-                CreatorHub
+                Drawker
               </span>
               <span className="text-[9px] font-bold text-slate-400 tracking-wider uppercase -mt-0.5">
                 Portfolio Search
