@@ -86,7 +86,7 @@ function CreatorClient({
     'https://qcklfkslqtjnxufqcqyi.supabase.co/storage/v1/object/public/portfolios/bg.png'
 
     useEffect(() => {
-    // URLのIDが 'form-builder' だった場合は実際の編集ページへ移動させる
+    // URLのIDが 'form-buirelder' だった場合は実際の編集ページへ移動させる
     if (id === 'form-builder') {
       router.push('/dashboard/form-builder')
       return
