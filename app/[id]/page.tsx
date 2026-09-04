@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { supabase, Profile, PortfolioItem } from '@/lib/supabase'
 
 type Option = {
@@ -65,6 +66,7 @@ function CreatorClient({
   initialProfile?: ExtendedProfile | null
   initialWorks?: PortfolioItem[]
 }) {
+  const router = useRouter()
   const [profile, setProfile] = useState<ExtendedProfile | null>(initialProfile || null)
   const [works, setWorks] = useState<PortfolioItem[]>(initialWorks)
   const [loading, setLoading] = useState(true)
@@ -82,8 +84,9 @@ function CreatorClient({
     'https://qcklfkslqtjnxufqcqyi.supabase.co/storage/v1/object/public/portfolios/bg.png'
 
   useEffect(() => {
+    // 1. URLが /form-builder などの特殊パスでアクセスされた場合はエディタへリダイレクト
     if (!id || id === 'form-builder') {
-      setLoading(false)
+      router.push('/form-builder') // フォーム作成画面のURL構造に合わせて適宜調整してください
       return
     }
 
@@ -101,6 +104,7 @@ function CreatorClient({
           }
         }
 
+        // プロファイル取得
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
           .select('*')
@@ -114,6 +118,7 @@ function CreatorClient({
           setProfile(profileData as ExtendedProfile)
         }
 
+        // ポートフォリオ作品取得
         const { data: worksData, error: worksError } = await supabase
           .from('portfolio_items')
           .select('*')
@@ -127,6 +132,7 @@ function CreatorClient({
           setWorks(worksData)
         }
 
+        // PV ログの記録
         await supabase.from('analytics_logs').insert({
           creator_id: id,
           event_type: 'pv',
@@ -139,7 +145,7 @@ function CreatorClient({
     }
 
     fetchCreatorDataAndTrackPV()
-  }, [id])
+  }, [id, router])
 
   const activeFormConfig = useMemo<FormConfig | null>(() => {
     if (!profile?.form_config) return null
