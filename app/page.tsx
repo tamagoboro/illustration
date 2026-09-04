@@ -740,7 +740,7 @@ export default function Home() {
                             + 比較
                           </button>
                           <Link
-                            href={`/creator/${profile.user_id}`}
+                            href={`/${profile.user_id}`}
                             className="flex-1 py-1.5 text-xs font-black text-center text-white bg-purple-700 hover:bg-purple-800 rounded-xl shadow-md transition-all flex items-center justify-center"
                           >
                             詳細を見る &gt;
