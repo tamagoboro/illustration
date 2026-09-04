@@ -33,6 +33,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const ogImage = profile.avatar_url || `${BASE_URL}/OGP-img.png`
   const canonicalUrl = `${BASE_URL}/creator/${id}`
 
+  // Twitter URLの末尾スラッシュを除去してからユーザー名を抽出
+  const twitterHandle = profile.twitter_url
+    ? profile.twitter_url.replace(/\/$/, '').split('/').pop()
+    : null
+
   return {
     title,
     description,
@@ -78,8 +83,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       title,
       description,
       images: [ogImage],
-      ...(profile.twitter_url && {
-        creator: `@${profile.twitter_url.split('/').pop()}`,
+      ...(twitterHandle && {
+        creator: `@${twitterHandle}`,
       }),
     },
   }

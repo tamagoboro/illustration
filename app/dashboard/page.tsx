@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, ChangeEvent } from 'react'
+import { useState, useEffect, ChangeEvent, FormEvent, KeyboardEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { User } from '@supabase/supabase-js'
@@ -267,7 +267,10 @@ export default function Dashboard() {
   ): Promise<{ blob: Blob; mimeType: string; extension: string }> => {
     return new Promise((resolve, reject) => {
       const img = new Image()
+      const objectUrl = URL.createObjectURL(file)
+
       img.onload = () => {
+        URL.revokeObjectURL(objectUrl)
         let { width, height } = img
         if (width > maxWidth) {
           height = Math.round((height * maxWidth) / width)
@@ -301,8 +304,11 @@ export default function Dashboard() {
           quality
         )
       }
-      img.onerror = (err) => reject(err)
-      img.src = URL.createObjectURL(file)
+      img.onerror = (err) => {
+        URL.revokeObjectURL(objectUrl)
+        reject(err)
+      }
+      img.src = objectUrl
     })
   }
 
@@ -375,7 +381,7 @@ export default function Dashboard() {
     setTimeout(() => setSaveSuccess(null), 3000)
   }
 
-  const handleSaveProfile = async (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: FormEvent) => {
     e.preventDefault()
     if (!user) return
     setSaving(true)
@@ -446,7 +452,7 @@ export default function Dashboard() {
     }
   }
 
-  const handleSavePortfolio = async (e: React.FormEvent) => {
+  const handleSavePortfolio = async (e: FormEvent) => {
     e.preventDefault()
     if (!user) return
     setSaving(true)
@@ -490,7 +496,6 @@ export default function Dashboard() {
   }
 
   const currentPortfolioUrl = typeof window !== 'undefined' && user ? `${window.location.origin}/${user.id}` : ''
-  const currentFormUrl = externalEstimationUrl || (typeof window !== 'undefined' ? `${window.location.origin}/form-builder` : '')
 
   if (loading) {
     return (
@@ -1130,8 +1135,8 @@ export default function Dashboard() {
                       placeholder="例: ドット絵, 和風イラスト..."
                       value={customTasteInput}
                       onChange={(e) => setCustomTasteInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
+                      onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+                        if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
                           e.preventDefault()
                           handleAddCustomTaste()
                         }

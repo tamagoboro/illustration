@@ -83,13 +83,14 @@ function CreatorClient({
   const BACKGROUND_IMAGE_URL =
     'https://qcklfkslqtjnxufqcqyi.supabase.co/storage/v1/object/public/portfolios/bg.png'
 
+  // 1. ページ読み込み時: プロフィール取得 & PVログ送信
   useEffect(() => {
     if (!id || id === 'form-builder') {
       setLoading(false)
       return
     }
 
-    const fetchCreatorData = async () => {
+    const fetchCreatorDataAndTrackPV = async () => {
       try {
         setLoading(true)
 
@@ -131,6 +132,13 @@ function CreatorClient({
         if (worksData) {
           setWorks(worksData)
         }
+
+        // 📊 PV (アクセスログ) の送信
+        await supabase.from('analytics_logs').insert({
+          creator_id: id,
+          event_type: 'pv'
+        })
+
       } catch (err) {
         console.error('Unexpected error fetching creator data:', err)
       } finally {
@@ -138,7 +146,7 @@ function CreatorClient({
       }
     }
 
-    fetchCreatorData()
+    fetchCreatorDataAndTrackPV()
   }, [id])
 
   const activeFormConfig = useMemo<FormConfig | null>(() => {
@@ -213,8 +221,31 @@ function CreatorClient({
     return basePriceTotal + fixedAdditions + percentAmount
   }, [formAnswers, activeFormConfig, basePriceTotal])
 
-  const handleGenerateSpec = () => {
+  // 2. 見積もり仕様書作成 & 試算実行ログの送信
+  const handleGenerateSpec = async () => {
     if (!activeFormConfig) return
+
+    // 📊 試算ログの送信 (選択されたラジオ・チェックボックスの値を収集)
+    const selectedOptions: string[] = []
+    activeFormConfig.fields.forEach((field) => {
+      const answer = formAnswers[field.id]
+      if (!answer) return
+      if (Array.isArray(answer)) {
+        selectedOptions.push(...answer)
+      } else if (field.type === 'radio' || field.type === 'checkbox') {
+        selectedOptions.push(String(answer))
+      }
+    })
+
+    try {
+      await supabase.from('analytics_logs').insert({
+        creator_id: id,
+        event_type: 'estimate_calc',
+        metadata: { options: selectedOptions }
+      })
+    } catch (e) {
+      console.error('Estimate tracking error:', e)
+    }
 
     let specLines: string[] = []
     specLines.push(`【ご依頼・見積もり仕様書】`)
@@ -308,7 +339,8 @@ function CreatorClient({
     }
   }
 
-  const handleToggleFavorite = () => {
+  // 3. お気に入り切り替え処理
+  const handleToggleFavorite = async () => {
     const storedFavs = localStorage.getItem('favorite_creators')
     let favArray: string[] = storedFavs ? JSON.parse(storedFavs) : []
 
@@ -318,6 +350,16 @@ function CreatorClient({
     } else {
       favArray.push(id)
       setIsFavorite(true)
+
+      // 📊 お気に入り登録ログの送信
+      try {
+        await supabase.from('analytics_logs').insert({
+          creator_id: id,
+          event_type: 'favorite'
+        })
+      } catch (e) {
+        console.error('Favorite tracking error:', e)
+      }
     }
 
     localStorage.setItem('favorite_creators', JSON.stringify(favArray))

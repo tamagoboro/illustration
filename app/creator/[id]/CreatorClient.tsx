@@ -95,16 +95,24 @@ export default function CreatorClient({
   }, [id])
 
   useEffect(() => {
+    // 初期データが既に揃っている場合は再取得をスキップ
+    if (initialProfile && initialWorks.length > 0) {
+      setLoading(false)
+      return
+    }
+
     const fetchCreatorData = async () => {
       if (!profile) setLoading(true)
 
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', id)
-        .single()
+      if (!profile) {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('user_id', id)
+          .single()
 
-      if (profileData) setProfile(profileData as ExtendedProfile)
+        if (profileData) setProfile(profileData as ExtendedProfile)
+      }
 
       if (works.length === 0) {
         const { data: worksData } = await supabase
@@ -120,7 +128,7 @@ export default function CreatorClient({
     }
 
     fetchCreatorData()
-  }, [id])
+  }, [id, initialProfile, initialWorks, profile, works.length])
 
   const activeFormConfig = useMemo<FormConfig | null>(() => {
     if (!profile?.form_config) return null
