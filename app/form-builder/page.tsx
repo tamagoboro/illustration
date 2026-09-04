@@ -7,13 +7,18 @@ import { supabase, Profile, PortfolioItem } from '@/lib/supabase'
 type Option = {
   label: string
   price: number
-  calcType?: 'add' | 'percent'
+  priceType?: 'fixed' | 'percent'
+  calcType?: 'add' | 'percent' // 互換性のため維持
 }
 
 type Field = {
   id: string
-  title: string
-  type: 'radio' | 'checkbox' | 'text'
+  label?: string
+  title?: string // 互換性のため維持
+  type: 'radio' | 'checkbox' | 'text' | 'textarea' | 'color' | 'note' | 'faq'
+  price?: number
+  noteText?: string
+  faqAnswer?: string
   required?: boolean
   options?: Option[]
 }
@@ -21,6 +26,7 @@ type Field = {
 type FormConfig = {
   title?: string
   description?: string
+  thanks_message?: string
   themeColor?: string
   fields: Field[]
 }
@@ -121,7 +127,7 @@ export default function CreatorClient({
     fetchCreatorData()
   }, [id])
 
-  // form_config が設定されていない（またはfieldsが空）場合は null を返す
+  // form_config の取得
   const activeFormConfig = useMemo<FormConfig | null>(() => {
     if (!profile?.form_config) return null
     if (!profile.form_config.fields || profile.form_config.fields.length === 0) {
@@ -144,11 +150,24 @@ export default function CreatorClient({
     })
   }
 
+  // 1. 基本料金の合計（ベース額）
+  const basePriceTotal = useMemo(() => {
+    if (!activeFormConfig) return 0
+    let total = 0
+    activeFormConfig.fields.forEach((field) => {
+      if (field.price && field.type !== 'note' && field.type !== 'faq') {
+        total += field.price
+      }
+    })
+    return total
+  }, [activeFormConfig])
+
+  // 2. 合計金額の動的計算（ベース額 + 選択肢固定額 + パーセント加算）
   const totalPrice = useMemo(() => {
     if (!activeFormConfig) return 0
 
-    let baseSum = 0
-    let percentSum = 0
+    let fixedAdditions = 0
+    let percentAdditions = 0
 
     activeFormConfig.fields.forEach((field) => {
       const answer = formAnswers[field.id]
@@ -157,29 +176,33 @@ export default function CreatorClient({
       if (field.type === 'radio') {
         const selectedOpt = field.options.find((opt) => opt.label === answer)
         if (selectedOpt) {
-          if (selectedOpt.calcType === 'percent') {
-            percentSum += selectedOpt.price
+          const isPercent = selectedOpt.priceType === 'percent' || selectedOpt.calcType === 'percent'
+          if (isPercent) {
+            percentAdditions += selectedOpt.price || 0
           } else {
-            baseSum += selectedOpt.price
+            fixedAdditions += selectedOpt.price || 0
           }
         }
       } else if (field.type === 'checkbox' && Array.isArray(answer)) {
         answer.forEach((selectedLabel) => {
           const selectedOpt = field.options?.find((opt) => opt.label === selectedLabel)
           if (selectedOpt) {
-            if (selectedOpt.calcType === 'percent') {
-              percentSum += selectedOpt.price
+            const isPercent = selectedOpt.priceType === 'percent' || selectedOpt.calcType === 'percent'
+            if (isPercent) {
+              percentAdditions += selectedOpt.price || 0
             } else {
-              baseSum += selectedOpt.price
+              fixedAdditions += selectedOpt.price || 0
             }
           }
         })
       }
     })
 
-    return baseSum + Math.round((baseSum * percentSum) / 100)
-  }, [formAnswers, activeFormConfig])
+    const percentAmount = Math.round(basePriceTotal * (percentAdditions / 100))
+    return basePriceTotal + fixedAdditions + percentAmount
+  }, [formAnswers, activeFormConfig, basePriceTotal])
 
+  // 仕様書テキストの作成
   const handleGenerateSpec = () => {
     if (!activeFormConfig) return
 
@@ -190,16 +213,19 @@ export default function CreatorClient({
     specLines.push(`-----------------------------------`)
 
     activeFormConfig.fields.forEach((field) => {
+      if (field.type === 'note' || field.type === 'faq') return
+
+      const title = field.label || field.title || '設問'
       const answer = formAnswers[field.id]
       if (!answer || (Array.isArray(answer) && answer.length === 0)) return
 
-      if (field.type === 'text') {
-        specLines.push(`■ ${field.title}:`)
+      if (field.type === 'text' || field.type === 'textarea') {
+        specLines.push(`■ ${title}:`)
         specLines.push(`   ${answer}`)
       } else if (Array.isArray(answer)) {
-        specLines.push(`■ ${field.title}: ${answer.join(', ')}`)
+        specLines.push(`■ ${title}: ${answer.join(', ')}`)
       } else {
-        specLines.push(`■ ${field.title}: ${answer}`)
+        specLines.push(`■ ${title}: ${answer}`)
       }
     })
 
@@ -217,15 +243,12 @@ export default function CreatorClient({
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // ----------------------------------------------------
-  // PDFダウンロード処理（API連携）
-  // ----------------------------------------------------
+  // PDFダウンロード
   const handleDownloadPDF = async () => {
     if (!activeFormConfig) return
 
     try {
       setIsDownloadingPdf(true)
-
       const formattedAnswers: { label: string; value: string }[] = []
 
       if (clientName.trim()) {
@@ -233,13 +256,15 @@ export default function CreatorClient({
       }
 
       activeFormConfig.fields.forEach((field) => {
+        if (field.type === 'note' || field.type === 'faq') return
+        const title = field.label || field.title || '設問'
         const answer = formAnswers[field.id]
         if (!answer || (Array.isArray(answer) && answer.length === 0)) return
 
         if (Array.isArray(answer)) {
-          formattedAnswers.push({ label: field.title, value: answer.join(', ') })
+          formattedAnswers.push({ label: title, value: answer.join(', ') })
         } else {
-          formattedAnswers.push({ label: field.title, value: String(answer) })
+          formattedAnswers.push({ label: title, value: String(answer) })
         }
       })
 
@@ -251,13 +276,11 @@ export default function CreatorClient({
           formTitle: activeFormConfig.title || '概算見積もり・仕様書',
           answers: formattedAnswers,
           totalPrice,
-          thanksMessage: profile?.status_comment || 'ご検討ありがとうございます。',
+          thanksMessage: activeFormConfig.thanks_message || profile?.status_comment || 'ご検討ありがとうございます。',
         }),
       })
 
-      if (!response.ok) {
-        throw new Error('PDFの生成に失敗しました')
-      }
+      if (!response.ok) throw new Error('PDFの生成に失敗しました')
 
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
@@ -298,10 +321,8 @@ export default function CreatorClient({
         style={{ backgroundImage: `url(${BACKGROUND_IMAGE_URL})` }}
       >
         <div className="p-8 bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-2xl flex flex-col items-center space-y-3">
-          <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-xs font-black text-slate-600 tracking-widest uppercase">
-            Loading...
-          </p>
+          <div className="w-8 h-8 border-3 border-pink-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs font-black text-slate-600 tracking-widest uppercase">Loading...</p>
         </div>
       </div>
     )
@@ -314,13 +335,8 @@ export default function CreatorClient({
         style={{ backgroundImage: `url(${BACKGROUND_IMAGE_URL})` }}
       >
         <div className="p-8 bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-white/60 text-center space-y-3 max-w-sm w-full">
-          <p className="text-slate-700 font-bold text-sm">
-            クリエイターが見つかりませんでした
-          </p>
-          <Link
-            href="/"
-            className="text-indigo-600 hover:text-indigo-700 font-semibold text-xs inline-flex items-center gap-1"
-          >
+          <p className="text-slate-700 font-bold text-sm">クリエイターが見つかりませんでした</p>
+          <Link href="/" className="text-pink-600 hover:text-pink-700 font-semibold text-xs inline-flex items-center gap-1">
             ← 検索結果に戻る
           </Link>
         </div>
@@ -342,12 +358,12 @@ export default function CreatorClient({
     >
       <div className="absolute inset-0 bg-slate-900/10 backdrop-brightness-95 pointer-events-none" />
 
-      {/* ナビバー */}
+      {/* ヘッダー */}
       <header className="px-6 py-4 bg-white/70 backdrop-blur-xl border-b border-white/50 sticky top-0 z-30 shadow-xs">
         <div className="max-w-5xl mx-auto flex justify-between items-center">
           <Link
             href="/"
-            className="text-xs font-bold text-slate-600 hover:text-indigo-600 transition-colors flex items-center gap-1.5"
+            className="text-xs font-bold text-slate-600 hover:text-pink-600 transition-colors flex items-center gap-1.5"
           >
             <span>←</span> 検索結果へ戻る
           </Link>
@@ -399,7 +415,7 @@ export default function CreatorClient({
 
                   <div className="flex flex-wrap gap-1.5">
                     {profile.ai_usage === 'none' && (
-                      <span className="text-[11px] bg-indigo-600/10 text-indigo-800 font-extrabold px-3 py-0.5 rounded-full border border-indigo-200/60 shadow-2xs">
+                      <span className="text-[11px] bg-pink-500/10 text-pink-700 font-extrabold px-3 py-0.5 rounded-full border border-pink-200/60 shadow-2xs">
                         ✦ 完全手描き
                       </span>
                     )}
@@ -428,15 +444,13 @@ export default function CreatorClient({
               </div>
             </div>
 
-            {/* アクションエリア */}
+            {/* サイド操作枠 */}
             <div className="w-full lg:w-80 bg-white/80 backdrop-blur-md p-5 rounded-2xl border border-white shadow-sm space-y-4 shrink-0">
               <div className="space-y-2.5 text-xs text-slate-600 pb-1">
                 {profile.price_min != null && (
-                  <div className="flex justify-between items-baseline bg-indigo-50/50 p-3 rounded-xl border border-indigo-100/80">
-                    <span className="font-bold text-slate-500">
-                      最低参考価格
-                    </span>
-                    <span className="font-black text-indigo-600 text-lg">
+                  <div className="flex justify-between items-baseline bg-pink-50/50 p-3 rounded-xl border border-pink-100/80">
+                    <span className="font-bold text-slate-500">最低参考価格</span>
+                    <span className="font-black text-pink-600 text-lg">
                       ¥{profile.price_min.toLocaleString()}〜
                     </span>
                   </div>
@@ -444,9 +458,7 @@ export default function CreatorClient({
                 <div className="flex justify-between items-center px-1">
                   <span>目安納期</span>
                   <span className="font-extrabold text-slate-900">
-                    {profile.lead_time_days
-                      ? `${profile.lead_time_days} 日以内`
-                      : '要相談'}
+                    {profile.lead_time_days ? `${profile.lead_time_days} 日以内` : '要相談'}
                   </span>
                 </div>
                 <div className="flex justify-between items-center px-1">
@@ -464,13 +476,13 @@ export default function CreatorClient({
                       setGeneratedSpec(null)
                       setIsEstimateOpen(true)
                     }}
-                    className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white font-extrabold rounded-xl transition-all shadow-lg shadow-indigo-200/50 text-sm cursor-pointer flex items-center justify-center gap-2"
+                    className="w-full py-3.5 bg-pink-500 hover:bg-pink-600 active:scale-[0.98] text-white font-extrabold rounded-xl transition-all shadow-lg shadow-pink-200/50 text-sm cursor-pointer flex items-center justify-center gap-2"
                   >
-                    <span>🧮</span> 簡単見積もり・仕様書作成
+                    <span>🎨</span> 簡単見積もり・仕様書作成
                   </button>
                 ) : (
                   <div className="w-full py-3 px-3 bg-slate-100/80 text-slate-400 font-bold rounded-xl text-xs text-center border border-slate-200/60">
-                    未作成のため制作することができません
+                    フォーム未設定
                   </div>
                 )}
 
@@ -490,22 +502,17 @@ export default function CreatorClient({
                   }`}
                 >
                   <span>{isFavorite ? '❤️' : '🤍'}</span>
-                  <span>
-                    {isFavorite ? 'お気に入り登録済み' : 'お気に入りに追加'}
-                  </span>
+                  <span>{isFavorite ? 'お気に入り登録済み' : 'お気に入りに追加'}</span>
                 </button>
               </div>
             </div>
           </div>
         </div>
 
-        {/* スペックグリッド */}
+        {/* スペック情報 */}
         <section className="bg-white/75 backdrop-blur-xl p-6 sm:p-7 rounded-3xl shadow-xl border border-white/80 space-y-5">
           <h2 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
-            <span className="p-1.5 bg-white rounded-lg text-xs shadow-2xs">
-              ⚙️
-            </span>{' '}
-            制作・受付条件
+            <span className="p-1.5 bg-white rounded-lg text-xs shadow-2xs">⚙️</span> 制作・受付条件
           </h2>
 
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -542,9 +549,7 @@ export default function CreatorClient({
               },
               {
                 label: '著作権譲渡',
-                value: profile.copyright_transfer_available
-                  ? '相談・譲渡可能'
-                  : '不可',
+                value: profile.copyright_transfer_available ? '相談・譲渡可能' : '不可',
                 highlight: !!profile.copyright_transfer_available,
               },
               {
@@ -553,18 +558,9 @@ export default function CreatorClient({
                 highlight: !profile.ai_learning_allowed,
               },
             ].map((spec, i) => (
-              <div
-                key={i}
-                className="p-3.5 bg-white/60 rounded-2xl border border-white/80 space-y-1 shadow-2xs"
-              >
-                <span className="text-[11px] font-bold text-slate-400 block">
-                  {spec.label}
-                </span>
-                <span
-                  className={`text-xs font-extrabold block ${
-                    spec.highlight ? 'text-indigo-600' : 'text-slate-800'
-                  }`}
-                >
+              <div key={i} className="p-3.5 bg-white/60 rounded-2xl border border-white/80 space-y-1 shadow-2xs">
+                <span className="text-[11px] font-bold text-slate-400 block">{spec.label}</span>
+                <span className={`text-xs font-extrabold block ${spec.highlight ? 'text-pink-600' : 'text-slate-800'}`}>
                   {spec.value}
                 </span>
               </div>
@@ -572,14 +568,11 @@ export default function CreatorClient({
           </div>
         </section>
 
-        {/* 料金目安・メニュー */}
+        {/* 料金目安 */}
         {profile.menu_items && profile.menu_items.length > 0 && (
           <section className="bg-white/75 backdrop-blur-xl p-6 sm:p-7 rounded-3xl shadow-xl border border-white/80 space-y-5">
             <h2 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
-              <span className="p-1.5 bg-white rounded-lg text-xs shadow-2xs">
-                🏷️
-              </span>{' '}
-              料金目安・メニュー
+              <span className="p-1.5 bg-white rounded-lg text-xs shadow-2xs">🏷️</span> 料金目安・メニュー
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
               {profile.menu_items.map((item, index) => (
@@ -587,13 +580,9 @@ export default function CreatorClient({
                   key={index}
                   className="p-4 bg-white/60 border border-white/80 rounded-2xl flex justify-between items-center hover:bg-white transition shadow-2xs"
                 >
-                  <span className="text-xs font-bold text-slate-700">
-                    {item.title}
-                  </span>
-                  <span className="text-xs font-black text-indigo-600 bg-indigo-50/80 px-2.5 py-1 rounded-lg border border-indigo-100">
-                    {typeof item.price === 'number'
-                      ? `¥${item.price.toLocaleString()}〜`
-                      : '要相談'}
+                  <span className="text-xs font-bold text-slate-700">{item.title}</span>
+                  <span className="text-xs font-black text-pink-600 bg-pink-50/80 px-2.5 py-1 rounded-lg border border-pink-100">
+                    {typeof item.price === 'number' ? `¥${item.price.toLocaleString()}〜` : '要相談'}
                   </span>
                 </div>
               ))}
@@ -601,12 +590,10 @@ export default function CreatorClient({
           </section>
         )}
 
-        {/* ポートフォリオ作品 */}
+        {/* ポートフォリオ */}
         <section className="space-y-4">
           <div className="flex justify-between items-baseline px-1">
-            <h2 className="text-base font-black text-slate-900 tracking-tight drop-shadow-xs">
-              ポートフォリオ作品
-            </h2>
+            <h2 className="text-base font-black text-slate-900 tracking-tight drop-shadow-xs">ポートフォリオ作品</h2>
             <span className="text-xs font-extrabold text-slate-500 bg-white/60 backdrop-blur-sm px-2.5 py-1 rounded-full border border-white">
               {works.length} 作品
             </span>
@@ -630,9 +617,7 @@ export default function CreatorClient({
                   />
                   {work.title && (
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-3 flex items-end">
-                      <p className="text-xs font-bold text-white truncate">
-                        {work.title}
-                      </p>
+                      <p className="text-xs font-bold text-white truncate">{work.title}</p>
                     </div>
                   )}
                 </div>
@@ -667,113 +652,161 @@ export default function CreatorClient({
               {!generatedSpec ? (
                 <>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700">
-                      お名前（またはアカウント名）
-                    </label>
+                    <label className="text-xs font-bold text-slate-700">お名前（またはアカウント名）</label>
                     <input
                       type="text"
                       placeholder="例: 山田太郎"
                       value={clientName}
                       onChange={(e) => setClientName(e.target.value)}
-                      className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
                     />
                   </div>
 
-                  {activeFormConfig.fields.map((field) => (
-                    <div
-                      key={field.id}
-                      className="space-y-2 bg-slate-50/70 p-4 rounded-2xl border border-slate-100"
-                    >
-                      {/* 見出し部分の修正：色が白化する事象を防ぐため text-slate-900 と h4タグを適用 */}
-                      <div className="flex items-center gap-2 mb-2">
-                        <h4 className="text-xs font-extrabold text-slate-900 border-l-2 border-indigo-600 pl-2">
-                          {field.title || '無題の項目'}
-                        </h4>
-                        {field.required && (
-                          <span className="text-[10px] bg-rose-500 text-white font-extrabold px-1.5 py-0.5 rounded shadow-2xs">
-                            必須
-                          </span>
+                  {activeFormConfig.fields.map((field) => {
+                    const title = field.label || field.title || '無題の項目'
+
+                    // 特殊項目: クリエイター説明文 (note)
+                    if (field.type === 'note') {
+                      return (
+                        <div key={field.id} className="bg-amber-50/60 border-2 border-amber-200/60 p-4 rounded-2xl text-xs text-amber-900 font-bold whitespace-pre-wrap">
+                          <div className="font-black mb-1 text-amber-800">📌 {title}</div>
+                          {field.noteText || ''}
+                        </div>
+                      )
+                    }
+
+                    // 特殊項目: よくある質問 (faq)
+                    if (field.type === 'faq') {
+                      return (
+                        <div key={field.id} className="bg-sky-50/60 border-2 border-sky-100 p-4 rounded-2xl space-y-1">
+                          <div className="text-xs font-black text-sky-900">❓ {title}</div>
+                          <div className="text-xs font-bold text-slate-600 pl-4 border-l-2 border-sky-300 whitespace-pre-wrap">
+                            {field.faqAnswer || ''}
+                          </div>
+                        </div>
+                      )
+                    }
+
+                    // 通常項目（テキスト / ラジオ / チェックボックス / カラー等）
+                    return (
+                      <div key={field.id} className="space-y-2 bg-slate-50/70 p-4 rounded-2xl border border-slate-100">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-xs font-extrabold text-slate-900 border-l-2 border-pink-500 pl-2">
+                              {title}
+                            </h4>
+                            {field.required && (
+                              <span className="text-[10px] bg-rose-500 text-white font-extrabold px-1.5 py-0.5 rounded shadow-2xs">
+                                必須
+                              </span>
+                            )}
+                          </div>
+                          {field.price ? (
+                            <span className="text-[11px] font-black text-pink-600 bg-pink-50 px-2 py-0.5 rounded-full border border-pink-100">
+                              +¥{field.price.toLocaleString()}
+                            </span>
+                          ) : null}
+                        </div>
+
+                        {field.type === 'radio' && field.options && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                            {field.options.map((opt, i) => {
+                              const isSelected = formAnswers[field.id] === opt.label
+                              const isPercent = opt.priceType === 'percent' || opt.calcType === 'percent'
+                              const calcVal = isPercent ? Math.round(basePriceTotal * (opt.price / 100)) : opt.price
+
+                              return (
+                                <div
+                                  key={i}
+                                  onClick={() => handleInputChange(field.id, opt.label)}
+                                  className={`flex items-center justify-between p-3 rounded-xl border text-xs font-bold cursor-pointer transition select-none ${
+                                    isSelected
+                                      ? 'bg-slate-800 text-white border-slate-800 shadow-sm'
+                                      : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                                  }`}
+                                >
+                                  <span>{opt.label}</span>
+                                  <span className={`text-[11px] ${isSelected ? 'text-pink-300' : 'text-pink-600'}`}>
+                                    {opt.price > 0
+                                      ? isPercent
+                                        ? `+${opt.price}% ${calcVal > 0 ? `(+¥${calcVal.toLocaleString()})` : ''}`
+                                        : `+¥${opt.price.toLocaleString()}`
+                                      : '標準'}
+                                  </span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+
+                        {field.type === 'checkbox' && field.options && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                            {field.options.map((opt, i) => {
+                              const currentList: string[] = formAnswers[field.id] || []
+                              const isSelected = currentList.includes(opt.label)
+                              const isPercent = opt.priceType === 'percent' || opt.calcType === 'percent'
+                              const calcVal = isPercent ? Math.round(basePriceTotal * (opt.price / 100)) : opt.price
+
+                              return (
+                                <div
+                                  key={i}
+                                  onClick={() => handleInputChange(field.id, opt.label, true)}
+                                  className={`flex items-center justify-between p-3 rounded-xl border text-xs font-bold cursor-pointer transition select-none ${
+                                    isSelected
+                                      ? 'bg-slate-800 text-white border-slate-800 shadow-sm'
+                                      : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                                  }`}
+                                >
+                                  <span>{opt.label}</span>
+                                  <span className={`text-[11px] ${isSelected ? 'text-pink-300' : 'text-pink-600'}`}>
+                                    {opt.price > 0
+                                      ? isPercent
+                                        ? `+${opt.price}% ${calcVal > 0 ? `(+¥${calcVal.toLocaleString()})` : ''}`
+                                        : `+¥${opt.price.toLocaleString()}`
+                                      : '+¥0'}
+                                  </span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+
+                        {field.type === 'text' && (
+                          <input
+                            type="text"
+                            placeholder="内容を入力してください"
+                            value={formAnswers[field.id] || ''}
+                            onChange={(e) => handleInputChange(field.id, e.target.value)}
+                            className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+                          />
+                        )}
+
+                        {field.type === 'textarea' && (
+                          <textarea
+                            rows={3}
+                            placeholder="構図、キャラクターの特徴、納期のご希望などがあればご記入ください"
+                            value={formAnswers[field.id] || ''}
+                            onChange={(e) => handleInputChange(field.id, e.target.value)}
+                            className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+                          />
+                        )}
+
+                        {field.type === 'color' && (
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="color"
+                              value={formAnswers[field.id] || '#3b82f6'}
+                              onChange={(e) => handleInputChange(field.id, e.target.value)}
+                              className="h-10 w-16 rounded-xl border-2 border-slate-200 cursor-pointer"
+                            />
+                            <span className="text-xs font-bold text-slate-500">
+                              {formAnswers[field.id] || '#3b82f6'}
+                            </span>
+                          </div>
                         )}
                       </div>
-
-                      {field.type === 'radio' && field.options && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                          {field.options.map((opt, i) => {
-                            const isSelected = formAnswers[field.id] === opt.label
-                            return (
-                              <div
-                                key={i}
-                                onClick={() => handleInputChange(field.id, opt.label)}
-                                className={`flex items-center justify-between p-3 rounded-xl border text-xs font-bold cursor-pointer transition select-none ${
-                                  isSelected
-                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                                    : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
-                                }`}
-                              >
-                                <span>{opt.label}</span>
-                                <span
-                                  className={`text-[11px] ${
-                                    isSelected ? 'text-indigo-100' : 'text-slate-400'
-                                  }`}
-                                >
-                                  {opt.calcType === 'percent'
-                                    ? `+${opt.price}%`
-                                    : opt.price > 0
-                                    ? `+¥${opt.price.toLocaleString()}`
-                                    : '標準'}
-                                </span>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
-
-                      {field.type === 'checkbox' && field.options && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                          {field.options.map((opt, i) => {
-                            const currentList: string[] = formAnswers[field.id] || []
-                            const isSelected = currentList.includes(opt.label)
-                            return (
-                              <div
-                                key={i}
-                                onClick={() =>
-                                  handleInputChange(field.id, opt.label, true)
-                                }
-                                className={`flex items-center justify-between p-3 rounded-xl border text-xs font-bold cursor-pointer transition select-none ${
-                                  isSelected
-                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                                    : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
-                                }`}
-                              >
-                                <span>{opt.label}</span>
-                                <span
-                                  className={`text-[11px] ${
-                                    isSelected ? 'text-indigo-100' : 'text-slate-400'
-                                  }`}
-                                >
-                                  {opt.calcType === 'percent'
-                                    ? `+${opt.price}%`
-                                    : `+¥${opt.price.toLocaleString()}`}
-                                </span>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
-
-                      {field.type === 'text' && (
-                        <textarea
-                          rows={3}
-                          placeholder="構図、キャラクターの特徴、納期のご希望などがあればご記入ください"
-                          value={formAnswers[field.id] || ''}
-                          onChange={(e) =>
-                            handleInputChange(field.id, e.target.value)
-                          }
-                          className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                      )}
-                    </div>
-                  ))}
+                    )
+                  })}
                 </>
               ) : (
                 <div className="space-y-4 animate-in fade-in">
@@ -781,7 +814,6 @@ export default function CreatorClient({
                     {generatedSpec}
                   </div>
 
-                  {/* アクションボタン（テキストコピー / PDFダウンロード） */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <button
                       onClick={handleCopySpec}
@@ -801,11 +833,8 @@ export default function CreatorClient({
                     </button>
                   </div>
 
-                  {/* 送信先SNSリンク */}
                   <div className="pt-2 space-y-2">
-                    <p className="text-xs font-black text-slate-700">
-                      送信先のSNS・窓口を選択:
-                    </p>
+                    <p className="text-xs font-black text-slate-700">送信先のSNS・窓口を選択:</p>
 
                     {profile.twitter_url && (
                       <a
@@ -824,7 +853,7 @@ export default function CreatorClient({
                         href={profile.external_estimation_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-xl transition flex items-center justify-between text-xs"
+                        className="w-full py-3 px-4 bg-pink-500 hover:bg-pink-600 text-white font-extrabold rounded-xl transition flex items-center justify-between text-xs"
                       >
                         <span>外部フォーム / Webサイトで送る</span>
                         <span>↗</span>
@@ -841,17 +870,15 @@ export default function CreatorClient({
                   <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">
                     概算合計金額
                   </span>
-                  <span className="text-xl sm:text-2xl font-black text-indigo-600">
+                  <span className="text-xl sm:text-2xl font-black text-pink-600">
                     ¥{totalPrice.toLocaleString()}
-                    <span className="text-xs text-slate-500 font-normal ml-1">
-                      (税込)
-                    </span>
+                    <span className="text-xs text-slate-500 font-normal ml-1">(税込)</span>
                   </span>
                 </div>
 
                 <button
                   onClick={handleGenerateSpec}
-                  className="w-full sm:w-auto py-3 px-6 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-extrabold rounded-xl transition text-xs shadow-lg shadow-indigo-200 cursor-pointer"
+                  className="w-full sm:w-auto py-3 px-6 bg-pink-500 hover:bg-pink-600 active:scale-95 text-white font-extrabold rounded-xl transition text-xs shadow-lg shadow-pink-200 cursor-pointer"
                 >
                   この内容で仕様書を作成 ➔
                 </button>
@@ -872,7 +899,7 @@ export default function CreatorClient({
         </div>
       )}
 
-      {/* 直接相談・お問い合わせ モーダル */}
+      {/* お問い合わせ モーダル */}
       {isContactOpen && (
         <div className="fixed inset-0 bg-slate-950/50 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
           <div className="bg-white/90 backdrop-blur-2xl rounded-3xl p-6 sm:p-7 w-full max-w-md shadow-2xl border border-white relative space-y-6">
@@ -887,9 +914,7 @@ export default function CreatorClient({
               <h3 className="text-lg font-black text-slate-900">
                 {profile.display_name} へ相談・お問い合わせ
               </h3>
-              <p className="text-xs text-slate-500">
-                連絡窓口を選択してください
-              </p>
+              <p className="text-xs text-slate-500">連絡窓口を選択してください</p>
             </div>
 
             <div className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">
@@ -898,12 +923,10 @@ export default function CreatorClient({
                   href={profile.external_estimation_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full py-3.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-2xl transition flex items-center justify-between text-xs shadow-md shadow-indigo-200"
+                  className="w-full py-3.5 px-4 bg-pink-500 hover:bg-pink-600 text-white font-extrabold rounded-2xl transition flex items-center justify-between text-xs shadow-md shadow-pink-200"
                 >
                   <span>📋 外部見積もりフォーム</span>
-                  <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-md">
-                    開く ↗
-                  </span>
+                  <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-md">開く ↗</span>
                 </a>
               )}
 
@@ -915,9 +938,7 @@ export default function CreatorClient({
                   className="w-full py-3.5 px-4 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-2xl transition flex items-center justify-between text-xs shadow-md"
                 >
                   <span>X (Twitter) で相談・DM</span>
-                  <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-md">
-                    開く ↗
-                  </span>
+                  <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-md">開く ↗</span>
                 </a>
               )}
 
@@ -929,9 +950,7 @@ export default function CreatorClient({
                   className="w-full py-3.5 px-4 bg-gradient-to-r from-purple-600 to-pink-500 hover:opacity-95 text-white font-extrabold rounded-2xl transition flex items-center justify-between text-xs shadow-md"
                 >
                   <span>📸 Instagram で相談・DM</span>
-                  <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-md">
-                    開く ↗
-                  </span>
+                  <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-md">開く ↗</span>
                 </a>
               )}
 
@@ -943,9 +962,7 @@ export default function CreatorClient({
                   className="w-full py-3.5 px-4 bg-blue-500 hover:bg-blue-600 text-white font-extrabold rounded-2xl transition flex items-center justify-between text-xs shadow-md"
                 >
                   <span>🎨 Pixiv メッセージ</span>
-                  <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-md">
-                    開く ↗
-                  </span>
+                  <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-md">開く ↗</span>
                 </a>
               )}
 
@@ -957,9 +974,7 @@ export default function CreatorClient({
                   className="w-full py-3.5 px-4 bg-white/80 text-slate-800 border border-slate-200 font-extrabold rounded-2xl hover:bg-white transition flex items-center justify-between text-xs shadow-xs"
                 >
                   <span>🌐 公式Webサイト</span>
-                  <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">
-                    開く ↗
-                  </span>
+                  <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">開く ↗</span>
                 </a>
               )}
 
