@@ -626,13 +626,6 @@ export default function Dashboard() {
             </button>
             <button
               type="button"
-              onClick={() => handleCopy(currentFormUrl, 'form')}
-              className="flex-1 sm:flex-none px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl transition-all cursor-pointer active:scale-95 flex items-center justify-center gap-1.5"
-            >
-              {copiedType === 'form' ? '✓ コピーしました' : '見積もりフォーム直リンクをコピー'}
-            </button>
-            <button
-              type="button"
               onClick={() => setQrModalOpen(true)}
               className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-all cursor-pointer active:scale-95 flex items-center justify-center gap-1.5 shrink-0"
             >

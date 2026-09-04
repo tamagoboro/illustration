@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, use } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { supabase, Profile, PortfolioItem } from '@/lib/supabase'
 
@@ -84,7 +84,6 @@ function CreatorClient({
     'https://qcklfkslqtjnxufqcqyi.supabase.co/storage/v1/object/public/portfolios/bg.png'
 
   useEffect(() => {
-    // "form-builder"などの静的パス誤認識時や未指定時は取得を行わない
     if (!id || id === 'form-builder') {
       setLoading(false)
       return
