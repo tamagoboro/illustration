@@ -26,7 +26,6 @@ type Field = {
 type FormConfig = {
   title?: string
   description?: string
-  thanks_message?: string
   themeColor?: string
   fields: Field[]
 }
@@ -76,14 +75,12 @@ function CreatorClient({
 
   const [formAnswers, setFormAnswers] = useState<Record<string, any>>({})
   const [clientName, setClientName] = useState('')
-  const [generatedSpec, setGeneratedSpec] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false)
 
   const BACKGROUND_IMAGE_URL =
     'https://qcklfkslqtjnxufqcqyi.supabase.co/storage/v1/object/public/portfolios/bg.png'
 
-  // 1. ページ読み込み時: プロフィール取得 & PVログ送信
   useEffect(() => {
     if (!id || id === 'form-builder') {
       setLoading(false)
@@ -94,7 +91,6 @@ function CreatorClient({
       try {
         setLoading(true)
 
-        // お気に入りチェック
         const storedFavs = localStorage.getItem('favorite_creators')
         if (storedFavs) {
           try {
@@ -105,7 +101,6 @@ function CreatorClient({
           }
         }
 
-        // プロフィールデータ取得
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
           .select('*')
@@ -119,7 +114,6 @@ function CreatorClient({
           setProfile(profileData as ExtendedProfile)
         }
 
-        // ポートフォリオデータ取得
         const { data: worksData, error: worksError } = await supabase
           .from('portfolio_items')
           .select('*')
@@ -133,12 +127,10 @@ function CreatorClient({
           setWorks(worksData)
         }
 
-        // 📊 PV (アクセスログ) の送信
         await supabase.from('analytics_logs').insert({
           creator_id: id,
-          event_type: 'pv'
+          event_type: 'pv',
         })
-
       } catch (err) {
         console.error('Unexpected error fetching creator data:', err)
       } finally {
@@ -195,7 +187,8 @@ function CreatorClient({
       if (field.type === 'radio') {
         const selectedOpt = field.options.find((opt) => opt.label === answer)
         if (selectedOpt) {
-          const isPercent = selectedOpt.priceType === 'percent' || selectedOpt.calcType === 'percent'
+          const isPercent =
+            selectedOpt.priceType === 'percent' || selectedOpt.calcType === 'percent'
           if (isPercent) {
             percentAdditions += selectedOpt.price || 0
           } else {
@@ -206,7 +199,8 @@ function CreatorClient({
         answer.forEach((selectedLabel) => {
           const selectedOpt = field.options?.find((opt) => opt.label === selectedLabel)
           if (selectedOpt) {
-            const isPercent = selectedOpt.priceType === 'percent' || selectedOpt.calcType === 'percent'
+            const isPercent =
+              selectedOpt.priceType === 'percent' || selectedOpt.calcType === 'percent'
             if (isPercent) {
               percentAdditions += selectedOpt.price || 0
             } else {
@@ -221,31 +215,8 @@ function CreatorClient({
     return basePriceTotal + fixedAdditions + percentAmount
   }, [formAnswers, activeFormConfig, basePriceTotal])
 
-  // 2. 見積もり仕様書作成 & 試算実行ログの送信
-  const handleGenerateSpec = async () => {
-    if (!activeFormConfig) return
-
-    // 📊 試算ログの送信 (選択されたラジオ・チェックボックスの値を収集)
-    const selectedOptions: string[] = []
-    activeFormConfig.fields.forEach((field) => {
-      const answer = formAnswers[field.id]
-      if (!answer) return
-      if (Array.isArray(answer)) {
-        selectedOptions.push(...answer)
-      } else if (field.type === 'radio' || field.type === 'checkbox') {
-        selectedOptions.push(String(answer))
-      }
-    })
-
-    try {
-      await supabase.from('analytics_logs').insert({
-        creator_id: id,
-        event_type: 'estimate_calc',
-        metadata: { options: selectedOptions }
-      })
-    } catch (e) {
-      console.error('Estimate tracking error:', e)
-    }
+  const generateSpecText = () => {
+    if (!activeFormConfig) return ''
 
     let specLines: string[] = []
     specLines.push(`【ご依頼・見積もり仕様書】`)
@@ -274,18 +245,44 @@ function CreatorClient({
     specLines.push(`■ 概算見積もり合計: ¥${totalPrice.toLocaleString()} (税込)`)
     specLines.push(`※上記はシミュレーションによる概算です。内容により変動する場合があります。`)
 
-    setGeneratedSpec(specLines.join('\n'))
+    return specLines.join('\n')
   }
 
-  const handleCopySpec = () => {
-    if (!generatedSpec) return
-    navigator.clipboard.writeText(generatedSpec)
+  const trackEstimateCalc = async () => {
+    if (!activeFormConfig) return
+    const selectedOptions: string[] = []
+    activeFormConfig.fields.forEach((field) => {
+      const answer = formAnswers[field.id]
+      if (!answer) return
+      if (Array.isArray(answer)) {
+        selectedOptions.push(...answer)
+      } else if (field.type === 'radio' || field.type === 'checkbox') {
+        selectedOptions.push(String(answer))
+      }
+    })
+
+    try {
+      await supabase.from('analytics_logs').insert({
+        creator_id: id,
+        event_type: 'estimate_calc',
+        metadata: { options: selectedOptions },
+      })
+    } catch (e) {
+      console.error('Estimate tracking error:', e)
+    }
+  }
+
+  const handleCopySpec = async () => {
+    await trackEstimateCalc()
+    const text = generateSpecText()
+    navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
   const handleDownloadPDF = async () => {
     if (!activeFormConfig) return
+    await trackEstimateCalc()
 
     try {
       setIsDownloadingPdf(true)
@@ -316,7 +313,6 @@ function CreatorClient({
           formTitle: activeFormConfig.title || '概算見積もり・仕様書',
           answers: formattedAnswers,
           totalPrice,
-          thanksMessage: activeFormConfig.thanks_message || profile?.status_comment || 'ご検討ありがとうございます。',
         }),
       })
 
@@ -339,7 +335,6 @@ function CreatorClient({
     }
   }
 
-  // 3. お気に入り切り替え処理
   const handleToggleFavorite = async () => {
     const storedFavs = localStorage.getItem('favorite_creators')
     let favArray: string[] = storedFavs ? JSON.parse(storedFavs) : []
@@ -351,11 +346,10 @@ function CreatorClient({
       favArray.push(id)
       setIsFavorite(true)
 
-      // 📊 お気に入り登録ログの送信
       try {
         await supabase.from('analytics_logs').insert({
           creator_id: id,
-          event_type: 'favorite'
+          event_type: 'favorite',
         })
       } catch (e) {
         console.error('Favorite tracking error:', e)
@@ -522,7 +516,6 @@ function CreatorClient({
                 {activeFormConfig ? (
                   <button
                     onClick={() => {
-                      setGeneratedSpec(null)
                       setIsEstimateOpen(true)
                     }}
                     className="w-full py-3.5 bg-pink-500 hover:bg-pink-600 active:scale-[0.98] text-white font-extrabold rounded-xl transition-all shadow-lg shadow-pink-200/50 text-sm cursor-pointer flex items-center justify-center gap-2"
@@ -694,249 +687,221 @@ function CreatorClient({
             </div>
 
             <div className="overflow-y-auto py-5 space-y-6 flex-1 pr-1">
-              {!generatedSpec ? (
-                <>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700">お名前（またはアカウント名）</label>
-                    <input
-                      type="text"
-                      placeholder="例: 山田太郎"
-                      value={clientName}
-                      onChange={(e) => setClientName(e.target.value)}
-                      className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
-                    />
-                  </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700">お名前（またはアカウント名）</label>
+                <input
+                  type="text"
+                  placeholder="例: 山田太郎"
+                  value={clientName}
+                  onChange={(e) => setClientName(e.target.value)}
+                  className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+                />
+              </div>
 
-                  {activeFormConfig.fields.map((field) => {
-                    const title = field.label || field.title || '無題の項目'
+              {activeFormConfig.fields.map((field) => {
+                const title = field.label || field.title || '無題の項目'
 
-                    if (field.type === 'note') {
-                      return (
-                        <div key={field.id} className="bg-amber-50/60 border-2 border-amber-200/60 p-4 rounded-2xl text-xs text-amber-900 font-bold whitespace-pre-wrap">
-                          <div className="font-black mb-1 text-amber-800">📌 {title}</div>
-                          {field.noteText || ''}
-                        </div>
-                      )
-                    }
+                if (field.type === 'note') {
+                  return (
+                    <div key={field.id} className="bg-amber-50/60 border-2 border-amber-200/60 p-4 rounded-2xl text-xs text-amber-900 font-bold whitespace-pre-wrap">
+                      <div className="font-black mb-1 text-amber-800">📌 {title}</div>
+                      {field.noteText || ''}
+                    </div>
+                  )
+                }
 
-                    if (field.type === 'faq') {
-                      return (
-                        <div key={field.id} className="bg-sky-50/60 border-2 border-sky-100 p-4 rounded-2xl space-y-1">
-                          <div className="text-xs font-black text-sky-900">❓ {title}</div>
-                          <div className="text-xs font-bold text-slate-600 pl-4 border-l-2 border-sky-300 whitespace-pre-wrap">
-                            {field.faqAnswer || ''}
-                          </div>
-                        </div>
-                      )
-                    }
+                if (field.type === 'faq') {
+                  return (
+                    <div key={field.id} className="bg-sky-50/60 border-2 border-sky-100 p-4 rounded-2xl space-y-1">
+                      <div className="text-xs font-black text-sky-900">❓ {title}</div>
+                      <div className="text-xs font-bold text-slate-600 pl-4 border-l-2 border-sky-300 whitespace-pre-wrap">
+                        {field.faqAnswer || ''}
+                      </div>
+                    </div>
+                  )
+                }
 
-                    return (
-                      <div key={field.id} className="space-y-2 bg-slate-50/70 p-4 rounded-2xl border border-slate-100">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <h4 className="text-xs font-extrabold text-slate-900 border-l-2 border-pink-500 pl-2">
-                              {title}
-                            </h4>
-                            {field.required && (
-                              <span className="text-[10px] bg-rose-500 text-white font-extrabold px-1.5 py-0.5 rounded shadow-2xs">
-                                必須
-                              </span>
-                            )}
-                          </div>
-                          {field.price ? (
-                            <span className="text-[11px] font-black text-pink-600 bg-pink-50 px-2 py-0.5 rounded-full border border-pink-100">
-                              +¥{field.price.toLocaleString()}
-                            </span>
-                          ) : null}
-                        </div>
-
-                        {field.type === 'radio' && field.options && (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                            {field.options.map((opt, i) => {
-                              const isSelected = formAnswers[field.id] === opt.label
-                              const isPercent = opt.priceType === 'percent' || opt.calcType === 'percent'
-                              const calcVal = isPercent ? Math.round(basePriceTotal * (opt.price / 100)) : opt.price
-
-                              return (
-                                <div
-                                  key={i}
-                                  onClick={() => handleInputChange(field.id, opt.label)}
-                                  className={`flex items-center justify-between p-3 rounded-xl border text-xs font-bold cursor-pointer transition select-none ${
-                                    isSelected
-                                      ? 'bg-slate-800 text-white border-slate-800 shadow-sm'
-                                      : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
-                                  }`}
-                                >
-                                  <span>{opt.label}</span>
-                                  <span className={`text-[11px] ${isSelected ? 'text-pink-300' : 'text-pink-600'}`}>
-                                    {opt.price > 0
-                                      ? isPercent
-                                        ? `+${opt.price}% ${calcVal > 0 ? `(+¥${calcVal.toLocaleString()})` : ''}`
-                                        : `+¥${opt.price.toLocaleString()}`
-                                      : '標準'}
-                                  </span>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        )}
-
-                        {field.type === 'checkbox' && field.options && (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                            {field.options.map((opt, i) => {
-                              const currentList: string[] = formAnswers[field.id] || []
-                              const isSelected = currentList.includes(opt.label)
-                              const isPercent = opt.priceType === 'percent' || opt.calcType === 'percent'
-                              const calcVal = isPercent ? Math.round(basePriceTotal * (opt.price / 100)) : opt.price
-
-                              return (
-                                <div
-                                  key={i}
-                                  onClick={() => handleInputChange(field.id, opt.label, true)}
-                                  className={`flex items-center justify-between p-3 rounded-xl border text-xs font-bold cursor-pointer transition select-none ${
-                                    isSelected
-                                      ? 'bg-slate-800 text-white border-slate-800 shadow-sm'
-                                      : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
-                                  }`}
-                                >
-                                  <span>{opt.label}</span>
-                                  <span className={`text-[11px] ${isSelected ? 'text-pink-300' : 'text-pink-600'}`}>
-                                    {opt.price > 0
-                                      ? isPercent
-                                        ? `+${opt.price}% ${calcVal > 0 ? `(+¥${calcVal.toLocaleString()})` : ''}`
-                                        : `+¥${opt.price.toLocaleString()}`
-                                      : '+¥0'}
-                                  </span>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        )}
-
-                        {field.type === 'text' && (
-                          <input
-                            type="text"
-                            placeholder="内容を入力してください"
-                            value={formAnswers[field.id] || ''}
-                            onChange={(e) => handleInputChange(field.id, e.target.value)}
-                            className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
-                          />
-                        )}
-
-                        {field.type === 'textarea' && (
-                          <textarea
-                            rows={3}
-                            placeholder="構図、キャラクターの特徴、納期のご希望などがあればご記入ください"
-                            value={formAnswers[field.id] || ''}
-                            onChange={(e) => handleInputChange(field.id, e.target.value)}
-                            className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
-                          />
-                        )}
-
-                        {field.type === 'color' && (
-                          <div className="flex items-center gap-3">
-                            <input
-                              type="color"
-                              value={formAnswers[field.id] || '#3b82f6'}
-                              onChange={(e) => handleInputChange(field.id, e.target.value)}
-                              className="h-10 w-16 rounded-xl border-2 border-slate-200 cursor-pointer"
-                            />
-                            <span className="text-xs font-bold text-slate-500">
-                              {formAnswers[field.id] || '#3b82f6'}
-                            </span>
-                          </div>
+                return (
+                  <div key={field.id} className="space-y-2 bg-slate-50/70 p-4 rounded-2xl border border-slate-100">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs font-extrabold text-slate-900 border-l-2 border-pink-500 pl-2">
+                          {title}
+                        </h4>
+                        {field.required && (
+                          <span className="text-[10px] bg-rose-500 text-white font-extrabold px-1.5 py-0.5 rounded shadow-2xs">
+                            必須
+                          </span>
                         )}
                       </div>
-                    )
-                  })}
-                </>
-              ) : (
-                <div className="space-y-4 animate-in fade-in">
-                  <div className="bg-slate-900 text-slate-100 p-4 rounded-2xl font-mono text-xs leading-relaxed whitespace-pre-wrap select-all border border-slate-800 shadow-inner">
-                    {generatedSpec}
-                  </div>
+                      {field.price ? (
+                        <span className="text-[11px] font-black text-pink-600 bg-pink-50 px-2 py-0.5 rounded-full border border-pink-100">
+                          +¥{field.price.toLocaleString()}
+                        </span>
+                      ) : null}
+                    </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <button
-                      onClick={handleCopySpec}
-                      className="py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl transition text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md"
-                    >
-                      <span>{copied ? '✅' : '📋'}</span>
-                      <span>{copied ? 'コピー完了！' : '仕様書テキストをコピー'}</span>
-                    </button>
+                    {field.type === 'radio' && field.options && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                        {field.options.map((opt, i) => {
+                          const isSelected = formAnswers[field.id] === opt.label
+                          const isPercent = opt.priceType === 'percent' || opt.calcType === 'percent'
+                          const calcVal = isPercent ? Math.round(basePriceTotal * (opt.price / 100)) : opt.price
 
-                    <button
-                      onClick={handleDownloadPDF}
-                      disabled={isDownloadingPdf}
-                      className="py-3 bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 text-white font-extrabold rounded-xl transition text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md"
-                    >
-                      <span>📄</span>
-                      <span>{isDownloadingPdf ? 'PDF生成中...' : 'PDF形式でダウンロード'}</span>
-                    </button>
-                  </div>
-
-                  <div className="pt-2 space-y-2">
-                    <p className="text-xs font-black text-slate-700">送信先のSNS・窓口を選択:</p>
-
-                    {profile.twitter_url && (
-                      <a
-                        href={profile.twitter_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-xl transition flex items-center justify-between text-xs"
-                      >
-                        <span>X (Twitter) の DM で送る</span>
-                        <span>↗</span>
-                      </a>
+                          return (
+                            <div
+                              key={i}
+                              onClick={() => handleInputChange(field.id, opt.label)}
+                              className={`flex items-center justify-between p-3 rounded-xl border text-xs font-bold cursor-pointer transition select-none ${
+                                isSelected
+                                  ? 'bg-slate-800 text-white border-slate-800 shadow-sm'
+                                  : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                              }`}
+                            >
+                              <span>{opt.label}</span>
+                              <span className={`text-[11px] ${isSelected ? 'text-pink-300' : 'text-pink-600'}`}>
+                                {opt.price > 0
+                                  ? isPercent
+                                    ? `+${opt.price}% ${calcVal > 0 ? `(+¥${calcVal.toLocaleString()})` : ''}`
+                                    : `+¥${opt.price.toLocaleString()}`
+                                  : '標準'}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
                     )}
 
-                    {profile.external_estimation_url && (
-                      <a
-                        href={profile.external_estimation_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full py-3 px-4 bg-pink-500 hover:bg-pink-600 text-white font-extrabold rounded-xl transition flex items-center justify-between text-xs"
-                      >
-                        <span>外部フォーム / Webサイトで送る</span>
-                        <span>↗</span>
-                      </a>
+                    {field.type === 'checkbox' && field.options && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                        {field.options.map((opt, i) => {
+                          const currentList: string[] = formAnswers[field.id] || []
+                          const isSelected = currentList.includes(opt.label)
+                          const isPercent = opt.priceType === 'percent' || opt.calcType === 'percent'
+                          const calcVal = isPercent ? Math.round(basePriceTotal * (opt.price / 100)) : opt.price
+
+                          return (
+                            <div
+                              key={i}
+                              onClick={() => handleInputChange(field.id, opt.label, true)}
+                              className={`flex items-center justify-between p-3 rounded-xl border text-xs font-bold cursor-pointer transition select-none ${
+                                isSelected
+                                  ? 'bg-slate-800 text-white border-slate-800 shadow-sm'
+                                  : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                              }`}
+                            >
+                              <span>{opt.label}</span>
+                              <span className={`text-[11px] ${isSelected ? 'text-pink-300' : 'text-pink-600'}`}>
+                                {opt.price > 0
+                                  ? isPercent
+                                    ? `+${opt.price}% ${calcVal > 0 ? `(+¥${calcVal.toLocaleString()})` : ''}`
+                                    : `+¥${opt.price.toLocaleString()}`
+                                  : '+¥0'}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                    {field.type === 'text' && (
+                      <input
+                        type="text"
+                        placeholder="内容を入力してください"
+                        value={formAnswers[field.id] || ''}
+                        onChange={(e) => handleInputChange(field.id, e.target.value)}
+                        className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+                      />
+                    )}
+
+                    {field.type === 'textarea' && (
+                      <textarea
+                        rows={3}
+                        placeholder="構図、キャラクターの特徴、納期のご希望などがあればご記入ください"
+                        value={formAnswers[field.id] || ''}
+                        onChange={(e) => handleInputChange(field.id, e.target.value)}
+                        className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+                      />
+                    )}
+
+                    {field.type === 'color' && (
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="color"
+                          value={formAnswers[field.id] || '#3b82f6'}
+                          onChange={(e) => handleInputChange(field.id, e.target.value)}
+                          className="h-10 w-16 rounded-xl border-2 border-slate-200 cursor-pointer"
+                        />
+                        <span className="text-xs font-bold text-slate-500">
+                          {formAnswers[field.id] || '#3b82f6'}
+                        </span>
+                      </div>
                     )}
                   </div>
+                )
+              })}
+            </div>
+
+            <div className="pt-4 border-t border-slate-100 flex flex-col space-y-3 shrink-0">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">
+                  概算合計金額
+                </span>
+                <span className="text-xl sm:text-2xl font-black text-pink-600">
+                  ¥{totalPrice.toLocaleString()}
+                  <span className="text-xs text-slate-500 font-normal ml-1">(税込)</span>
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  onClick={handleCopySpec}
+                  className="py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl transition text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                >
+                  <span>{copied ? '✅' : '📋'}</span>
+                  <span>{copied ? 'コピー完了！' : '仕様書テキストをコピー'}</span>
+                </button>
+
+                <button
+                  onClick={handleDownloadPDF}
+                  disabled={isDownloadingPdf}
+                  className="py-3 bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 text-white font-extrabold rounded-xl transition text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                >
+                  <span>📄</span>
+                  <span>{isDownloadingPdf ? 'PDF生成中...' : 'PDF形式でダウンロード'}</span>
+                </button>
+              </div>
+
+              {(profile.twitter_url || profile.external_estimation_url) && (
+                <div className="pt-1 flex flex-col gap-1.5">
+                  {profile.twitter_url && (
+                    <a
+                      href={profile.twitter_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={trackEstimateCalc}
+                      className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-xl transition flex items-center justify-between text-xs"
+                    >
+                      <span>X (Twitter) の DM で送る</span>
+                      <span>↗</span>
+                    </a>
+                  )}
+
+                  {profile.external_estimation_url && (
+                    <a
+                      href={profile.external_estimation_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={trackEstimateCalc}
+                      className="w-full py-2.5 px-4 bg-pink-500 hover:bg-pink-600 text-white font-extrabold rounded-xl transition flex items-center justify-between text-xs"
+                    >
+                      <span>外部フォーム / Webサイトで送る</span>
+                      <span>↗</span>
+                    </a>
+                  )}
                 </div>
               )}
             </div>
-
-            {!generatedSpec && (
-              <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4 shrink-0">
-                <div className="text-center sm:text-left">
-                  <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">
-                    概算合計金額
-                  </span>
-                  <span className="text-xl sm:text-2xl font-black text-pink-600">
-                    ¥{totalPrice.toLocaleString()}
-                    <span className="text-xs text-slate-500 font-normal ml-1">(税込)</span>
-                  </span>
-                </div>
-
-                <button
-                  onClick={handleGenerateSpec}
-                  className="w-full sm:w-auto py-3 px-6 bg-pink-500 hover:bg-pink-600 active:scale-95 text-white font-extrabold rounded-xl transition text-xs shadow-lg shadow-pink-200 cursor-pointer"
-                >
-                  この内容で仕様書を作成 ➔
-                </button>
-              </div>
-            )}
-
-            {generatedSpec && (
-              <div className="pt-3 border-t border-slate-100 flex justify-start">
-                <button
-                  onClick={() => setGeneratedSpec(null)}
-                  className="text-xs font-bold text-slate-500 hover:text-slate-800 transition flex items-center gap-1 cursor-pointer"
-                >
-                  ← 条件選択に戻る
-                </button>
-              </div>
-            )}
           </div>
         </div>
       )}
