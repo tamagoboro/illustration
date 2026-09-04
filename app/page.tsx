@@ -313,7 +313,7 @@ export default function Home() {
             </div>
             <div>
               <h1 className="text-xs font-black text-slate-950 tracking-wider">
-                CREATOR SEARCH
+                 Drawker
               </h1>
               <p className="text-[10px] text-slate-800 font-extrabold">
                 理想のイラストレーターを探す

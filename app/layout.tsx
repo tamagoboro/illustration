@@ -4,14 +4,14 @@ import './globals.css'
 const rawSiteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
 const siteUrl = rawSiteUrl.startsWith('http') ? rawSiteUrl : `https://${rawSiteUrl}`
 
-const siteTitle = 'CREATOR SEARCH | イラスト依頼・ポートフォリオ比較プラットフォーム'
+const siteTitle = ' Drawker | イラスト依頼・ポートフォリオ比較プラットフォーム'
 const siteDescription = '【掲載無料・手数料0円】イラストレーターやクリエイターの料金表・納期・商用利用条件を一括比較！SNSアイコン、VTuber立ち絵、一枚絵などの依頼相談がスムーズに行える検索サイトです。'
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
     default: siteTitle,
-    template: '%s | CREATOR SEARCH',
+    template: '%s |  Drawker',
   },
   description: siteDescription,
   keywords: [
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     'イラストレーター',
     'イラスト検索サイト',
     'クリエイター検索',
-    'CREATOR SEARCH',
+    'Drawker',
     'ポートフォリオ比較',
     'おすすめ'
   ],
@@ -36,13 +36,13 @@ export const metadata: Metadata = {
     title: siteTitle,
     description: siteDescription,
     url: siteUrl,
-    siteName: 'CREATOR SEARCH',
+    siteName: ' Drawker',
     images: [
       {
         url: '/OGP-img.png',
         width: 1200,
         height: 630,
-        alt: 'CREATOR SEARCH メインイメージ',
+        alt: 'Drawker メインイメージ',
       },
     ],
     locale: 'ja_JP',
@@ -64,7 +64,7 @@ export default function RootLayout({
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
-    name: 'CREATOR SEARCH',
+    name: 'Drawker',
     url: siteUrl,
     description: siteDescription,
     potentialAction: {
