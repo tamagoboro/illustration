@@ -85,10 +85,10 @@ function CreatorClient({
   const BACKGROUND_IMAGE_URL =
     'https://qcklfkslqtjnxufqcqyi.supabase.co/storage/v1/object/public/portfolios/bg.png'
 
-  useEffect(() => {
-    // URLのIDが 'form-builder' だった場合はエラーを出さず編集ページへ移動させる
+    useEffect(() => {
+    // URLのIDが 'form-builder' だった場合は実際の編集ページへ移動させる
     if (id === 'form-builder') {
-      router.push('/dashboard/form')
+      router.push('/dashboard/form-builder')
       return
     }
 
