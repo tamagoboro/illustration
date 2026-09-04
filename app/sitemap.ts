@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase'
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // 環境変数がない場合は本番URLを直接使用
-  const productionUrl = 'https://illustration-jq5k.vercel.app/' // ※ご自身の本番URLに変更してください
+  const productionUrl = 'https://drawker.com/' // ※ご自身の本番URLに変更してください
   const rawSiteUrl = process.env.NEXT_PUBLIC_SITE_URL || productionUrl
   const baseUrl = rawSiteUrl.startsWith('http') ? rawSiteUrl : `https://${rawSiteUrl}`
 

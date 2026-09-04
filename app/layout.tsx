@@ -52,7 +52,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: siteTitle,
     description: siteDescription,
-    images: [`https://qcklfkslqtjnxufqcqyi.supabase.co/storage/v1/object/public/portfolios/OGP-img.png`], // 絶対パスにする
+    images: [`https://qcklfkslqtjnxufqcqyi.supabase.co/storage/v1/object/public/portfolios/OGP-Drawker.png`], // 絶対パスにする
   },
 }
 
