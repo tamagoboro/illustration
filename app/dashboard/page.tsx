@@ -305,7 +305,7 @@ export default function Dashboard() {
       setAvatarUrl(normalizeStorageUrl(publicUrlData.publicUrl))
     } catch (error: any) {
       alert('アイコンのアップロードに失敗しました: ' + error.message)
-    } finally {
+    } fontally {
       setUploadingAvatar(false)
     }
   }
