@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, CSSProperties } from 'react'
 import Link from 'next/link'
 import { supabase, Profile, PortfolioItem } from '@/lib/supabase'
 
@@ -95,7 +95,6 @@ export default function CreatorClient({
   }, [id])
 
   useEffect(() => {
-    // 初期データが既に揃っている場合は再取得をスキップ
     if (initialProfile && initialWorks.length > 0) {
       setLoading(false)
       return
@@ -161,14 +160,12 @@ export default function CreatorClient({
     let extraFixedPrice = 0
     let percentSum = 0
 
-    // 各設問の基本金額を集計
     activeFormConfig.fields.forEach((field) => {
       if (field.price && field.type !== 'note' && field.type !== 'faq') {
         baseSum += field.price
       }
     })
 
-    // 選択されたオプションの金額を加算
     activeFormConfig.fields.forEach((field) => {
       const answer = formAnswers[field.id]
       if (!answer || !field.options) return
@@ -291,7 +288,7 @@ export default function CreatorClient({
     } catch (error) {
       console.error(error)
       alert('PDFの生成中にエラーが発生しました。')
-    } finally {
+} finally { // ← ここを fontally から finally に修正
       setIsDownloadingPdf(false)
     }
   }
@@ -646,58 +643,83 @@ export default function CreatorClient({
         </section>
       </main>
 
-      {/* フォーム入力モーダル */}
+      {/* 💎 フォーム入力 & 統一プレビューモーダル */}
       {isEstimateOpen && activeFormConfig && (
-        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 z-50 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl p-5 sm:p-7 w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl border-4 border-amber-100 relative">
-            <div className="flex justify-between items-start pb-4 border-b border-slate-100 shrink-0">
-              <div>
-                <h3 className="text-base sm:text-lg font-black text-slate-800">
-                  {activeFormConfig.title || 'ご依頼・お仕事申請フォーム'}
-                </h3>
-                {activeFormConfig.description && (
-                  <p className="text-xs font-bold text-slate-400 mt-1 whitespace-pre-wrap">
-                    {activeFormConfig.description}
-                  </p>
-                )}
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-lg flex items-center justify-center p-3 sm:p-5 z-50 animate-in fade-in duration-200">
+          <div className="bg-slate-50/95 backdrop-blur-2xl rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl border border-white/60 overflow-hidden relative">
+            
+            {/* モーダルヘッダー */}
+            <div 
+              className="p-5 sm:p-6 border-b border-slate-200/60 shrink-0 relative overflow-hidden"
+              style={{
+                background: `linear-gradient(135deg, ${themeColor}12 0%, #ffffff00 100%)`
+              }}
+            >
+              <div className="flex justify-between items-start gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 rounded-lg bg-white shadow-xs text-sm">
+                      {generatedSpec ? '📄' : '✨'}
+                    </span>
+                    <h3 className="text-base sm:text-lg font-black text-slate-900">
+                      {generatedSpec
+                        ? '完成仕様書プレビュー'
+                        : activeFormConfig.title || '簡単見積もり・仕様書作成'}
+                    </h3>
+                  </div>
+                  {activeFormConfig.description && !generatedSpec && (
+                    <p className="text-xs font-medium text-slate-500 whitespace-pre-wrap pl-7">
+                      {activeFormConfig.description}
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => setIsEstimateOpen(false)}
+                  className="w-8 h-8 rounded-full bg-slate-200/60 hover:bg-slate-300/80 text-slate-600 flex items-center justify-center text-xs font-black transition cursor-pointer shrink-0"
+                >
+                  ✕
+                </button>
               </div>
-              <button
-                onClick={() => setIsEstimateOpen(false)}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center text-xs font-bold transition cursor-pointer shrink-0"
-              >
-                ✕
-              </button>
             </div>
 
-            <div className="overflow-y-auto py-5 space-y-5 flex-1 pr-1">
+            {/* モーダルメインコンテンツ */}
+            <div className="overflow-y-auto p-5 sm:p-6 space-y-6 flex-1">
               {!generatedSpec ? (
+                /* ─── 回答・入力画面 ─── */
                 <>
-                  <div className="space-y-1">
-                    <label className="text-xs font-black text-slate-700">
-                      お名前（またはアカウント名）
+                  {/* お名前入力 */}
+                  <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-2">
+                    <label className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                      <span>👤</span>
+                      <span>お名前（またはアカウント名）</span>
                     </label>
                     <input
                       type="text"
                       placeholder="例: 山田太郎"
                       value={clientName}
                       onChange={(e) => setClientName(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border-2 rounded-xl text-xs font-bold focus:outline-none focus:border-pink-500"
+                      style={{ '--theme-color': themeColor } as CSSProperties}
+                      className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-slate-50/50 font-bold focus:outline-none focus:ring-2 focus:ring-[var(--theme-color)] focus:bg-white transition"
                     />
                   </div>
 
+                  {/* 各項目 */}
                   {activeFormConfig.fields.map((field) => {
-                    const fieldTitle = field.label || '無題の質問'
+                    const fieldTitle = field.label || '無題の項目'
 
                     if (field.type === 'note') {
                       return (
                         <div
                           key={field.id}
-                          className="bg-amber-50/60 border-2 border-amber-200/60 p-4 rounded-2xl text-xs text-amber-900 font-bold whitespace-pre-wrap"
+                          className="bg-amber-50/80 border border-amber-200 p-4 rounded-2xl text-xs text-amber-900 font-bold whitespace-pre-wrap shadow-2xs space-y-1"
                         >
-                          <div className="font-black mb-1 text-amber-800">
-                            📌 {fieldTitle}
+                          <div className="font-black text-amber-800 flex items-center gap-1.5 text-xs">
+                            <span>📌</span>
+                            <span>{fieldTitle}</span>
                           </div>
-                          {field.noteText || ''}
+                          <p className="text-slate-700 leading-relaxed pl-5 font-normal">
+                            {field.noteText || ''}
+                          </p>
                         </div>
                       )
                     }
@@ -706,12 +728,13 @@ export default function CreatorClient({
                       return (
                         <div
                           key={field.id}
-                          className="bg-sky-50/60 border-2 border-sky-100 p-4 rounded-2xl space-y-1"
+                          className="bg-sky-50/80 border border-sky-200 p-4 rounded-2xl space-y-2 shadow-2xs"
                         >
-                          <div className="text-xs font-black text-sky-900">
-                            ❓ {fieldTitle}
+                          <div className="text-xs font-black text-sky-900 flex items-center gap-1.5">
+                            <span>❓</span>
+                            <span>{fieldTitle}</span>
                           </div>
-                          <div className="text-xs font-bold text-slate-600 pl-4 border-l-2 border-sky-300 whitespace-pre-wrap">
+                          <div className="text-xs font-medium text-slate-600 pl-4 border-l-2 border-sky-400 whitespace-pre-wrap leading-relaxed">
                             {field.faqAnswer || ''}
                           </div>
                         </div>
@@ -719,46 +742,57 @@ export default function CreatorClient({
                     }
 
                     return (
-                      <div key={field.id} className="space-y-1.5">
-                        <label className="text-xs font-black text-slate-700 flex items-center">
-                          <span>{fieldTitle}</span>
-                          {field.required && (
-                            <span className="text-rose-500 font-bold ml-1">*</span>
-                          )}
+                      <div
+                        key={field.id}
+                        className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-3"
+                      >
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                            <span>{fieldTitle}</span>
+                            {field.required && (
+                              <span className="text-[10px] bg-rose-500 text-white font-extrabold px-1.5 py-0.5 rounded shadow-2xs">
+                                必須
+                              </span>
+                            )}
+                          </label>
+
                           {field.price && field.price > 0 ? (
                             <span
-                              className="text-[10px] font-black px-2 py-0.5 rounded-full ml-2"
+                              className="text-[11px] font-black px-2.5 py-1 rounded-full border shadow-2xs"
                               style={{
                                 color: themeColor,
-                                backgroundColor: `${themeColor}15`,
+                                backgroundColor: `${themeColor}12`,
+                                borderColor: `${themeColor}30`,
                               }}
                             >
                               +¥{field.price.toLocaleString()}
                             </span>
                           ) : null}
-                        </label>
+                        </div>
 
                         {field.type === 'text' && (
                           <input
                             type="text"
-                            placeholder="入力欄"
+                            placeholder="内容を入力してください"
                             value={formAnswers[field.id] || ''}
                             onChange={(e) =>
                               setFormAnswers({ ...formAnswers, [field.id]: e.target.value })
                             }
-                            className="w-full px-3 py-2 bg-slate-50 border-2 rounded-xl text-xs font-bold focus:outline-none focus:border-pink-500"
+                            style={{ '--theme-color': themeColor } as CSSProperties}
+                            className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-slate-50/50 font-medium focus:outline-none focus:ring-2 focus:ring-[var(--theme-color)] focus:bg-white transition"
                           />
                         )}
 
                         {field.type === 'textarea' && (
                           <textarea
                             rows={3}
-                            placeholder="詳細をご記入ください"
+                            placeholder="具体的なご希望内容や補足事項をご記入ください"
                             value={formAnswers[field.id] || ''}
                             onChange={(e) =>
                               setFormAnswers({ ...formAnswers, [field.id]: e.target.value })
                             }
-                            className="w-full px-3 py-2 bg-slate-50 border-2 rounded-xl text-xs font-bold focus:outline-none focus:border-pink-500"
+                            style={{ '--theme-color': themeColor } as CSSProperties}
+                            className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-slate-50/50 font-medium focus:outline-none focus:ring-2 focus:ring-[var(--theme-color)] focus:bg-white transition leading-relaxed"
                           />
                         )}
 
@@ -772,7 +806,7 @@ export default function CreatorClient({
                               }
                               className="h-10 w-16 rounded-xl border-2 border-slate-200 cursor-pointer p-1 bg-white shrink-0"
                             />
-                            <span className="text-xs font-mono font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+                            <span className="text-xs font-mono font-bold text-slate-700 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
                               {formAnswers[field.id] || '#3b82f6'}
                             </span>
                           </div>
@@ -780,14 +814,13 @@ export default function CreatorClient({
 
                         {(field.type === 'radio' || field.type === 'checkbox') &&
                           field.options && (
-                            <div className="space-y-1.5">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                               {field.options.map((opt, optIdx) => {
                                 const isPercent = opt.priceType === 'percent'
                                 const isCheckbox = field.type === 'checkbox'
                                 const selectedVal = formAnswers[field.id]
                                 const isSelected = isCheckbox
-                                  ? Array.isArray(selectedVal) &&
-                                    selectedVal.includes(opt.label)
+                                  ? Array.isArray(selectedVal) && selectedVal.includes(opt.label)
                                   : selectedVal === opt.label
 
                                 let priceTag = ''
@@ -802,6 +835,8 @@ export default function CreatorClient({
                                   } else {
                                     priceTag = `+¥${opt.price.toLocaleString()}`
                                   }
+                                } else {
+                                  priceTag = '標準'
                                 }
 
                                 return (
@@ -810,29 +845,34 @@ export default function CreatorClient({
                                     onClick={() =>
                                       handleSelectOption(field.id, opt.label, isCheckbox)
                                     }
-                                    className={`flex items-center justify-between text-xs font-bold px-3 py-2 rounded-xl cursor-pointer transition select-none ${
+                                    className={`flex items-center justify-between p-3.5 rounded-xl border text-xs font-bold cursor-pointer transition select-none ${
                                       isSelected
-                                        ? 'bg-slate-800 text-white shadow-xs'
-                                        : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/60'
+                                        ? 'bg-slate-900 text-white border-slate-900 shadow-md scale-[1.01]'
+                                        : 'bg-slate-50/70 text-slate-700 border-slate-200/80 hover:bg-slate-100 hover:border-slate-300'
                                     }`}
                                   >
-                                    <div className="flex items-center space-x-2">
-                                      <input
-                                        type={field.type}
-                                        checked={isSelected}
-                                        readOnly
-                                        className="pointer-events-none"
-                                        style={{ accentColor: themeColor }}
-                                      />
+                                    <div className="flex items-center gap-2.5">
+                                      <div
+                                        className={`w-4 h-4 rounded-${
+                                          isCheckbox ? 'md' : 'full'
+                                        } border flex items-center justify-center transition ${
+                                          isSelected
+                                            ? 'bg-white border-white text-slate-900'
+                                            : 'border-slate-300 bg-white'
+                                        }`}
+                                      >
+                                        {isSelected && (
+                                          <span className="text-[10px] font-black">✓</span>
+                                        )}
+                                      </div>
                                       <span>{opt.label}</span>
                                     </div>
 
                                     {priceTag && (
                                       <span
-                                        className="text-[10px] font-black"
-                                        style={{
-                                          color: isSelected ? '#ffffff' : themeColor,
-                                        }}
+                                        className={`text-[11px] font-black ${
+                                          isSelected ? 'text-pink-300' : 'text-pink-600'
+                                        }`}
                                       >
                                         {priceTag}
                                       </span>
@@ -847,15 +887,13 @@ export default function CreatorClient({
                   })}
                 </>
               ) : (
-                <div className="space-y-4 animate-in fade-in">
-                  <div className="bg-slate-900 text-slate-100 p-4 rounded-2xl font-mono text-xs leading-relaxed whitespace-pre-wrap select-all border border-slate-800 shadow-inner">
-                    {generatedSpec}
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                /* ─── プレビュー・仕様書生成完了画面（入力画面とデザインを完全一致） ─── */
+                <div className="space-y-6 animate-in fade-in duration-300">
+                  {/* アクションボタン */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <button
                       onClick={handleCopySpec}
-                      className="py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl transition text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                      className="py-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-extrabold rounded-xl transition text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-200"
                     >
                       <span>{copied ? '✅' : '📋'}</span>
                       <span>{copied ? 'コピー完了！' : '仕様書テキストをコピー'}</span>
@@ -864,76 +902,156 @@ export default function CreatorClient({
                     <button
                       onClick={handleDownloadPDF}
                       disabled={isDownloadingPdf}
-                      className="py-3 bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 text-white font-extrabold rounded-xl transition text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                      className="py-3.5 bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 active:scale-[0.98] text-white font-extrabold rounded-xl transition text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-rose-200"
                     >
                       <span>📄</span>
                       <span>{isDownloadingPdf ? 'PDF生成中...' : 'PDF形式でダウンロード'}</span>
                     </button>
                   </div>
 
-                  <div className="pt-2 space-y-2">
-                    <p className="text-xs font-black text-slate-700">
-                      送信先のSNS・窓口を選択:
+                  {/* 一致させたプレビューカード一覧 */}
+                  <div className="space-y-3">
+                    {/* お名前プレビュー */}
+                    {clientName.trim() && (
+                      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-1.5">
+                        <span className="text-xs font-black text-slate-400 flex items-center gap-1.5">
+                          <span>👤</span> お名前
+                        </span>
+                        <p className="text-xs font-black text-slate-900 pl-5">
+                          {clientName}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* 各項目の選択・入力結果 */}
+                    {activeFormConfig.fields.map((field) => {
+                      if (field.type === 'note' || field.type === 'faq') return null
+                      const answer = formAnswers[field.id]
+                      if (!answer || (Array.isArray(answer) && answer.length === 0)) return null
+
+                      return (
+                        <div
+                          key={field.id}
+                          className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-2"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black text-slate-800">
+                              {field.label || '無題の項目'}
+                            </span>
+                            {field.price && field.price > 0 ? (
+                              <span
+                                className="text-[11px] font-black px-2.5 py-0.5 rounded-full border"
+                                style={{
+                                  color: themeColor,
+                                  backgroundColor: `${themeColor}12`,
+                                  borderColor: `${themeColor}30`,
+                                }}
+                              >
+                                +¥{field.price.toLocaleString()}
+                              </span>
+                            ) : null}
+                          </div>
+
+                          <div className="text-xs font-bold text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-100 leading-relaxed whitespace-pre-wrap">
+                            {field.type === 'color' ? (
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className="w-4 h-4 rounded-full border shadow-2xs inline-block"
+                                  style={{ backgroundColor: answer }}
+                                />
+                                <span className="font-mono">{answer}</span>
+                              </div>
+                            ) : Array.isArray(answer) ? (
+                              answer.join(', ')
+                            ) : (
+                              String(answer)
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+
+                    {/* 合計金額表示カード */}
+                    <div className="bg-white p-5 rounded-2xl border-2 border-slate-900 shadow-md flex justify-between items-center">
+                      <span className="text-xs font-black text-slate-900">
+                        概算見積もり合計
+                      </span>
+                      <span
+                        className="text-xl font-black"
+                        style={{ color: themeColor }}
+                      >
+                        ¥{totalPrice.toLocaleString()} (税込)
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 送信先リンク */}
+                  <div className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-xs space-y-3">
+                    <p className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                      <span>📩</span>
+                      <span>送信先の窓口を選択してご依頼を完了してください:</span>
                     </p>
-                    {profile.twitter_url && (
-                      <a
-                        href={profile.twitter_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-xl transition flex items-center justify-between text-xs"
-                      >
-                        <span>X (Twitter) の DM で送る</span>
-                        <span>↗</span>
-                      </a>
-                    )}
-                    {profile.external_estimation_url && (
-                      <a
-                        href={profile.external_estimation_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full py-3 px-4 bg-pink-600 hover:bg-pink-700 text-white font-extrabold rounded-xl transition flex items-center justify-between text-xs"
-                      >
-                        <span>外部フォーム / Webサイトで送る</span>
-                        <span>↗</span>
-                      </a>
-                    )}
+
+                    <div className="space-y-2">
+                      {profile.twitter_url && (
+                        <a
+                          href={profile.twitter_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-xl transition flex items-center justify-between text-xs shadow-xs"
+                        >
+                          <span>X (Twitter) の DM で送る</span>
+                          <span>↗</span>
+                        </a>
+                      )}
+
+                      {profile.external_estimation_url && (
+                        <a
+                          href={profile.external_estimation_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ backgroundColor: themeColor }}
+                          className="w-full py-3 px-4 hover:opacity-90 text-white font-extrabold rounded-xl transition flex items-center justify-between text-xs shadow-xs"
+                        >
+                          <span>外部フォーム / Webサイトで送る</span>
+                          <span>↗</span>
+                        </a>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
             </div>
 
+            {/* モーダルフッター */}
             {!generatedSpec && (
-              <div
-                className="mt-2 pt-4 border-t-2 border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4 p-4 rounded-2xl shrink-0"
-                style={{
-                  backgroundColor: `${themeColor}10`,
-                  borderColor: `${themeColor}25`,
-                }}
-              >
+              <div className="p-4 sm:p-5 bg-white border-t border-slate-200/80 flex flex-col sm:flex-row justify-between items-center gap-4 shrink-0 shadow-lg">
                 <div className="text-center sm:text-left">
-                  <span className="text-xs font-black text-slate-600 block">
-                    概算見積金額
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                    概算見積もり合計
                   </span>
                   <span
                     className="text-xl sm:text-2xl font-black"
                     style={{ color: themeColor }}
                   >
                     ¥{totalPrice.toLocaleString()}
+                    <span className="text-xs text-slate-400 font-normal ml-1">(税込)</span>
                   </span>
                 </div>
 
                 <button
                   onClick={handleGenerateSpec}
                   style={{ backgroundColor: themeColor }}
-                  className="w-full sm:w-auto py-3 px-6 hover:opacity-90 active:scale-95 text-white font-black text-xs rounded-xl transition shadow-md cursor-pointer"
+                  className="w-full sm:w-auto py-3.5 px-7 hover:opacity-95 active:scale-[0.98] text-white font-black text-xs rounded-xl transition shadow-lg cursor-pointer flex items-center justify-center gap-2"
                 >
-                  この内容で仕様書を作成 ➔
+                  <span>この内容で仕様書を作成</span>
+                  <span>➔</span>
                 </button>
               </div>
             )}
 
             {generatedSpec && (
-              <div className="pt-3 border-t border-slate-100 flex justify-start">
+              <div className="p-4 bg-white border-t border-slate-200/80 flex justify-start shrink-0">
                 <button
                   onClick={() => setGeneratedSpec(null)}
                   className="text-xs font-bold text-slate-500 hover:text-slate-800 transition flex items-center gap-1 cursor-pointer"
