@@ -24,7 +24,6 @@ type Field = {
 type FormConfig = {
   title: string
   description: string
-  thanks_message: string
   theme_color: string
   is_accepting: boolean
   fields: Field[]
@@ -35,7 +34,6 @@ const FORM_TEMPLATES: Record<string, FormConfig> = {
   illustration: {
     title: 'イラストご依頼フォーム',
     description: '※商用利用や著作権譲渡については選択肢をご指定ください。\n※制作実績としてSNS等に公開させていただく場合がございます。',
-    thanks_message: 'ご依頼メッセージの送信が完了いたしました！\n確認後、通常2日以内にご連絡させていただきます。今しばらくお待ちくださいませ。',
     theme_color: '#ec4899',
     is_accepting: true,
     fields: [
@@ -53,7 +51,6 @@ const FORM_TEMPLATES: Record<string, FormConfig> = {
   vtuber: {
     title: 'Live2Dモデルパーツ分け・制作依頼',
     description: 'VTuber用キャラデザ・パーツ分けイラストの依頼フォームです。',
-    thanks_message: '送信ありがとうございました！内容を確認のうえ、折り返しご連絡いたします。',
     theme_color: '#8b5cf6',
     is_accepting: true,
     fields: [
@@ -69,7 +66,6 @@ const FORM_TEMPLATES: Record<string, FormConfig> = {
   mix: {
     title: '歌ってみた Mixご依頼フォーム',
     description: 'ボーカルピッチ補正・タイミング補正・マスタリング込みの価格です。',
-    thanks_message: 'ご依頼ありがとうございます！音源データ等の不備がないか確認次第ご連絡差し上げます。',
     theme_color: '#0284c7',
     is_accepting: true,
     fields: [
@@ -84,7 +80,6 @@ const FORM_TEMPLATES: Record<string, FormConfig> = {
   video: {
     title: 'MV・動画編集依頼フォーム',
     description: 'YouTube動画やオリジナル曲MVの編集をお引き受けします。',
-    thanks_message: '送信完了いたしました。構成案や素材を確認した上で回答を送信いたします。',
     theme_color: '#10b981',
     is_accepting: true,
     fields: [
@@ -103,16 +98,12 @@ export default function FormBuilderPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
-  
-  // プレビュータブ & モーダル状態
-  const [previewTab, setPreviewTab] = useState<'input' | 'thanks'>('input')
   const [showTmplModal, setShowTmplModal] = useState(false)
 
   // フォーム基本設定（テーマカラー・ステータス等）
   const [config, setConfig] = useState<FormConfig>({
     title: 'ご依頼・お仕事申請フォーム',
     description: '注意事項などを入力してください',
-    thanks_message: 'ご依頼ありがとうございます！2日以内にX(旧Twitter)のDMまたはメールにてご連絡いたします。',
     theme_color: '#ec4899',
     is_accepting: true,
     fields: FORM_TEMPLATES.illustration.fields,
@@ -149,7 +140,7 @@ export default function FormBuilderPage() {
 
   const addField = () => {
     const newField: Field = {
-      id: `f_${Date.now()}`,
+      id: `f_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       label: '新しい質問',
       type: 'text',
       price: 0,
@@ -165,11 +156,21 @@ export default function FormBuilderPage() {
     }))
   }
 
+  const moveField = (idx: number, direction: 'up' | 'down') => {
+    setConfig((prev) => {
+      const fields = [...prev.fields]
+      const targetIdx = direction === 'up' ? idx - 1 : idx + 1
+      if (targetIdx < 0 || targetIdx >= fields.length) return prev
+      const [movedItem] = fields.splice(idx, 1)
+      fields.splice(targetIdx, 0, movedItem)
+      return { ...prev, fields }
+    })
+  }
+
   const updateField = (idx: number, key: keyof Field, val: any) => {
     setConfig((prev) => {
       const fields = [...prev.fields]
       fields[idx] = { ...fields[idx], [key]: val }
-      // タイプ変更時のオプション補正
       if ((val === 'radio' || val === 'checkbox') && !fields[idx].options) {
         fields[idx].options = [{ label: '選択肢 1', price: 0, priceType: 'fixed' }]
       }
@@ -233,38 +234,15 @@ export default function FormBuilderPage() {
     }
   }
 
-  // 概算見積計算ロジック（固定額 + %加算）
-  const calculateTotal = () => {
-    let basePriceTotal = 0
-    let extraFixedPrice = 0
-    let percentAdditions = 0
-
-    config.fields.forEach((f) => {
-      if (f.price && f.type !== 'note' && f.type !== 'faq') {
-        basePriceTotal += f.price
-      }
-      if (f.options && f.options.length > 0) {
-        const opt = f.options[0] // プレビュー用の簡易選択計算
-        if (opt.priceType === 'percent') {
-          percentAdditions += opt.price
-        } else {
-          extraFixedPrice += opt.price
-        }
-      }
-    })
-
-    return basePriceTotal + extraFixedPrice + Math.round(basePriceTotal * (percentAdditions / 100))
-  }
-
   if (loading) {
     return <div className="p-8 text-center text-xs font-bold text-slate-400">読み込み中...</div>
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-4 sm:p-6 flex flex-col lg:flex-row gap-6">
+    <div className="max-w-4xl mx-auto p-4 sm:p-6">
       
-      {/* ================= 左側：エディタエリア ================= */}
-      <div className="w-full lg:w-7/12 space-y-6">
+      {/* エディタエリア */}
+      <div className="space-y-6">
         
         {/* (A) 基本・デザイン設定 */}
         <div className="bg-white rounded-3xl p-6 border-2 border-slate-100 shadow-sm space-y-4">
@@ -281,7 +259,7 @@ export default function FormBuilderPage() {
               />
             </div>
             <div className="text-xs text-slate-400 font-bold">
-              ボタンやプレビューのアクセントカラーに即時反映されます
+              ボタンやフォームのアクセントカラーに反映されます
             </div>
           </div>
 
@@ -321,23 +299,7 @@ export default function FormBuilderPage() {
           />
         </div>
 
-        {/* (C) サンクスページ設定 */}
-        <div className="bg-white rounded-3xl p-6 border-2 border-slate-100 shadow-sm space-y-2">
-          <div className="flex items-center justify-between">
-            <h2 className="font-black text-slate-800 text-sm">🎉 送信完了画面（サンクスページ）</h2>
-            <span className="text-[10px] font-bold text-pink-500 bg-pink-50 px-2 py-0.5 rounded-full">お礼メッセージ</span>
-          </div>
-          <p className="text-xs font-bold text-slate-400">フォーム送信後に表示されるお礼や連絡の目安を設定できます。</p>
-          <textarea
-            value={config.thanks_message}
-            onChange={(e) => updateConfig('thanks_message', e.target.value)}
-            rows={3}
-            className="w-full px-4 py-2.5 text-xs font-bold bg-amber-50/40 border-2 border-amber-100 rounded-2xl focus:outline-none"
-            placeholder="ご依頼ありがとうございます！"
-          />
-        </div>
-
-        {/* (D) カスタム設問リスト */}
+        {/* (C) カスタム設問リスト */}
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="font-black text-slate-800 text-sm">🧩 カスタム設問項目</h2>
@@ -357,17 +319,32 @@ export default function FormBuilderPage() {
             </div>
           </div>
 
-          {/* 各設問ブロック */}
           {config.fields.map((f, idx) => (
             <div key={f.id} className="bg-white rounded-2xl p-5 border-2 border-slate-100 space-y-3 shadow-xs">
               <div className="flex justify-between items-center">
                 <span className="text-xs font-black text-pink-500">項目 #{idx + 1}</span>
-                <button
-                  onClick={() => removeField(idx)}
-                  className="text-xs font-bold text-red-400 hover:text-red-600 cursor-pointer"
-                >
-                  削除
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => moveField(idx, 'up')}
+                    disabled={idx === 0}
+                    className="text-xs font-bold text-slate-400 hover:text-slate-600 disabled:opacity-30 cursor-pointer"
+                  >
+                    ▲
+                  </button>
+                  <button
+                    onClick={() => moveField(idx, 'down')}
+                    disabled={idx === config.fields.length - 1}
+                    className="text-xs font-bold text-slate-400 hover:text-slate-600 disabled:opacity-30 cursor-pointer"
+                  >
+                    ▼
+                  </button>
+                  <button
+                    onClick={() => removeField(idx)}
+                    className="text-xs font-bold text-red-400 hover:text-red-600 cursor-pointer ml-2"
+                  >
+                    削除
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-3 gap-2">
@@ -393,7 +370,6 @@ export default function FormBuilderPage() {
                 </select>
               </div>
 
-              {/* クリエイター説明文 (note) */}
               {f.type === 'note' && (
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-slate-400 block">表示する説明文テキスト</label>
@@ -407,7 +383,6 @@ export default function FormBuilderPage() {
                 </div>
               )}
 
-              {/* FAQブロック */}
               {f.type === 'faq' && (
                 <div className="space-y-2">
                   <div className="space-y-1">
@@ -433,7 +408,6 @@ export default function FormBuilderPage() {
                 </div>
               )}
 
-              {/* 通常入力（基本金額指定） */}
               {f.type !== 'note' && f.type !== 'faq' && (
                 <div className="flex items-center gap-2">
                   <label className="text-xs font-bold text-slate-500 whitespace-nowrap">基本金額:</label>
@@ -447,7 +421,6 @@ export default function FormBuilderPage() {
                 </div>
               )}
 
-              {/* 選択肢オプション（radio / checkbox） */}
               {(f.type === 'radio' || f.type === 'checkbox') && (
                 <div className="pl-2 space-y-2 pt-2 border-t border-slate-100">
                   <label className="text-[10px] font-bold text-slate-400 block">選択肢と追加金額 (固定額 または %指定)</label>
@@ -495,7 +468,6 @@ export default function FormBuilderPage() {
                 </div>
               )}
 
-              {/* 必須指定チェックボックス */}
               {f.type !== 'note' && f.type !== 'faq' && (
                 <div className="flex items-center space-x-2 pt-1">
                   <input
@@ -513,7 +485,6 @@ export default function FormBuilderPage() {
           ))}
         </div>
 
-        {/* 保存ボタン */}
         <button
           onClick={handleSave}
           disabled={saving}
@@ -523,130 +494,7 @@ export default function FormBuilderPage() {
         </button>
       </div>
 
-      {/* ================= 右側：リアルタイムスマホ風プレビュー ================= */}
-      <div className="w-full lg:w-5/12 sticky top-20 h-[calc(100vh-100px)] flex flex-col space-y-2">
-        
-        {/* プレビュータブ切り替え */}
-        <div className="flex bg-slate-200/80 p-1 rounded-2xl font-black text-xs">
-          <button
-            onClick={() => setPreviewTab('input')}
-            className={`flex-1 py-2 rounded-xl transition cursor-pointer ${previewTab === 'input' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500'}`}
-          >
-            📄 フォーム入力画面
-          </button>
-          <button
-            onClick={() => setPreviewTab('thanks')}
-            className={`flex-1 py-2 rounded-xl transition cursor-pointer ${previewTab === 'thanks' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500'}`}
-          >
-            🎉 送信完了画面
-          </button>
-        </div>
-
-        {/* スマホ本体枠 */}
-        <div className="bg-white rounded-[40px] shadow-2xl border-8 border-slate-800 p-6 overflow-y-auto flex flex-col justify-between flex-1">
-          
-          {previewTab === 'input' ? (
-            <div className="flex flex-col justify-between h-full space-y-6">
-              <div className="space-y-5">
-                <div>
-                  <span
-                    className={`text-[10px] font-black px-3 py-1 rounded-full text-white ${config.is_accepting ? '' : 'bg-slate-400'}`}
-                    style={{ backgroundColor: config.is_accepting ? config.theme_color : undefined }}
-                  >
-                    {config.is_accepting ? '受付中' : '受付停止中'}
-                  </span>
-                  <h1 className="text-xl font-black text-slate-800 mt-2">{config.title}</h1>
-                  <p className="text-xs font-bold text-slate-400 mt-1 whitespace-pre-wrap">{config.description}</p>
-                </div>
-
-                {/* 動的フィールドプレビュー */}
-                <div className="space-y-4">
-                  {config.fields.map((f) => {
-                    if (f.type === 'note') {
-                      return (
-                        <div key={f.id} className="bg-amber-50/60 border-2 border-amber-200/60 p-4 rounded-2xl text-xs text-amber-900 font-bold whitespace-pre-wrap">
-                          <div className="font-black mb-1 text-amber-800">📌 {f.label}</div>
-                          {f.noteText}
-                        </div>
-                      )
-                    }
-
-                    if (f.type === 'faq') {
-                      return (
-                        <div key={f.id} className="bg-sky-50/60 border-2 border-sky-100 p-4 rounded-2xl space-y-1">
-                          <div className="text-xs font-black text-sky-900">❓ {f.label || '質問'}</div>
-                          <div className="text-xs font-bold text-slate-600 pl-3 border-l-2 border-sky-300 whitespace-pre-wrap">{f.faqAnswer}</div>
-                        </div>
-                      )
-                    }
-
-                    return (
-                      <div key={f.id} className="space-y-1">
-                        <label className="text-xs font-black text-slate-700 flex items-center gap-1">
-                          {f.label} {f.required && <span className="text-red-500">*</span>}
-                          {f.price! > 0 && (
-                            <span
-                              className="text-[10px] font-black px-2 py-0.5 rounded-full"
-                              style={{ color: config.theme_color, backgroundColor: `${config.theme_color}15` }}
-                            >
-                              +¥{f.price?.toLocaleString()}
-                            </span>
-                          )}
-                        </label>
-
-                        {f.type === 'text' && <input disabled placeholder="入力欄" className="w-full px-3 py-2 bg-slate-50 border-2 rounded-xl text-xs" />}
-                        {f.type === 'textarea' && <textarea disabled rows={2} placeholder="入力欄" className="w-full px-3 py-2 bg-slate-50 border-2 rounded-xl text-xs" />}
-                        {f.type === 'color' && <input type="color" disabled className="h-8 w-12 rounded border" />}
-                        {(f.type === 'radio' || f.type === 'checkbox') && (
-                          <div className="space-y-1">
-                            {f.options?.map((opt, oIdx) => (
-                              <label key={oIdx} className="flex items-center justify-between text-xs font-bold text-slate-600 bg-slate-50 px-3 py-1.5 rounded-xl">
-                                <span className="flex items-center space-x-2">
-                                  <input type={f.type} disabled defaultChecked={oIdx === 0} style={{ accentColor: config.theme_color }} />
-                                  <span>{opt.label}</span>
-                                </span>
-                                {opt.price > 0 && (
-                                  <span className="text-[10px] font-black" style={{ color: config.theme_color }}>
-                                    +{opt.priceType === 'percent' ? `${opt.price}%` : `¥${opt.price.toLocaleString()}`}
-                                  </span>
-                                )}
-                              </label>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* 概算見積計算バー */}
-              <div
-                className="mt-6 pt-4 border-t-2 border-slate-100 flex justify-between items-center p-4 rounded-2xl"
-                style={{ backgroundColor: `${config.theme_color}10`, borderColor: `${config.theme_color}25` }}
-              >
-                <span className="text-xs font-black text-slate-600">概算見積金額</span>
-                <span className="text-xl font-black" style={{ color: config.theme_color }}>
-                  ¥{calculateTotal().toLocaleString()}
-                </span>
-              </div>
-            </div>
-          ) : (
-            /* 送信完了画面プレビュー */
-            <div className="flex-1 flex flex-col items-center justify-center text-center p-4 space-y-4 my-auto">
-              <div className="w-16 h-16 bg-pink-100 text-pink-500 rounded-full flex items-center justify-center text-3xl shadow-inner animate-bounce">
-                💌
-              </div>
-              <h3 className="text-lg font-black text-slate-800">送信が完了しました！</h3>
-              <div className="text-xs font-bold text-slate-600 bg-amber-50/60 border-2 border-amber-200/60 p-4 rounded-2xl whitespace-pre-wrap w-full text-left leading-relaxed">
-                {config.thanks_message}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ================= 職種別テンプレート選択モーダル ================= */}
+      {/* テンプレートモーダル */}
       {showTmplModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-2xl space-y-4 max-w-lg w-full border-4 border-amber-100">
