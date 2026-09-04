@@ -303,41 +303,89 @@ export default function Home() {
       className="min-h-screen text-slate-900 pb-32 font-sans antialiased relative bg-fixed bg-cover bg-center"
       style={{ backgroundImage: `url(${BACKGROUND_IMAGE_URL})` }}
     >
-      <div className="absolute inset-0 bg-white/20 backdrop-blur-[1px] pointer-events-none -z-10" />
+      <div className="absolute inset-0 bg-slate-900/10 backdrop-brightness-95 pointer-events-none -z-10" />
 
       {/* ヘッダー */}
-      <header className="sticky top-0 z-40 px-6 py-3.5 bg-white/80 backdrop-blur-md border-b border-white/40 shadow-xs">
-        <div className="flex items-center gap-2.5">
-          <button
-            onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
-            className={`px-3.5 py-2 text-xs font-bold rounded-2xl border transition-all flex items-center gap-1.5 backdrop-blur-md cursor-pointer ${
-              showFavoritesOnly
-                ? 'bg-rose-600 text-white border-rose-600 shadow-md'
-                : 'bg-white/90 text-purple-900 hover:bg-white border-white/90 shadow-sm'
-            }`}
+      <header className="sticky top-0 z-40 px-4 sm:px-8 py-3 bg-white/70 backdrop-blur-xl border-b border-white/50 shadow-xs transition-all">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+          
+          {/* ロゴ / ブランドエリア */}
+          <Link 
+            href="/" 
+            className="flex items-center gap-2.5 group cursor-pointer select-none"
           >
-            <span className="text-rose-600">♥</span>
-            <span>お気に入り</span>
-            {favorites.length > 0 && (
-              <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] bg-purple-800 text-white font-black">
-                {favorites.length}
+            <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-purple-600 via-pink-500 to-rose-400 flex items-center justify-center text-white font-black text-base shadow-md group-hover:scale-105 transition-transform">
+              ✦
+            </div>
+            <div className="flex flex-col">
+              <span className="text-sm font-black tracking-tight text-slate-800 group-hover:text-purple-700 transition-colors">
+                CreatorHub
               </span>
-            )}
-          </button>
-
-          <Link
-            href={isLoggedIn ? '/dashboard' : '/login'}
-            className={`px-4 py-2 text-xs font-black text-white rounded-2xl shadow-md transition-all flex items-center gap-1 cursor-pointer active:scale-95 ${
-              isLoggedIn
-                ? 'bg-purple-700 hover:bg-purple-800'
-                : 'bg-gradient-to-r from-purple-700 to-indigo-600 hover:from-purple-800 hover:to-indigo-700 ring-2 ring-purple-400/30'
-            }`}
-          >
-            ✦ {isLoggedIn ? 'ダッシュボード' : 'クリエイター無料登録'}
+              <span className="text-[9px] font-bold text-slate-400 tracking-wider uppercase -mt-0.5">
+                Portfolio Search
+              </span>
+            </div>
           </Link>
+
+          {/* アクションボタンエリア */}
+          <div className="flex items-center gap-2.5">
+            
+            {/* お気に入りフィルターボタン */}
+            <button
+              onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+              className={`group px-3.5 py-2 text-xs font-extrabold rounded-2xl border transition-all flex items-center gap-2 cursor-pointer active:scale-95 ${
+                showFavoritesOnly
+                  ? 'bg-rose-500 text-white border-rose-500 shadow-md shadow-rose-200'
+                  : 'bg-white/80 hover:bg-white text-slate-700 hover:text-rose-600 border-slate-200/80 shadow-2xs'
+              }`}
+            >
+              <span 
+                className={`text-sm transition-transform group-hover:scale-125 ${
+                  showFavoritesOnly ? 'text-white' : 'text-rose-500'
+                }`}
+              >
+                ♥
+              </span>
+              <span className="hidden sm:inline">お気に入り</span>
+              
+              {favorites.length > 0 && (
+                <span 
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider transition-colors ${
+                    showFavoritesOnly 
+                      ? 'bg-white text-rose-600' 
+                      : 'bg-rose-500 text-white'
+                  }`}
+                >
+                  {favorites.length}
+                </span>
+              )}
+            </button>
+
+            {/* ログイン / ダッシュボードボタン */}
+            <Link
+              href={isLoggedIn ? '/dashboard' : '/login'}
+              className={`px-4 py-2 text-xs font-black rounded-2xl shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+                isLoggedIn
+                  ? 'bg-slate-900 hover:bg-slate-800 text-white border border-slate-700'
+                  : 'bg-gradient-to-r from-purple-600 via-pink-600 to-rose-500 hover:opacity-95 text-white ring-2 ring-purple-500/20 shadow-purple-200'
+              }`}
+            >
+              {isLoggedIn ? (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>ダッシュボード</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-amber-300">✦</span>
+                  <span>クリエイター無料登録</span>
+                </>
+              )}
+            </Link>
+
+          </div>
         </div>
       </header>
-
       {/* ヒーロー */}
       <section className="text-center py-10 px-4 max-w-4xl mx-auto space-y-2">
         <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-wide font-serif drop-shadow-[0_1px_2px_rgba(255,255,255,0.8)]">
