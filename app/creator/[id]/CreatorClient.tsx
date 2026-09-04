@@ -130,7 +130,7 @@ export default function CreatorClient({
     return profile.form_config
   }, [profile])
 
-  // 単一選択・複数選択のハンドラ（<div>クリックで安全に制御）
+  // 単一選択・複数選択のハンドラ
   const handleSelectOption = (fieldId: string, optionLabel: string, isCheckbox: boolean) => {
     setFormAnswers((prev) => {
       if (isCheckbox) {
@@ -145,7 +145,7 @@ export default function CreatorClient({
     })
   }
 
-  // builder.html に準拠した計算ロジック
+  // 計算ロジック
   const { basePriceTotal, totalPrice } = useMemo(() => {
     if (!activeFormConfig) return { basePriceTotal: 0, totalPrice: 0 }
 
@@ -638,7 +638,7 @@ export default function CreatorClient({
         </section>
       </main>
 
-      {/* フォーム入力モーダル (builder.htmlプレビューのデザイン準拠) */}
+      {/* フォーム入力モーダル */}
       {isEstimateOpen && activeFormConfig && (
         <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 z-50 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl p-5 sm:p-7 w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl border-4 border-amber-100 relative">
@@ -677,11 +677,9 @@ export default function CreatorClient({
                     />
                   </div>
 
-                  {/* builder.htmlプレビュー形式でレンダリング */}
                   {activeFormConfig.fields.map((field) => {
                     const fieldTitle = field.label || '無題の質問'
 
-                    // 1. note タイプ
                     if (field.type === 'note') {
                       return (
                         <div
@@ -696,7 +694,6 @@ export default function CreatorClient({
                       )
                     }
 
-                    // 2. faq タイプ
                     if (field.type === 'faq') {
                       return (
                         <div
@@ -713,7 +710,6 @@ export default function CreatorClient({
                       )
                     }
 
-                    // 3. 通常入力項目（ラジオ・チェックボックス・テキスト・カラー等）
                     return (
                       <div key={field.id} className="space-y-1.5">
                         <label className="text-xs font-black text-slate-700 flex items-center">
