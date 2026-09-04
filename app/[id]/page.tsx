@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, use } from 'react'
 import Link from 'next/link'
 import { supabase, Profile, PortfolioItem } from '@/lib/supabase'
 
@@ -996,12 +996,11 @@ function CreatorClient({
 }
 
 type PageProps = {
-  params: Promise<{ id: string }> | { id: string }
+  params: Promise<{ id: string }>
 }
 
 export default async function Page({ params }: PageProps) {
-  const resolvedParams = await params
-  const id = resolvedParams?.id || ''
+  const { id = '' } = await params
 
   return <CreatorClient id={id} />
 }
