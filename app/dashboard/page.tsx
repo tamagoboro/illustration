@@ -1001,7 +1001,7 @@ export default function Dashboard() {
                       )}
                     </label>
                     <Link
-                      href="app/dashboard/form-builder/from.tsx"
+                      href="form-builder/from.tsx"
                       className="text-xs font-bold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1"
                     >
                       <span>見積書を作成・編集する</span>
