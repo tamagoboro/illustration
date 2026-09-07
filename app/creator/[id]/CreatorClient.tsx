@@ -176,24 +176,25 @@ useEffect(() => {
 }, [id])
 
 // テーマカラーの解決（profile.theme_color を最優先に評価）
+// テーマカラーの解決（profile.theme_color を絶対的な最優先に評価）
 const themeColor = useMemo(() => {
-  // DBの theme_color を最優先で取得
+  // 1. まず DB の profiles.theme_color を最優先。次に form_config 側を見る
   const rawColor = profile?.theme_color || profile?.form_config?.themeColor || ''
   const normalized = rawColor.toString().trim().toLowerCase()
 
-  // キーワード判定
+  // 2. キーワード判定（DBのデータ形式に完全一致させる）
   if (normalized === 'emerald' || normalized === '#10b981') return '#10B981'
   if (normalized === 'indigo' || normalized === '#4f46e5') return '#4F46E5'
   if (normalized === 'rose' || normalized === '#f43f5e') return '#F43F5E'
   if (normalized === 'amber' || normalized === '#f59e0b') return '#F59E0B'
   if (normalized === 'dark' || normalized === '#0f172a') return '#0F172A'
 
-  // カラーコード（#xxxxxx）が直接入っている場合はそれを採用
+  // 3. 直接カラーコード（#xxxxxx）が保存されている場合
   if (normalized.startsWith('#')) return normalized
 
-  // どれにも該当しない場合の初期値をエメラルド（#10B981）に変更
+  // 4. どれにもヒットしない場合のデフォルト値（必要に応じて変更）
   return '#10B981'
-}, [profile])
+}, [profile?.theme_color, profile?.form_config?.themeColor])
   // タグリストの規格化 (文字列配列・オブジェクト配列の両方に対応)
   const normalizedTastes = useMemo(() => {
     if (!profile?.tastes || !Array.isArray(profile.tastes)) return []
