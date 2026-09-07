@@ -177,21 +177,24 @@ useEffect(() => {
   fetchCreatorData()
 }, [id])
   // テーマカラーの解決（profile.theme_color を最優先に評価）
-  const themeColor = useMemo(() => {
-    // 1. ダッシュボード側の設定（profile.theme_color）を最優先。無ければ form_config を使用。
-    const rawColor = (profile?.theme_color || profile?.form_config?.themeColor || '#1F2937').toLowerCase()
+const themeColor = useMemo(() => {
+  // DBの theme_color を最優先で取得
+  const rawColor = profile?.theme_color || profile?.form_config?.themeColor || ''
+  const normalized = rawColor.toString().trim().toLowerCase()
 
-    // 2. プリセットID文字列を対応するカラーコードに変換
-    if (rawColor === 'indigo' || rawColor === '#4f46e5') return '#4F46E5'
-    if (rawColor === 'rose' || rawColor === '#f43f5e') return '#F43F5E'
-    if (rawColor === 'emerald' || rawColor === '#10b981') return '#10B981'
-    if (rawColor === 'amber' || rawColor === '#f59e0b') return '#F59E0B'
-    if (rawColor === 'dark' || rawColor === '#0f172a') return '#0F172A'
+  // キーワード判定
+  if (normalized === 'emerald' || normalized === '#10b981') return '#10B981'
+  if (normalized === 'indigo' || normalized === '#4f46e5') return '#4F46E5'
+  if (normalized === 'rose' || normalized === '#f43f5e') return '#F43F5E'
+  if (normalized === 'amber' || normalized === '#f59e0b') return '#F59E0B'
+  if (normalized === 'dark' || normalized === '#0f172a') return '#0F172A'
 
-    // 3. それ以外の 16 進数カラーコード（例: #1F2937）は指定値をそのまま優先適用
-    return profile?.theme_color || profile?.form_config?.themeColor || '#1F2937'
-  }, [profile?.theme_color, profile?.form_config?.themeColor])
+  // カラーコード（#xxxxxx）が直接入っている場合はそれを採用
+  if (normalized.startsWith('#')) return normalized
 
+  // どれにも該当しない場合の初期値（※ここがピンク(#F43F5E)になっているとピンクになります）
+  return '#F43F5E' // デフォルトをエメラルドにする場合
+}, [profile])
   // タグリストの規格化 (文字列配列・オブジェクト配列の両方に対応)
   const normalizedTastes = useMemo(() => {
     if (!profile?.tastes || !Array.isArray(profile.tastes)) return []
