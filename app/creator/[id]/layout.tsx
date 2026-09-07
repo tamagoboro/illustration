@@ -1,9 +1,9 @@
 import type { Metadata } from 'next'
-import { notFound } from 'next/navigation'
+import React from 'react'
 import { supabase } from '@/lib/supabase'
-import CreatorClient from './CreatorClient'
 
 type Props = {
+  children: React.ReactNode
   params: Promise<{ id: string }>
 }
 
@@ -28,7 +28,7 @@ const getFullImageUrl = (url: string | null | undefined, fallbackUrl: string): s
   return fallbackUrl
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params
 
   const { data: profile } = await supabase
@@ -92,7 +92,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       'max-image-preview': 'large',
       'max-snippet': -1,
     },
-    // AI無断学習防止タグの追加
     other: {
       'robots': 'noai, noimageai',
       'googlebot': 'noai, noimageai',
@@ -123,4 +122,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       }),
     },
   }
+}
+
+export default async function CreatorLayout({ children }: Props) {
+  return <>{children}</>
 }
