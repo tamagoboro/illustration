@@ -145,41 +145,37 @@ export default function CreatorClient({
     }
   }, [id])
 
-  useEffect(() => {
-    if (initialProfile && initialWorks.length > 0) {
-      setLoading(false)
-      return
+useEffect(() => {
+  const fetchCreatorData = async () => {
+    // initialProfile がない場合のみローディング表示
+    if (!initialProfile) setLoading(true)
+
+    // initialProfile の有無に関わらず、必ず Supabase から最新データを取得する
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('user_id', id)
+      .single()
+
+    if (profileData) {
+      setProfile(profileData as ExtendedProfile)
     }
 
-    const fetchCreatorData = async () => {
-      if (!profile) setLoading(true)
+    if (works.length === 0) {
+      const { data: worksData } = await supabase
+        .from('portfolio_items')
+        .select('*')
+        .eq('user_id', id)
+        .order('sort_order', { ascending: true })
 
-      if (!profile) {
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('user_id', id)
-          .single()
-
-        if (profileData) setProfile(profileData as ExtendedProfile)
-      }
-
-      if (works.length === 0) {
-        const { data: worksData } = await supabase
-          .from('portfolio_items')
-          .select('*')
-          .eq('user_id', id)
-          .order('sort_order', { ascending: true })
-
-        if (worksData) setWorks(worksData)
-      }
-
-      setLoading(false)
+      if (worksData) setWorks(worksData)
     }
 
-    fetchCreatorData()
-  }, [id, initialProfile, initialWorks, profile, works.length])
+    setLoading(false)
+  }
 
+  fetchCreatorData()
+}, [id])
   // テーマカラーの解決（profile.theme_color を最優先に評価）
   const themeColor = useMemo(() => {
     // 1. ダッシュボード側の設定（profile.theme_color）を最優先。無ければ form_config を使用。
