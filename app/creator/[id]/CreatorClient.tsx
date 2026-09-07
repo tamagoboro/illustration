@@ -77,7 +77,6 @@ export default function CreatorClient({
   const [clientName, setClientName] = useState('')
   const [generatedSpec, setGeneratedSpec] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
-  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false)
 
   const BACKGROUND_IMAGE_URL =
     'https://qcklfkslqtjnxufqcqyi.supabase.co/storage/v1/object/public/portfolios/bg.png'
@@ -234,61 +233,6 @@ export default function CreatorClient({
     navigator.clipboard.writeText(generatedSpec)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
-  }
-
-  const handleDownloadPDF = async () => {
-    if (!activeFormConfig) return
-
-    try {
-      setIsDownloadingPdf(true)
-      const formattedAnswers: { label: string; value: string }[] = []
-
-      if (clientName.trim()) {
-        formattedAnswers.push({ label: '依頼者名', value: clientName })
-      }
-
-      activeFormConfig.fields.forEach((field) => {
-        if (field.type === 'note' || field.type === 'faq') return
-        const answer = formAnswers[field.id]
-        if (!answer || (Array.isArray(answer) && answer.length === 0)) return
-
-        const labelName = field.label || '無題'
-        if (Array.isArray(answer)) {
-          formattedAnswers.push({ label: labelName, value: answer.join(', ') })
-        } else {
-          formattedAnswers.push({ label: labelName, value: String(answer) })
-        }
-      })
-
-      const response = await fetch('/api/estimate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          creatorName: profile?.display_name || 'クリエイター',
-          formTitle: activeFormConfig.title || '概算見積もり・仕様書',
-          answers: formattedAnswers,
-          totalPrice,
-          thanksMessage: profile?.status_comment || 'ご検討ありがとうございます。',
-        }),
-      })
-
-      if (!response.ok) throw new Error('PDFの生成に失敗しました')
-
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `見積仕様書_${profile?.display_name || 'creator'}_${Date.now()}.pdf`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
-    } catch (error) {
-      console.error(error)
-      alert('PDFの生成中にエラーが発生しました。')
-    } finally {
-      setIsDownloadingPdf(false)
-    }
   }
 
   const handleToggleFavorite = () => {
@@ -452,7 +396,6 @@ export default function CreatorClient({
             {/* サイド操作枠 */}
             <div className="w-full lg:w-80 bg-white/80 backdrop-blur-md p-5 rounded-2xl border border-white shadow-sm space-y-4 shrink-0">
               
-              {/* 💡 仲介手数料0% バナー */}
               <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-2.5 text-center">
                 <span className="text-[11px] font-black text-emerald-800 flex items-center justify-center gap-1">
                   <span>💡</span> 仲介手数料0円・直取引価格でご案内
@@ -654,7 +597,7 @@ export default function CreatorClient({
         </section>
       </main>
 
-      {/* フォーム入力 & 統一プレビューモーダル */}
+      {/* フォーム入力 & プレビューモーダル */}
       {isEstimateOpen && activeFormConfig && (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-lg flex items-center justify-center p-3 sm:p-5 z-50 animate-in fade-in duration-200">
           <div className="bg-slate-50/95 backdrop-blur-2xl rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl border border-white/60 overflow-hidden relative">
@@ -899,22 +842,13 @@ export default function CreatorClient({
               ) : (
                 <div className="space-y-6 animate-in fade-in duration-300">
                   {/* アクションボタン */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
                     <button
                       onClick={handleCopySpec}
-                      className="py-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-extrabold rounded-xl transition text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-200"
+                      className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-extrabold rounded-xl transition text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-200"
                     >
                       <span>{copied ? '✅' : '📋'}</span>
                       <span>{copied ? 'コピー完了！' : '仕様書テキストをコピー'}</span>
-                    </button>
-
-                    <button
-                      onClick={handleDownloadPDF}
-                      disabled={isDownloadingPdf}
-                      className="py-3.5 bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 active:scale-[0.98] text-white font-extrabold rounded-xl transition text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-rose-200"
-                    >
-                      <span>📄</span>
-                      <span>{isDownloadingPdf ? 'PDF生成中...' : 'PDF形式でダウンロード'}</span>
                     </button>
                   </div>
 
