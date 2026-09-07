@@ -33,7 +33,6 @@ type MenuItem = {
   price: number | ''
 }
 
-// テーブル定義に合わせた ExtendedProfile の更新
 type ExtendedProfile = Profile & {
   display_name?: string | null
   status?: string | null
@@ -64,6 +63,13 @@ type ExtendedProfile = Profile & {
   available_from?: string | null
 }
 
+// URL補完ヘルパー関数
+const formatExternalUrl = (url?: string | null) => {
+  if (!url) return ''
+  if (url.startsWith('http://') || url.startsWith('https://')) return url
+  return `https://${url}`
+}
+
 export default function CreatorClient({
   id,
   initialProfile,
@@ -90,6 +96,18 @@ export default function CreatorClient({
 
   const BACKGROUND_IMAGE_URL =
     'https://qcklfkslqtjnxufqcqyi.supabase.co/storage/v1/object/public/portfolios/bg.png'
+
+  // モーダル表示時の背景スクロール抑制（UX改善）
+  useEffect(() => {
+    if (isEstimateOpen || isContactOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = 'unset'
+    }
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [isEstimateOpen, isContactOpen])
 
   useEffect(() => {
     const storedFavs = localStorage.getItem('favorite_creators')
@@ -337,7 +355,7 @@ export default function CreatorClient({
                   <div className="relative shrink-0">
                     <img
                       src={profile.avatar_url}
-                      alt={profile.display_name || ''}
+                      alt={profile.display_name || 'アバター画像'}
                       className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover ring-4 ring-white/80 shadow-md"
                     />
                   </div>
@@ -391,6 +409,57 @@ export default function CreatorClient({
                 {profile.status_comment || 'プロフィールコメントはありません。'}
               </p>
 
+              {/* SNS・公式リンク（メインカード内にも設置してアクセシビリティ向上） */}
+              {hasContactLinks && (
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <span className="text-xs font-bold text-slate-500 mr-1">SNS / Links:</span>
+                  {profile.twitter_url && (
+                    <a
+                      href={formatExternalUrl(profile.twitter_url)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-bold px-3 py-1 rounded-xl bg-slate-900 text-white hover:bg-slate-800 transition shadow-2xs flex items-center gap-1"
+                    >
+                      <span>X (Twitter)</span>
+                      <span className="text-[10px]">↗</span>
+                    </a>
+                  )}
+                  {profile.instagram_url && (
+                    <a
+                      href={formatExternalUrl(profile.instagram_url)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-bold px-3 py-1 rounded-xl bg-gradient-to-r from-purple-600 to-pink-500 text-white hover:opacity-90 transition shadow-2xs flex items-center gap-1"
+                    >
+                      <span>Instagram</span>
+                      <span className="text-[10px]">↗</span>
+                    </a>
+                  )}
+                  {profile.pixiv_url && (
+                    <a
+                      href={formatExternalUrl(profile.pixiv_url)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-bold px-3 py-1 rounded-xl bg-blue-500 text-white hover:bg-blue-600 transition shadow-2xs flex items-center gap-1"
+                    >
+                      <span>Pixiv</span>
+                      <span className="text-[10px]">↗</span>
+                    </a>
+                  )}
+                  {profile.website_url && (
+                    <a
+                      href={formatExternalUrl(profile.website_url)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-bold px-3 py-1 rounded-xl bg-white text-slate-800 border border-slate-200 hover:bg-slate-50 transition shadow-2xs flex items-center gap-1"
+                    >
+                      <span>Web Site</span>
+                      <span className="text-[10px]">↗</span>
+                    </a>
+                  )}
+                </div>
+              )}
+
               <div className="flex flex-wrap gap-1.5">
                 {profile.tastes?.map((t) => (
                   <span
@@ -405,7 +474,6 @@ export default function CreatorClient({
 
             {/* サイド操作枠 */}
             <div className="w-full lg:w-80 bg-white/80 backdrop-blur-md p-5 rounded-2xl border border-white shadow-sm space-y-4 shrink-0">
-              
               <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-2.5 text-center">
                 <span className="text-[11px] font-black text-emerald-800 flex items-center justify-center gap-1">
                   <span>💡</span> 仲介手数料0円・直取引価格でご案内
@@ -436,9 +504,18 @@ export default function CreatorClient({
 
               <div className="space-y-2.5 text-xs text-slate-600 pb-1">
                 {profile.price_min != null && (
-                  <div className="flex justify-between items-baseline bg-pink-50/50 p-3 rounded-xl border border-pink-100/80">
+                  <div
+                    className="flex justify-between items-baseline p-3 rounded-xl border"
+                    style={{
+                      backgroundColor: `${themeColor}0D`,
+                      borderColor: `${themeColor}20`,
+                    }}
+                  >
                     <span className="font-bold text-slate-500">最低参考価格</span>
-                    <span className="font-black text-pink-600 text-lg">
+                    <span
+                      className="font-black text-lg"
+                      style={{ color: themeColor }}
+                    >
                       ¥{profile.price_min.toLocaleString()}〜
                     </span>
                   </div>
@@ -561,6 +638,7 @@ export default function CreatorClient({
                   className={`text-xs font-extrabold block ${
                     spec.highlight ? 'text-pink-600' : 'text-slate-800'
                   }`}
+                  style={spec.highlight ? { color: themeColor } : undefined}
                 >
                   {spec.value}
                 </span>
@@ -582,7 +660,14 @@ export default function CreatorClient({
                   className="p-4 bg-white/60 border border-white/80 rounded-2xl flex justify-between items-center hover:bg-white transition shadow-2xs"
                 >
                   <span className="text-xs font-bold text-slate-700">{item.title}</span>
-                  <span className="text-xs font-black text-pink-600 bg-pink-50/80 px-2.5 py-1 rounded-lg border border-pink-100">
+                  <span
+                    className="text-xs font-black px-2.5 py-1 rounded-lg border"
+                    style={{
+                      color: themeColor,
+                      backgroundColor: `${themeColor}10`,
+                      borderColor: `${themeColor}25`,
+                    }}
+                  >
                     {typeof item.price === 'number'
                       ? `¥${item.price.toLocaleString()}〜`
                       : '要相談'}
@@ -617,7 +702,7 @@ export default function CreatorClient({
                 >
                   <img
                     src={work.image_url}
-                    alt={work.title || ''}
+                    alt={work.title || `${profile.display_name}の作品`}
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                   />
                   {work.title && (
@@ -641,7 +726,7 @@ export default function CreatorClient({
             <div 
               className="p-5 sm:p-6 border-b border-slate-200/60 shrink-0 relative overflow-hidden"
               style={{
-                background: `linear-gradient(135deg, ${themeColor}12 0%, #ffffff00 100%)`
+                background: `linear-gradient(135deg, ${themeColor}15 0%, #ffffff00 100%)`
               }}
             >
               <div className="flex justify-between items-start gap-4">
@@ -664,6 +749,7 @@ export default function CreatorClient({
                 </div>
                 <button
                   onClick={() => setIsEstimateOpen(false)}
+                  aria-label="閉じる"
                   className="w-8 h-8 rounded-full bg-slate-200/60 hover:bg-slate-300/80 text-slate-600 flex items-center justify-center text-xs font-black transition cursor-pointer shrink-0"
                 >
                   ✕
@@ -833,9 +919,17 @@ export default function CreatorClient({
                                     onClick={() =>
                                       handleSelectOption(field.id, opt.label, isCheckbox)
                                     }
+                                    style={
+                                      isSelected
+                                        ? {
+                                            backgroundColor: themeColor,
+                                            borderColor: themeColor,
+                                          }
+                                        : undefined
+                                    }
                                     className={`flex items-center justify-between p-3.5 rounded-xl border text-xs font-bold cursor-pointer transition select-none ${
                                       isSelected
-                                        ? 'bg-slate-900 text-white border-slate-900 shadow-md scale-[1.01]'
+                                        ? 'text-white shadow-md scale-[1.01]'
                                         : 'bg-slate-50/70 text-slate-700 border-slate-200/80 hover:bg-slate-100 hover:border-slate-300'
                                     }`}
                                   >
@@ -850,7 +944,12 @@ export default function CreatorClient({
                                         }`}
                                       >
                                         {isSelected && (
-                                          <span className="text-[10px] font-black">✓</span>
+                                          <span
+                                            className="text-[10px] font-black"
+                                            style={{ color: themeColor }}
+                                          >
+                                            ✓
+                                          </span>
                                         )}
                                       </div>
                                       <span>{opt.label}</span>
@@ -859,8 +958,9 @@ export default function CreatorClient({
                                     {priceTag && (
                                       <span
                                         className={`text-[11px] font-black ${
-                                          isSelected ? 'text-pink-300' : 'text-pink-600'
+                                          isSelected ? 'text-white/90' : 'text-pink-600'
                                         }`}
+                                        style={!isSelected ? { color: themeColor } : undefined}
                                       >
                                         {priceTag}
                                       </span>
@@ -887,9 +987,8 @@ export default function CreatorClient({
                     </button>
                   </div>
 
-                  {/* 一致させたプレビューカード一覧 */}
+                  {/* プレビューカード一覧 */}
                   <div className="space-y-3">
-                    {/* お名前プレビュー */}
                     {clientName.trim() && (
                       <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-1.5">
                         <span className="text-xs font-black text-slate-400 flex items-center gap-1.5">
@@ -901,7 +1000,6 @@ export default function CreatorClient({
                       </div>
                     )}
 
-                    {/* 各項目の選択・入力結果 */}
                     {activeFormConfig.fields.map((field) => {
                       if (field.type === 'note' || field.type === 'faq') return null
                       const answer = formAnswers[field.id]
@@ -973,7 +1071,7 @@ export default function CreatorClient({
                     <div className="space-y-2">
                       {profile.twitter_url && (
                         <a
-                          href={profile.twitter_url}
+                          href={formatExternalUrl(profile.twitter_url)}
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={handleCopySpec}
@@ -991,7 +1089,7 @@ export default function CreatorClient({
 
                       {profile.external_estimation_url && (
                         <a
-                          href={profile.external_estimation_url}
+                          href={formatExternalUrl(profile.external_estimation_url)}
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={handleCopySpec}
@@ -1060,6 +1158,7 @@ export default function CreatorClient({
           <div className="bg-white/90 backdrop-blur-2xl rounded-3xl p-6 sm:p-7 w-full max-w-md shadow-2xl border border-white relative space-y-6">
             <button
               onClick={() => setIsContactOpen(false)}
+              aria-label="閉じる"
               className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100/80 hover:bg-slate-200 text-slate-500 flex items-center justify-center text-xs font-bold transition cursor-pointer"
             >
               ✕
@@ -1075,10 +1174,11 @@ export default function CreatorClient({
             <div className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">
               {profile.external_estimation_url && (
                 <a
-                  href={profile.external_estimation_url}
+                  href={formatExternalUrl(profile.external_estimation_url)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full py-3.5 px-4 bg-pink-600 hover:bg-pink-700 text-white font-extrabold rounded-2xl transition flex items-center justify-between text-xs shadow-md shadow-pink-200"
+                  style={{ backgroundColor: themeColor }}
+                  className="w-full py-3.5 px-4 hover:opacity-90 text-white font-extrabold rounded-2xl transition flex items-center justify-between text-xs shadow-md"
                 >
                   <span>📋 外部見積もりフォーム</span>
                   <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-md">
@@ -1089,7 +1189,7 @@ export default function CreatorClient({
 
               {profile.twitter_url && (
                 <a
-                  href={profile.twitter_url}
+                  href={formatExternalUrl(profile.twitter_url)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full py-3.5 px-4 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-2xl transition flex items-center justify-between text-xs shadow-md"
@@ -1103,7 +1203,7 @@ export default function CreatorClient({
 
               {profile.instagram_url && (
                 <a
-                  href={profile.instagram_url}
+                  href={formatExternalUrl(profile.instagram_url)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full py-3.5 px-4 bg-gradient-to-r from-purple-600 to-pink-500 hover:opacity-95 text-white font-extrabold rounded-2xl transition flex items-center justify-between text-xs shadow-md"
@@ -1117,7 +1217,7 @@ export default function CreatorClient({
 
               {profile.pixiv_url && (
                 <a
-                  href={profile.pixiv_url}
+                  href={formatExternalUrl(profile.pixiv_url)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full py-3.5 px-4 bg-blue-500 hover:bg-blue-600 text-white font-extrabold rounded-2xl transition flex items-center justify-between text-xs shadow-md"
@@ -1131,7 +1231,7 @@ export default function CreatorClient({
 
               {profile.website_url && (
                 <a
-                  href={profile.website_url}
+                  href={formatExternalUrl(profile.website_url)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full py-3.5 px-4 bg-white/80 text-slate-800 border border-slate-200 font-extrabold rounded-2xl hover:bg-white transition flex items-center justify-between text-xs shadow-xs"
