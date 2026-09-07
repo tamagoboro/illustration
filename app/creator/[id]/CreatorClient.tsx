@@ -398,7 +398,9 @@ const themeColor = useMemo(() => {
     profile.instagram_url ||
     profile.pixiv_url ||
     profile.website_url
-
+    
+  console.log('DBのtheme_color値:', profile?.theme_color);
+  console.log('決定されたthemeColor:', themeColor);
   // ステータス表示のラベル生成
   const getStatusLabel = () => {
     if (profile.status === 'stopped') return '受注停止'
@@ -1256,5 +1258,7 @@ const themeColor = useMemo(() => {
         </div>
       )}
     </div>
+    
   )
 }
+
