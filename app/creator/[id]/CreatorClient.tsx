@@ -36,9 +36,9 @@ type MenuItem = {
 
 type ExtendedProfile = Profile & {
   display_name?: string | null
-  status?: string | null
+  status?: 'available' | 'busy' | 'stopped' | string | null
   status_comment?: string | null
-  tastes?: string[] | null
+  tastes?: (string | { id?: string; name?: string })[] | null
   lead_time_days?: number | null
   price_min?: number | null
   commercial_use_allowed?: boolean | null
@@ -52,7 +52,7 @@ type ExtendedProfile = Profile & {
   is_public?: boolean | null
   likes_count?: number | null
   menu_items?: MenuItem[] | null
-  ai_usage?: string | null
+  ai_usage?: 'none' | 'partial' | 'full' | string | null
   ai_learning_allowed?: boolean | null
   express_option_available?: boolean | null
   copyright_transfer_available?: boolean | null
@@ -61,13 +61,32 @@ type ExtendedProfile = Profile & {
   form_config?: FormConfig | null
   active_projects_count?: number | null
   max_projects_capacity?: number | null
-  available_from?: string | null
+  available_from_text?: string | null
+  theme_color?: string | null
 }
 
 const formatExternalUrl = (url?: string | null) => {
   if (!url) return ''
   if (url.startsWith('http://') || url.startsWith('https://')) return url
   return `https://${url}`
+}
+
+// カラーコード (Hex / キーワード) を RGBA に変換する補助関数
+const hexToRgba = (hex: string, alpha: number) => {
+  if (!hex) return `rgba(31, 41, 55, ${alpha})`
+  if (hex === 'indigo') return `rgba(79, 70, 229, ${alpha})`
+  if (hex === 'rose') return `rgba(244, 63, 94, ${alpha})`
+  if (hex === 'emerald') return `rgba(16, 185, 129, ${alpha})`
+  if (hex === 'amber') return `rgba(245, 158, 11, ${alpha})`
+  if (hex === 'dark') return `rgba(15, 23, 42, ${alpha})`
+
+  let c = hex.replace('#', '')
+  if (c.length === 3) {
+    c = c.split('').map((char) => char + char).join('')
+  }
+  const num = parseInt(c, 16)
+  if (isNaN(num)) return `rgba(31, 41, 55, ${alpha})`
+  return `rgba(${(num >> 16) & 255}, ${(num >> 8) & 255}, ${num & 255}, ${alpha})`
 }
 
 export default function CreatorClient({
@@ -88,12 +107,12 @@ export default function CreatorClient({
   // モーダル管理
   const [isEstimateOpen, setIsEstimateOpen] = useState(false)
   const [isContactOpen, setIsContactOpen] = useState(false)
-  const [selectedWork, setSelectedWork] = useState<PortfolioItem | null>(null) // 作品詳細モーダル用
+  const [selectedWork, setSelectedWork] = useState<PortfolioItem | null>(null)
 
   // フォーム選択状態管理
   const [formAnswers, setFormAnswers] = useState<Record<string, any>>({})
   const [clientName, setClientName] = useState('')
-  const [referenceWorkTitle, setReferenceWorkTitle] = useState<string | null>(null) // 作品連携用
+  const [referenceWorkTitle, setReferenceWorkTitle] = useState<string | null>(null)
   const [generatedSpec, setGeneratedSpec] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [shareCopied, setShareCopied] = useState(false)
@@ -160,9 +179,38 @@ export default function CreatorClient({
     fetchCreatorData()
   }, [id, initialProfile, initialWorks, profile, works.length])
 
+  // テーマカラーの解決（ダッシュボードの16進数・プリセットIDのどちらにも対応）
+  const themeColor = useMemo(() => {
+    const rawColor = profile?.theme_color || profile?.form_config?.themeColor || '#1F2937'
+    if (rawColor === 'indigo') return '#4F46E5'
+    if (rawColor === 'rose') return '#F43F5E'
+    if (rawColor === 'emerald') return '#10B981'
+    if (rawColor === 'amber') return '#F59E0B'
+    if (rawColor === 'dark') return '#0F172A'
+    return rawColor
+  }, [profile])
+
+  // タグリストの規格化 (文字列配列・オブジェクト配列の両方に対応)
+  // オブジェクトかつ name を持つか判定する型ガード関数
+const normalizedTastes = useMemo(() => {
+  if (!profile?.tastes || !Array.isArray(profile.tastes)) return []
+  return profile.tastes
+    .map((item) => {
+      if (typeof item === 'string') return item
+      
+      // item がオブジェクトで 'name' を含む場合に型をキャストして参照
+      if (typeof item === 'object' && item !== null && 'name' in item) {
+        return (item as { name?: string }).name || ''
+      }
+      return ''
+    })
+    .filter((item) => item.length > 0)
+}, [profile?.tastes])
+
+  // フォーム設定の安全な取得
   const activeFormConfig = useMemo<FormConfig | null>(() => {
     if (!profile?.form_config) return null
-    if (!profile.form_config.fields || profile.form_config.fields.length === 0) {
+    if (!profile.form_config.fields || !Array.isArray(profile.form_config.fields) || profile.form_config.fields.length === 0) {
       return null
     }
     return profile.form_config
@@ -182,7 +230,7 @@ export default function CreatorClient({
     })
   }
 
-  const { basePriceTotal, totalPrice } = useMemo(() => {
+  const { totalPrice } = useMemo(() => {
     if (!activeFormConfig) return { basePriceTotal: 0, totalPrice: 0 }
 
     let baseSum = 0
@@ -228,7 +276,6 @@ export default function CreatorClient({
     return { basePriceTotal: baseSum, totalPrice: calculatedTotal }
   }, [formAnswers, activeFormConfig])
 
-  // 作品詳細からの見積もり連動開始
   const handleOpenEstimateWithWork = (work: PortfolioItem) => {
     setSelectedWork(null)
     setReferenceWorkTitle(work.title || 'ポートフォリオ掲載作品')
@@ -291,12 +338,10 @@ export default function CreatorClient({
     localStorage.setItem('favorite_creators', JSON.stringify(favArray))
   }
 
-  // タグ検索パラメーター遷移
   const handleTagClick = (tag: string) => {
     router.push(`/?tag=${encodeURIComponent(tag)}`)
   }
 
-  // SNSシェアヘルパー
   const sharePageUrl = typeof window !== 'undefined' ? window.location.href : ''
   const shareText = `${profile?.display_name || 'クリエイター'}さんのポートフォリオ・見積もりページ`
 
@@ -313,7 +358,7 @@ export default function CreatorClient({
         style={{ backgroundImage: `url(${BACKGROUND_IMAGE_URL})` }}
       >
         <div className="p-8 bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-2xl flex flex-col items-center space-y-3">
-          <div className="w-8 h-8 border-3 border-pink-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-3 border-slate-700 border-t-transparent rounded-full animate-spin" />
           <p className="text-xs font-black text-slate-600 tracking-widest uppercase">
             Loading...
           </p>
@@ -334,7 +379,7 @@ export default function CreatorClient({
           </p>
           <Link
             href="/"
-            className="text-pink-600 hover:text-pink-700 font-semibold text-xs inline-flex items-center gap-1"
+            className="text-slate-900 hover:underline font-semibold text-xs inline-flex items-center gap-1"
           >
             ← 検索結果に戻る
           </Link>
@@ -343,13 +388,19 @@ export default function CreatorClient({
     )
   }
 
-  const themeColor = activeFormConfig?.themeColor || '#ec4899'
   const hasContactLinks =
     profile.external_estimation_url ||
     profile.twitter_url ||
     profile.instagram_url ||
     profile.pixiv_url ||
     profile.website_url
+
+  // ステータス表示のラベル生成
+  const getStatusLabel = () => {
+    if (profile.status === 'stopped') return '受注停止'
+    if (profile.status === 'busy') return '相談受付中'
+    return '即対応可'
+  }
 
   return (
     <div
@@ -363,7 +414,7 @@ export default function CreatorClient({
         <div className="max-w-5xl mx-auto flex justify-between items-center">
           <Link
             href="/"
-            className="text-xs font-bold text-slate-600 hover:text-pink-600 transition-colors flex items-center gap-1.5"
+            className="text-xs font-bold text-slate-600 hover:text-slate-900 transition-colors flex items-center gap-1.5"
           >
             <span>←</span> 検索結果へ戻る
           </Link>
@@ -397,26 +448,40 @@ export default function CreatorClient({
 
                     <span
                       className={`inline-flex items-center gap-1.5 text-xs font-extrabold px-3 py-1 rounded-full border shadow-2xs ${
-                        profile.status === 'available'
-                          ? 'bg-emerald-500/10 text-emerald-800 border-emerald-500/30'
-                          : 'bg-amber-500/10 text-amber-800 border-amber-500/30'
+                        profile.status === 'stopped'
+                          ? 'bg-rose-500/10 text-rose-800 border-rose-500/30'
+                          : profile.status === 'busy'
+                          ? 'bg-amber-500/10 text-amber-800 border-amber-500/30'
+                          : 'bg-emerald-500/10 text-emerald-800 border-emerald-500/30'
                       }`}
                     >
                       <span
                         className={`w-2 h-2 rounded-full ${
-                          profile.status === 'available'
-                            ? 'bg-emerald-500 animate-pulse'
-                            : 'bg-amber-500'
+                          profile.status === 'stopped'
+                            ? 'bg-rose-500'
+                            : profile.status === 'busy'
+                            ? 'bg-amber-500'
+                            : 'bg-emerald-500 animate-pulse'
                         }`}
                       />
-                      {profile.status === 'available' ? '即対応可' : '相談受付中'}
+                      {getStatusLabel()}
                     </span>
                   </div>
 
                   <div className="flex flex-wrap gap-1.5">
                     {profile.ai_usage === 'none' && (
-                      <span className="text-[11px] bg-pink-600/10 text-pink-800 font-extrabold px-3 py-0.5 rounded-full border border-pink-200/60 shadow-2xs">
+                      <span className="text-[11px] bg-slate-900/10 text-slate-900 font-extrabold px-3 py-0.5 rounded-full border border-slate-300 shadow-2xs">
                         ✦ 完全手描き
+                      </span>
+                    )}
+                    {profile.ai_usage === 'partial' && (
+                      <span className="text-[11px] bg-slate-900/10 text-slate-800 font-extrabold px-3 py-0.5 rounded-full border border-slate-300 shadow-2xs">
+                        🎨 一部AI補助あり
+                      </span>
+                    )}
+                    {profile.ai_usage === 'full' && (
+                      <span className="text-[11px] bg-slate-900/10 text-slate-800 font-extrabold px-3 py-0.5 rounded-full border border-slate-300 shadow-2xs">
+                        🤖 AI生成・加筆メイン
                       </span>
                     )}
                     {!profile.ai_learning_allowed && (
@@ -488,9 +553,9 @@ export default function CreatorClient({
                 </div>
               )}
 
-              {/* タグ・スタイル（クリック時にパラメーター付き検索へリダイレクト） */}
+              {/* タグ・スタイル */}
               <div className="flex flex-wrap gap-1.5 pt-1">
-                {profile.tastes?.map((t) => (
+                {normalizedTastes.map((t) => (
                   <button
                     key={t}
                     onClick={() => handleTagClick(t)}
@@ -545,7 +610,7 @@ export default function CreatorClient({
                 </span>
               </div>
 
-              {(profile.max_projects_capacity != null || profile.available_from) && (
+              {(profile.max_projects_capacity != null || profile.available_from_text) && (
                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 space-y-1.5 text-xs">
                   {profile.max_projects_capacity != null && (
                     <div className="flex justify-between items-center">
@@ -555,11 +620,11 @@ export default function CreatorClient({
                       </span>
                     </div>
                   )}
-                  {profile.available_from && (
+                  {profile.available_from_text && (
                     <div className="flex justify-between items-center">
-                      <span className="text-slate-500 font-bold">受付開始可能日</span>
+                      <span className="text-slate-500 font-bold">着手可能時期</span>
                       <span className="font-extrabold text-slate-800">
-                        {profile.available_from}〜
+                        {profile.available_from_text}
                       </span>
                     </div>
                   )}
@@ -571,8 +636,8 @@ export default function CreatorClient({
                   <div
                     className="flex justify-between items-baseline p-3 rounded-xl border"
                     style={{
-                      backgroundColor: `${themeColor}0D`,
-                      borderColor: `${themeColor}20`,
+                      backgroundColor: hexToRgba(themeColor, 0.05),
+                      borderColor: hexToRgba(themeColor, 0.2),
                     }}
                   >
                     <span className="font-bold text-slate-500">最低参考価格</span>
@@ -658,8 +723,8 @@ export default function CreatorClient({
                     ? '完全手描き（未使用）'
                     : profile.ai_usage === 'partial'
                     ? '一部AI補助あり'
-                    : profile.ai_usage === 'main'
-                    ? 'AIメイン制作'
+                    : profile.ai_usage === 'full'
+                    ? 'AI生成・加筆メイン'
                     : '未指定',
                 highlight: profile.ai_usage === 'none',
               },
@@ -701,7 +766,7 @@ export default function CreatorClient({
                 </span>
                 <span
                   className={`text-xs font-extrabold block ${
-                    spec.highlight ? 'text-pink-600' : 'text-slate-800'
+                    spec.highlight ? 'text-slate-900' : 'text-slate-800'
                   }`}
                   style={spec.highlight ? { color: themeColor } : undefined}
                 >
@@ -729,8 +794,8 @@ export default function CreatorClient({
                     className="text-xs font-black px-2.5 py-1 rounded-lg border"
                     style={{
                       color: themeColor,
-                      backgroundColor: `${themeColor}10`,
-                      borderColor: `${themeColor}25`,
+                      backgroundColor: hexToRgba(themeColor, 0.08),
+                      borderColor: hexToRgba(themeColor, 0.2),
                     }}
                   >
                     {typeof item.price === 'number'
@@ -855,7 +920,7 @@ export default function CreatorClient({
             <div 
               className="p-5 sm:p-6 border-b border-slate-200/60 shrink-0 relative overflow-hidden"
               style={{
-                background: `linear-gradient(135deg, ${themeColor}15 0%, #ffffff00 100%)`
+                background: `linear-gradient(135deg, ${hexToRgba(themeColor, 0.12)} 0%, #ffffff00 100%)`
               }}
             >
               <div className="flex justify-between items-start gap-4">
@@ -877,7 +942,7 @@ export default function CreatorClient({
                   )}
                   {referenceWorkTitle && !generatedSpec && (
                     <div className="pl-7 pt-1">
-                      <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-pink-100 text-pink-700 border border-pink-200 inline-flex items-center gap-1">
+                      <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 inline-flex items-center gap-1">
                         🎨 参考指定作品: {referenceWorkTitle}
                       </span>
                     </div>
@@ -907,493 +972,282 @@ export default function CreatorClient({
                       placeholder="例: 山田太郎"
                       value={clientName}
                       onChange={(e) => setClientName(e.target.value)}
-                      style={{ '--theme-color': themeColor } as CSSProperties}
-                      className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-slate-50/50 font-bold focus:outline-none focus:ring-2 focus:ring-[var(--theme-color)] focus:bg-white transition"
+                      className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-slate-50/50 font-bold focus:outline-none focus:ring-2 transition-all"
                     />
                   </div>
 
-                  {activeFormConfig.fields.map((field) => {
-                    const fieldTitle = field.label || '無題の項目'
-
-                    if (field.type === 'note') {
-                      return (
-                        <div
-                          key={field.id}
-                          className="bg-amber-50/80 border border-amber-200 p-4 rounded-2xl text-xs text-amber-900 font-bold whitespace-pre-wrap shadow-2xs space-y-1"
-                        >
-                          <div className="font-black text-amber-800 flex items-center gap-1.5 text-xs">
-                            <span>📌</span>
-                            <span>{fieldTitle}</span>
-                          </div>
-                          <p className="text-slate-700 leading-relaxed pl-5 font-normal">
-                            {field.noteText || ''}
-                          </p>
-                        </div>
-                      )
-                    }
-
-                    if (field.type === 'faq') {
-                      return (
-                        <div
-                          key={field.id}
-                          className="bg-sky-50/80 border border-sky-200 p-4 rounded-2xl space-y-2 shadow-2xs"
-                        >
-                          <div className="text-xs font-black text-sky-900 flex items-center gap-1.5">
-                            <span>❓</span>
-                            <span>{fieldTitle}</span>
-                          </div>
-                          <div className="text-xs font-medium text-slate-600 pl-4 border-l-2 border-sky-400 whitespace-pre-wrap leading-relaxed">
-                            {field.faqAnswer || ''}
-                          </div>
-                        </div>
-                      )
-                    }
-
-                    return (
+                  <div className="space-y-4">
+                    {activeFormConfig.fields.map((field) => (
                       <div
                         key={field.id}
                         className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-3"
                       >
-                        <div className="flex items-center justify-between">
-                          <label className="text-xs font-black text-slate-800 flex items-center gap-1.5">
-                            <span>{fieldTitle}</span>
+                        <div className="flex justify-between items-baseline">
+                          <label className="text-xs font-black text-slate-900 flex items-center gap-1">
+                            <span>{field.label}</span>
                             {field.required && (
-                              <span className="text-[10px] bg-rose-500 text-white font-extrabold px-1.5 py-0.5 rounded shadow-2xs">
-                                必須
-                              </span>
+                              <span className="text-rose-500 font-bold text-[10px]">*</span>
                             )}
                           </label>
-
-                          {field.price && field.price > 0 ? (
-                            <span
-                              className="text-[11px] font-black px-2.5 py-1 rounded-full border shadow-2xs"
-                              style={{
-                                color: themeColor,
-                                backgroundColor: `${themeColor}12`,
-                                borderColor: `${themeColor}30`,
-                              }}
-                            >
-                              +¥{field.price.toLocaleString()}
+                          {field.price ? (
+                            <span className="text-[11px] font-bold text-slate-400">
+                              基本: +¥{field.price.toLocaleString()}
                             </span>
                           ) : null}
                         </div>
 
+                        {field.type === 'note' && field.noteText && (
+                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs text-slate-600 leading-relaxed">
+                            {field.noteText}
+                          </div>
+                        )}
+
+                        {field.type === 'faq' && (
+                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-1">
+                            <span className="text-[11px] font-bold text-slate-700 block">A. 解答:</span>
+                            <p className="text-xs text-slate-600 leading-relaxed">
+                              {field.faqAnswer}
+                            </p>
+                          </div>
+                        )}
+
+                        {(field.type === 'radio' || field.type === 'checkbox') && field.options && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {field.options.map((opt, i) => {
+                              const isChecked = field.type === 'radio'
+                                ? formAnswers[field.id] === opt.label
+                                : Array.isArray(formAnswers[field.id]) &&
+                                  formAnswers[field.id].includes(opt.label)
+
+                              return (
+                                <button
+                                  key={i}
+                                  type="button"
+                                  onClick={() =>
+                                    handleSelectOption(
+                                      field.id,
+                                      opt.label,
+                                      field.type === 'checkbox'
+                                    )
+                                  }
+                                  className={`p-3 rounded-xl border text-left text-xs font-bold transition-all flex justify-between items-center cursor-pointer ${
+                                    isChecked
+                                      ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                                      : 'bg-slate-50/50 border-slate-200 text-slate-700 hover:bg-slate-100/80'
+                                  }`}
+                                >
+                                  <span>{opt.label}</span>
+                                  {opt.price !== 0 && (
+                                    <span
+                                      className={`text-[10px] px-1.5 py-0.5 rounded ${
+                                        isChecked ? 'bg-white/20 text-white' : 'text-slate-400'
+                                      }`}
+                                    >
+                                      {opt.price > 0 ? '+' : ''}
+                                      {opt.priceType === 'percent'
+                                        ? `${opt.price}%`
+                                        : `¥${opt.price.toLocaleString()}`}
+                                    </span>
+                                  )}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )}
+
                         {field.type === 'text' && (
                           <input
                             type="text"
-                            placeholder="内容を入力してください"
+                            placeholder="自由入力してください"
                             value={formAnswers[field.id] || ''}
                             onChange={(e) =>
-                              setFormAnswers({ ...formAnswers, [field.id]: e.target.value })
+                              setFormAnswers((prev) => ({
+                                ...prev,
+                                [field.id]: e.target.value,
+                              }))
                             }
-                            style={{ '--theme-color': themeColor } as CSSProperties}
-                            className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-slate-50/50 font-medium focus:outline-none focus:ring-2 focus:ring-[var(--theme-color)] focus:bg-white transition"
+                            className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-slate-50/50 font-medium focus:outline-none focus:ring-2 transition-all"
                           />
                         )}
 
                         {field.type === 'textarea' && (
                           <textarea
                             rows={3}
-                            placeholder="具体的なご希望内容や補足事項をご記入ください"
+                            placeholder="詳細をご記入ください"
                             value={formAnswers[field.id] || ''}
                             onChange={(e) =>
-                              setFormAnswers({ ...formAnswers, [field.id]: e.target.value })
+                              setFormAnswers((prev) => ({
+                                ...prev,
+                                [field.id]: e.target.value,
+                              }))
                             }
-                            style={{ '--theme-color': themeColor } as CSSProperties}
-                            className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-slate-50/50 font-medium focus:outline-none focus:ring-2 focus:ring-[var(--theme-color)] focus:bg-white transition leading-relaxed"
+                            className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-slate-50/50 font-medium focus:outline-none focus:ring-2 transition-all leading-relaxed"
                           />
                         )}
 
                         {field.type === 'color' && (
-                          <div className="flex items-center gap-3 pt-1">
+                          <div className="flex items-center gap-3">
                             <input
                               type="color"
-                              value={formAnswers[field.id] || '#3b82f6'}
+                              value={formAnswers[field.id] || '#000000'}
                               onChange={(e) =>
-                                setFormAnswers({ ...formAnswers, [field.id]: e.target.value })
+                                setFormAnswers((prev) => ({
+                                  ...prev,
+                                  [field.id]: e.target.value,
+                                }))
                               }
-                              className="h-10 w-16 rounded-xl border-2 border-slate-200 cursor-pointer p-1 bg-white shrink-0"
+                              className="w-10 h-10 rounded-xl border border-slate-200 cursor-pointer"
                             />
-                            <span className="text-xs font-mono font-bold text-slate-700 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
-                              {formAnswers[field.id] || '#3b82f6'}
-                            </span>
+                            <input
+                              type="text"
+                              placeholder="#000000"
+                              value={formAnswers[field.id] || ''}
+                              onChange={(e) =>
+                                setFormAnswers((prev) => ({
+                                  ...prev,
+                                  [field.id]: e.target.value,
+                                }))
+                              }
+                              className="flex-1 text-xs p-2.5 rounded-xl border border-slate-200 bg-slate-50/50 font-mono"
+                            />
                           </div>
                         )}
-
-                        {(field.type === 'radio' || field.type === 'checkbox') &&
-                          field.options && (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                              {field.options.map((opt, optIdx) => {
-                                const isPercent = opt.priceType === 'percent'
-                                const isCheckbox = field.type === 'checkbox'
-                                const selectedVal = formAnswers[field.id]
-                                const isSelected = isCheckbox
-                                  ? Array.isArray(selectedVal) && selectedVal.includes(opt.label)
-                                  : selectedVal === opt.label
-
-                                let priceTag = ''
-                                if (opt.price > 0) {
-                                  if (isPercent) {
-                                    const calcVal = Math.round(
-                                      basePriceTotal * (opt.price / 100)
-                                    )
-                                    priceTag = `+${opt.price}% ${
-                                      calcVal > 0 ? `(+¥${calcVal.toLocaleString()})` : ''
-                                    }`
-                                  } else {
-                                    priceTag = `+¥${opt.price.toLocaleString()}`
-                                  }
-                                } else {
-                                  priceTag = '標準'
-                                }
-
-                                return (
-                                  <div
-                                    key={optIdx}
-                                    onClick={() =>
-                                      handleSelectOption(field.id, opt.label, isCheckbox)
-                                    }
-                                    style={
-                                      isSelected
-                                        ? {
-                                            backgroundColor: themeColor,
-                                            borderColor: themeColor,
-                                          }
-                                        : undefined
-                                    }
-                                    className={`flex items-center justify-between p-3.5 rounded-xl border text-xs font-bold cursor-pointer transition select-none ${
-                                      isSelected
-                                        ? 'text-white shadow-md scale-[1.01]'
-                                        : 'bg-slate-50/70 text-slate-700 border-slate-200/80 hover:bg-slate-100 hover:border-slate-300'
-                                    }`}
-                                  >
-                                    <div className="flex items-center gap-2.5">
-                                      <div
-                                        className={`w-4 h-4 rounded-${
-                                          isCheckbox ? 'md' : 'full'
-                                        } border flex items-center justify-center transition ${
-                                          isSelected
-                                            ? 'bg-white border-white text-slate-900'
-                                            : 'border-slate-300 bg-white'
-                                        }`}
-                                      >
-                                        {isSelected && (
-                                          <span
-                                            className="text-[10px] font-black"
-                                            style={{ color: themeColor }}
-                                          >
-                                            ✓
-                                          </span>
-                                        )}
-                                      </div>
-                                      <span>{opt.label}</span>
-                                    </div>
-
-                                    {priceTag && (
-                                      <span
-                                        className={`text-[11px] font-black ${
-                                          isSelected ? 'text-white/90' : 'text-pink-600'
-                                        }`}
-                                        style={!isSelected ? { color: themeColor } : undefined}
-                                      >
-                                        {priceTag}
-                                      </span>
-                                    )}
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          )}
                       </div>
-                    )
-                  })}
+                    ))}
+                  </div>
                 </>
               ) : (
-                <div className="space-y-6 animate-in fade-in duration-300">
-                  <div>
-                    <button
-                      onClick={handleCopySpec}
-                      className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-extrabold rounded-xl transition text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-200"
-                    >
-                      <span>{copied ? '✅' : '📋'}</span>
-                      <span>{copied ? 'コピー完了！' : '仕様書テキストをコピー'}</span>
-                    </button>
+                <div className="space-y-4">
+                  <div className="p-4 bg-slate-900 rounded-2xl text-white font-mono text-xs leading-relaxed whitespace-pre-wrap select-all shadow-inner">
+                    {generatedSpec}
                   </div>
-
-                  <div className="space-y-3">
-                    {clientName.trim() && (
-                      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-1.5">
-                        <span className="text-xs font-black text-slate-400 flex items-center gap-1.5">
-                          <span>👤</span> お名前
-                        </span>
-                        <p className="text-xs font-black text-slate-900 pl-5">
-                          {clientName}
-                        </p>
-                      </div>
-                    )}
-
-                    {referenceWorkTitle && (
-                      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-1.5">
-                        <span className="text-xs font-black text-slate-400 flex items-center gap-1.5">
-                          <span>🎨</span> 参考指定作品
-                        </span>
-                        <p className="text-xs font-black text-slate-900 pl-5">
-                          {referenceWorkTitle}
-                        </p>
-                      </div>
-                    )}
-
-                    {activeFormConfig.fields.map((field) => {
-                      if (field.type === 'note' || field.type === 'faq') return null
-                      const answer = formAnswers[field.id]
-                      if (!answer || (Array.isArray(answer) && answer.length === 0)) return null
-
-                      return (
-                        <div
-                          key={field.id}
-                          className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-2"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-black text-slate-800">
-                              {field.label || '無題の項目'}
-                            </span>
-                            {field.price && field.price > 0 ? (
-                              <span
-                                className="text-[11px] font-black px-2.5 py-0.5 rounded-full border"
-                                style={{
-                                  color: themeColor,
-                                  backgroundColor: `${themeColor}12`,
-                                  borderColor: `${themeColor}30`,
-                                }}
-                              >
-                                +¥{field.price.toLocaleString()}
-                              </span>
-                            ) : null}
-                          </div>
-
-                          <div className="text-xs font-bold text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-100 leading-relaxed whitespace-pre-wrap">
-                            {field.type === 'color' ? (
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className="w-4 h-4 rounded-full border shadow-2xs inline-block"
-                                  style={{ backgroundColor: answer }}
-                                />
-                                <span className="font-mono">{answer}</span>
-                              </div>
-                            ) : Array.isArray(answer) ? (
-                              answer.join(', ')
-                            ) : (
-                              String(answer)
-                            )}
-                          </div>
-                        </div>
-                      )
-                    })}
-
-                    <div className="bg-white p-5 rounded-2xl border-2 border-slate-900 shadow-md flex justify-between items-center">
-                      <span className="text-xs font-black text-slate-900">
-                        概算見積もり合計
-                      </span>
-                      <span
-                        className="text-xl font-black"
-                        style={{ color: themeColor }}
-                      >
-                        ¥{totalPrice.toLocaleString()} (税込)
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-xs space-y-3">
-                    <p className="text-xs font-black text-slate-800 flex items-center gap-1.5">
-                      <span>📩</span>
-                      <span>送信先の窓口を選択してご依頼を完了してください:</span>
-                    </p>
-
-                    <div className="space-y-2">
-                      {profile.twitter_url && (
-                        <a
-                          href={formatExternalUrl(profile.twitter_url)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={handleCopySpec}
-                          className="w-full py-3.5 px-4 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-xl transition flex items-center justify-between text-xs shadow-xs"
-                        >
-                          <div className="flex flex-col text-left">
-                            <span>X (Twitter) の DM で送る</span>
-                            <span className="text-[10px] text-slate-400 font-normal">
-                              ※ クリック時に仕様書が自動コピーされます
-                            </span>
-                          </div>
-                          <span>↗</span>
-                        </a>
-                      )}
-
-                      {profile.external_estimation_url && (
-                        <a
-                          href={formatExternalUrl(profile.external_estimation_url)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={handleCopySpec}
-                          style={{ backgroundColor: themeColor }}
-                          className="w-full py-3.5 px-4 hover:opacity-90 text-white font-extrabold rounded-xl transition flex items-center justify-between text-xs shadow-xs"
-                        >
-                          <div className="flex flex-col text-left">
-                            <span>外部フォーム / Webサイトで送る</span>
-                            <span className="text-[10px] text-white/80 font-normal">
-                              ※ クリック時に仕様書が自動コピーされます
-                            </span>
-                          </div>
-                          <span>↗</span>
-                        </a>
-                      )}
-                    </div>
-                  </div>
+                  <p className="text-[11px] text-slate-500 text-center font-medium">
+                    上記のテキストをコピーして、ダイレクトメッセージやお問合せフォームに貼り付けて送信してください。
+                  </p>
                 </div>
               )}
             </div>
 
-            {/* モーダルフッター */}
-            {!generatedSpec && (
-              <div className="p-4 sm:p-5 bg-white border-t border-slate-200/80 flex flex-col sm:flex-row justify-between items-center gap-4 shrink-0 shadow-lg">
-                <div className="text-center sm:text-left">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
-                    概算見積もり合計
-                  </span>
-                  <span
-                    className="text-xl sm:text-2xl font-black"
-                    style={{ color: themeColor }}
+            {/* モーダル フッター */}
+            <div className="p-4 sm:p-5 bg-white border-t border-slate-200/80 flex items-center justify-between gap-3 shrink-0">
+              {!generatedSpec ? (
+                <>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 block">概算合計金額</span>
+                    <span className="text-lg font-black text-slate-900">
+                      ¥{totalPrice.toLocaleString()}{' '}
+                      <span className="text-xs font-normal text-slate-500">(税込)</span>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setIsEstimateOpen(false)}
+                      className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
+                    >
+                      キャンセル
+                    </button>
+                    <button
+                      onClick={handleGenerateSpec}
+                      style={{ backgroundColor: themeColor }}
+                      className="px-5 py-2.5 text-white font-extrabold text-xs rounded-xl shadow-md hover:opacity-90 active:scale-[0.98] transition cursor-pointer"
+                    >
+                      仕様書を生成する →
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex justify-between items-center w-full gap-3">
+                  <button
+                    onClick={() => setGeneratedSpec(null)}
+                    className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
                   >
-                    ¥{totalPrice.toLocaleString()}
-                    <span className="text-xs text-slate-400 font-normal ml-1">(税込)</span>
-                  </span>
+                    ← 編集に戻る
+                  </button>
+                  <button
+                    onClick={handleCopySpec}
+                    style={{ backgroundColor: themeColor }}
+                    className="flex-1 py-2.5 text-white font-extrabold text-xs rounded-xl shadow-md hover:opacity-90 active:scale-[0.98] transition cursor-pointer text-center"
+                  >
+                    {copied ? '✓ コピー完了！' : '📋 仕様書テキストをコピー'}
+                  </button>
                 </div>
-
-                <button
-                  onClick={handleGenerateSpec}
-                  style={{ backgroundColor: themeColor }}
-                  className="w-full sm:w-auto py-3.5 px-7 hover:opacity-95 active:scale-[0.98] text-white font-black text-xs rounded-xl transition shadow-lg cursor-pointer flex items-center justify-center gap-2"
-                >
-                  <span>この内容で仕様書を作成</span>
-                  <span>➔</span>
-                </button>
-              </div>
-            )}
-
-            {generatedSpec && (
-              <div className="p-4 bg-white border-t border-slate-200/80 flex justify-start shrink-0">
-                <button
-                  onClick={() => setGeneratedSpec(null)}
-                  className="text-xs font-bold text-slate-500 hover:text-slate-800 transition flex items-center gap-1 cursor-pointer"
-                >
-                  ← 条件選択に戻る
-                </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       )}
 
-      {/* 相談・お問い合わせ モーダル */}
+      {/* お問い合わせ方法 モーダル */}
       {isContactOpen && (
-        <div className="fixed inset-0 bg-slate-950/50 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-          <div className="bg-white/90 backdrop-blur-2xl rounded-3xl p-6 sm:p-7 w-full max-w-md shadow-2xl border border-white relative space-y-6">
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 space-y-5 shadow-2xl border border-slate-100 relative">
             <button
               onClick={() => setIsContactOpen(false)}
               aria-label="閉じる"
-              className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100/80 hover:bg-slate-200 text-slate-500 flex items-center justify-center text-xs font-bold transition cursor-pointer"
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center text-xs font-black transition cursor-pointer"
             >
               ✕
             </button>
 
-            <div className="space-y-1">
-              <h3 className="text-lg font-black text-slate-900">
-                {profile.display_name} へ相談・お問い合わせ
-              </h3>
-              <p className="text-xs text-slate-500">連絡窓口を選択してください</p>
+            <div className="space-y-1 text-center">
+              <h3 className="text-base font-black text-slate-900">直接相談・お問い合わせ</h3>
+              <p className="text-xs text-slate-400">ご希望の外部連絡先からメッセージをお送りください</p>
             </div>
 
-            <div className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">
+            <div className="space-y-2 pt-1">
               {profile.external_estimation_url && (
                 <a
                   href={formatExternalUrl(profile.external_estimation_url)}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{ backgroundColor: themeColor }}
-                  className="w-full py-3.5 px-4 hover:opacity-90 text-white font-extrabold rounded-2xl transition flex items-center justify-between text-xs shadow-md"
+                  className="w-full py-3 px-4 text-white font-extrabold rounded-xl text-xs transition shadow-md flex items-center justify-between"
                 >
                   <span>📋 外部見積もりフォーム</span>
-                  <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-md">
-                    開く ↗
-                  </span>
+                  <span>↗</span>
                 </a>
               )}
-
               {profile.twitter_url && (
                 <a
                   href={formatExternalUrl(profile.twitter_url)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full py-3.5 px-4 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-2xl transition flex items-center justify-between text-xs shadow-md"
+                  className="w-full py-3 px-4 bg-slate-900 text-white font-bold rounded-xl text-xs transition hover:bg-slate-800 flex items-center justify-between"
                 >
-                  <span>X (Twitter) で相談・DM</span>
-                  <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-md">
-                    開く ↗
-                  </span>
+                  <span>𝕏 (Twitter) DM</span>
+                  <span>↗</span>
                 </a>
               )}
-
               {profile.instagram_url && (
                 <a
                   href={formatExternalUrl(profile.instagram_url)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full py-3.5 px-4 bg-gradient-to-r from-purple-600 to-pink-500 hover:opacity-95 text-white font-extrabold rounded-2xl transition flex items-center justify-between text-xs shadow-md"
+                  className="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-pink-500 text-white font-bold rounded-xl text-xs transition hover:opacity-90 flex items-center justify-between"
                 >
-                  <span>📸 Instagram で相談・DM</span>
-                  <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-md">
-                    開く ↗
-                  </span>
+                  <span>Instagram DM</span>
+                  <span>↗</span>
                 </a>
               )}
-
-              {profile.pixiv_url && (
-                <a
-                  href={formatExternalUrl(profile.pixiv_url)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full py-3.5 px-4 bg-blue-500 hover:bg-blue-600 text-white font-extrabold rounded-2xl transition flex items-center justify-between text-xs shadow-md"
-                >
-                  <span>🎨 Pixiv メッセージ</span>
-                  <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-md">
-                    開く ↗
-                  </span>
-                </a>
-              )}
-
               {profile.website_url && (
                 <a
                   href={formatExternalUrl(profile.website_url)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full py-3.5 px-4 bg-white/80 text-slate-800 border border-slate-200 font-extrabold rounded-2xl hover:bg-white transition flex items-center justify-between text-xs shadow-xs"
+                  className="w-full py-3 px-4 bg-slate-100 text-slate-800 font-bold rounded-xl text-xs transition hover:bg-slate-200 flex items-center justify-between"
                 >
-                  <span>🌐 公式Webサイト</span>
-                  <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">
-                    開く ↗
-                  </span>
+                  <span>公式Webサイト</span>
+                  <span>↗</span>
                 </a>
-              )}
-
-              {!hasContactLinks && (
-                <div className="text-center py-8 text-xs font-bold text-slate-400 bg-white/50 rounded-2xl border border-dashed border-slate-200">
-                  連絡先・SNSリンクが登録されていません
-                </div>
               )}
             </div>
 
-            <p className="text-[10px] text-slate-400 text-center font-bold">
-              ※ 新しいタブで外部ページが開きます
-            </p>
+            <button
+              onClick={() => setIsContactOpen(false)}
+              className="w-full py-2.5 bg-slate-100 text-slate-600 font-bold rounded-xl text-xs transition hover:bg-slate-200"
+            >
+              閉じる
+            </button>
           </div>
         </div>
       )}
