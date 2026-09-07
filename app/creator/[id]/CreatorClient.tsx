@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, CSSProperties } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { supabase, Profile, PortfolioItem } from '@/lib/supabase'
 
 type Option = {
@@ -63,7 +64,6 @@ type ExtendedProfile = Profile & {
   available_from?: string | null
 }
 
-// URL補完ヘルパー関数
 const formatExternalUrl = (url?: string | null) => {
   if (!url) return ''
   if (url.startsWith('http://') || url.startsWith('https://')) return url
@@ -79,6 +79,7 @@ export default function CreatorClient({
   initialProfile?: ExtendedProfile | null
   initialWorks?: PortfolioItem[]
 }) {
+  const router = useRouter()
   const [profile, setProfile] = useState<ExtendedProfile | null>(initialProfile || null)
   const [works, setWorks] = useState<PortfolioItem[]>(initialWorks)
   const [loading, setLoading] = useState(!initialProfile)
@@ -87,19 +88,22 @@ export default function CreatorClient({
   // モーダル管理
   const [isEstimateOpen, setIsEstimateOpen] = useState(false)
   const [isContactOpen, setIsContactOpen] = useState(false)
+  const [selectedWork, setSelectedWork] = useState<PortfolioItem | null>(null) // 作品詳細モーダル用
 
   // フォーム選択状態管理
   const [formAnswers, setFormAnswers] = useState<Record<string, any>>({})
   const [clientName, setClientName] = useState('')
+  const [referenceWorkTitle, setReferenceWorkTitle] = useState<string | null>(null) // 作品連携用
   const [generatedSpec, setGeneratedSpec] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [shareCopied, setShareCopied] = useState(false)
 
   const BACKGROUND_IMAGE_URL =
     'https://qcklfkslqtjnxufqcqyi.supabase.co/storage/v1/object/public/portfolios/bg.png'
 
-  // モーダル表示時の背景スクロール抑制（UX改善）
+  // モーダル表示時の背景スクロール抑制
   useEffect(() => {
-    if (isEstimateOpen || isContactOpen) {
+    if (isEstimateOpen || isContactOpen || selectedWork) {
       document.body.style.overflow = 'hidden'
     } else {
       document.body.style.overflow = 'unset'
@@ -107,7 +111,7 @@ export default function CreatorClient({
     return () => {
       document.body.style.overflow = 'unset'
     }
-  }, [isEstimateOpen, isContactOpen])
+  }, [isEstimateOpen, isContactOpen, selectedWork])
 
   useEffect(() => {
     const storedFavs = localStorage.getItem('favorite_creators')
@@ -224,6 +228,14 @@ export default function CreatorClient({
     return { basePriceTotal: baseSum, totalPrice: calculatedTotal }
   }, [formAnswers, activeFormConfig])
 
+  // 作品詳細からの見積もり連動開始
+  const handleOpenEstimateWithWork = (work: PortfolioItem) => {
+    setSelectedWork(null)
+    setReferenceWorkTitle(work.title || 'ポートフォリオ掲載作品')
+    setGeneratedSpec(null)
+    setIsEstimateOpen(true)
+  }
+
   const handleGenerateSpec = () => {
     if (!activeFormConfig) return
 
@@ -231,6 +243,7 @@ export default function CreatorClient({
     specLines.push(`【ご依頼・見積もり仕様書】`)
     specLines.push(`依頼先: ${profile?.display_name || 'クリエイター'} 様`)
     if (clientName.trim()) specLines.push(`依頼者名: ${clientName}`)
+    if (referenceWorkTitle) specLines.push(`参考希望作品: ${referenceWorkTitle}`)
     specLines.push(`-----------------------------------`)
 
     activeFormConfig.fields.forEach((field) => {
@@ -276,6 +289,21 @@ export default function CreatorClient({
     }
 
     localStorage.setItem('favorite_creators', JSON.stringify(favArray))
+  }
+
+  // タグ検索パラメーター遷移
+  const handleTagClick = (tag: string) => {
+    router.push(`/?tag=${encodeURIComponent(tag)}`)
+  }
+
+  // SNSシェアヘルパー
+  const sharePageUrl = typeof window !== 'undefined' ? window.location.href : ''
+  const shareText = `${profile?.display_name || 'クリエイター'}さんのポートフォリオ・見積もりページ`
+
+  const handleCopyShareUrl = () => {
+    navigator.clipboard.writeText(sharePageUrl)
+    setShareCopied(true)
+    setTimeout(() => setShareCopied(false), 2000)
   }
 
   if (loading) {
@@ -409,7 +437,7 @@ export default function CreatorClient({
                 {profile.status_comment || 'プロフィールコメントはありません。'}
               </p>
 
-              {/* SNS・公式リンク（メインカード内にも設置してアクセシビリティ向上） */}
+              {/* SNS・外部リンク */}
               {hasContactLinks && (
                 <div className="flex flex-wrap items-center gap-2 pt-1">
                   <span className="text-xs font-bold text-slate-500 mr-1">SNS / Links:</span>
@@ -460,15 +488,52 @@ export default function CreatorClient({
                 </div>
               )}
 
-              <div className="flex flex-wrap gap-1.5">
+              {/* タグ・スタイル（クリック時にパラメーター付き検索へリダイレクト） */}
+              <div className="flex flex-wrap gap-1.5 pt-1">
                 {profile.tastes?.map((t) => (
-                  <span
+                  <button
                     key={t}
-                    className="text-xs bg-slate-900/5 hover:bg-slate-900/10 text-slate-700 px-3 py-1 rounded-xl font-semibold transition"
+                    onClick={() => handleTagClick(t)}
+                    className="text-xs bg-slate-900/5 hover:bg-slate-900/10 text-slate-700 px-3 py-1 rounded-xl font-semibold transition cursor-pointer"
                   >
                     #{t}
-                  </span>
+                  </button>
                 ))}
+              </div>
+
+              {/* SNSシェア機能 */}
+              <div className="pt-3 border-t border-slate-200/60 flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-bold text-slate-400 mr-1">このページを共有:</span>
+                <a
+                  href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(sharePageUrl)}&text=${encodeURIComponent(shareText)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1"
+                >
+                  <span>𝕏 シェア</span>
+                </a>
+                <a
+                  href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(sharePageUrl)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 transition flex items-center gap-1"
+                >
+                  <span>Facebook</span>
+                </a>
+                <a
+                  href={`https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(sharePageUrl)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 transition flex items-center gap-1"
+                >
+                  <span>LINE</span>
+                </a>
+                <button
+                  onClick={handleCopyShareUrl}
+                  className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer"
+                >
+                  {shareCopied ? 'URLをコピーしました！' : '🔗 URLコピー'}
+                </button>
               </div>
             </div>
 
@@ -480,7 +545,6 @@ export default function CreatorClient({
                 </span>
               </div>
 
-              {/* 稼働枠・受任状況表示 */}
               {(profile.max_projects_capacity != null || profile.available_from) && (
                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 space-y-1.5 text-xs">
                   {profile.max_projects_capacity != null && (
@@ -538,6 +602,7 @@ export default function CreatorClient({
                 {activeFormConfig ? (
                   <button
                     onClick={() => {
+                      setReferenceWorkTitle(null)
                       setGeneratedSpec(null)
                       setIsEstimateOpen(true)
                     }}
@@ -578,7 +643,7 @@ export default function CreatorClient({
           </div>
         </div>
 
-        {/* 条件 */}
+        {/* 受付条件 */}
         <section className="bg-white/75 backdrop-blur-xl p-6 sm:p-7 rounded-3xl shadow-xl border border-white/80 space-y-5">
           <h2 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
             <span className="p-1.5 bg-white rounded-lg text-xs shadow-2xs">⚙️</span> 制作・受付条件
@@ -647,7 +712,7 @@ export default function CreatorClient({
           </div>
         </section>
 
-        {/* メニュー */}
+        {/* 料金メニュー */}
         {profile.menu_items && profile.menu_items.length > 0 && (
           <section className="bg-white/75 backdrop-blur-xl p-6 sm:p-7 rounded-3xl shadow-xl border border-white/80 space-y-5">
             <h2 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
@@ -678,7 +743,7 @@ export default function CreatorClient({
           </section>
         )}
 
-        {/* ポートフォリオ */}
+        {/* ポートフォリオ一覧 */}
         <section className="space-y-4">
           <div className="flex justify-between items-baseline px-1">
             <h2 className="text-base font-black text-slate-900 tracking-tight drop-shadow-xs">
@@ -698,24 +763,88 @@ export default function CreatorClient({
               {works.map((work) => (
                 <div
                   key={work.id}
-                  className="group relative aspect-square bg-white/40 rounded-2xl overflow-hidden shadow-lg border border-white/80 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl"
+                  onClick={() => setSelectedWork(work)}
+                  className="group relative aspect-square bg-white/40 rounded-2xl overflow-hidden shadow-lg border border-white/80 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl cursor-pointer"
                 >
                   <img
                     src={work.image_url}
                     alt={work.title || `${profile.display_name}の作品`}
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                   />
-                  {work.title && (
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-3 flex items-end">
-                      <p className="text-xs font-bold text-white truncate">{work.title}</p>
-                    </div>
-                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-3 flex flex-col justify-end">
+                    <p className="text-xs font-bold text-white truncate">{work.title || '無題'}</p>
+                    <span className="text-[10px] text-white/80 font-medium">クリックで拡大</span>
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </section>
       </main>
+
+      {/* 作品詳細 モーダル */}
+      {selectedWork && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl border border-white/40 relative">
+            <button
+              onClick={() => setSelectedWork(null)}
+              aria-label="閉じる"
+              className="absolute top-4 right-4 z-10 w-9 h-9 rounded-full bg-slate-900/60 hover:bg-slate-900/80 text-white flex items-center justify-center text-xs font-black transition cursor-pointer shadow-md"
+            >
+              ✕
+            </button>
+
+            <div className="overflow-y-auto flex-1 p-5 sm:p-6 space-y-5">
+              <div className="rounded-2xl overflow-hidden bg-slate-950 flex items-center justify-center max-h-[60vh]">
+                <img
+                  src={selectedWork.image_url}
+                  alt={selectedWork.title || '作品詳細'}
+                  className="max-h-[60vh] w-auto object-contain"
+                />
+              </div>
+
+              <div className="space-y-3">
+                <h3 className="text-xl font-black text-slate-900">
+                  {selectedWork.title || '作品タイトルなし'}
+                </h3>
+
+                {selectedWork.description && (
+                  <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap bg-slate-50 p-4 rounded-xl border border-slate-100">
+                    {selectedWork.description}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* 作品詳細からの見積もり連動 */}
+            <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-200/80 flex flex-col sm:flex-row justify-between items-center gap-3 shrink-0">
+              <span className="text-xs font-bold text-slate-500">
+                この作品のようなテイストで依頼したい場合:
+              </span>
+              {activeFormConfig ? (
+                <button
+                  onClick={() => handleOpenEstimateWithWork(selectedWork)}
+                  style={{ backgroundColor: themeColor }}
+                  className="w-full sm:w-auto py-3 px-6 text-white font-extrabold rounded-xl text-xs transition shadow-md hover:opacity-95 active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <span>✨</span>
+                  <span>この作品のイメージで見積もり作成</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    setSelectedWork(null)
+                    setIsContactOpen(true)
+                  }}
+                  className="w-full sm:w-auto py-3 px-6 bg-slate-900 text-white font-extrabold rounded-xl text-xs transition hover:bg-slate-800 cursor-pointer"
+                >
+                  ✉️ この作品についてお問い合わせ
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* フォーム入力 & プレビューモーダル */}
       {isEstimateOpen && activeFormConfig && (
@@ -746,6 +875,13 @@ export default function CreatorClient({
                       {activeFormConfig.description}
                     </p>
                   )}
+                  {referenceWorkTitle && !generatedSpec && (
+                    <div className="pl-7 pt-1">
+                      <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-pink-100 text-pink-700 border border-pink-200 inline-flex items-center gap-1">
+                        🎨 参考指定作品: {referenceWorkTitle}
+                      </span>
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={() => setIsEstimateOpen(false)}
@@ -757,11 +893,10 @@ export default function CreatorClient({
               </div>
             </div>
 
-            {/* モーダルメインコンテンツ */}
+            {/* モーダルメイン */}
             <div className="overflow-y-auto p-5 sm:p-6 space-y-6 flex-1">
               {!generatedSpec ? (
                 <>
-                  {/* お名前入力 */}
                   <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-2">
                     <label className="text-xs font-black text-slate-800 flex items-center gap-1.5">
                       <span>👤</span>
@@ -777,7 +912,6 @@ export default function CreatorClient({
                     />
                   </div>
 
-                  {/* 各項目 */}
                   {activeFormConfig.fields.map((field) => {
                     const fieldTitle = field.label || '無題の項目'
 
@@ -976,7 +1110,6 @@ export default function CreatorClient({
                 </>
               ) : (
                 <div className="space-y-6 animate-in fade-in duration-300">
-                  {/* アクションボタン */}
                   <div>
                     <button
                       onClick={handleCopySpec}
@@ -987,7 +1120,6 @@ export default function CreatorClient({
                     </button>
                   </div>
 
-                  {/* プレビューカード一覧 */}
                   <div className="space-y-3">
                     {clientName.trim() && (
                       <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-1.5">
@@ -996,6 +1128,17 @@ export default function CreatorClient({
                         </span>
                         <p className="text-xs font-black text-slate-900 pl-5">
                           {clientName}
+                        </p>
+                      </div>
+                    )}
+
+                    {referenceWorkTitle && (
+                      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-1.5">
+                        <span className="text-xs font-black text-slate-400 flex items-center gap-1.5">
+                          <span>🎨</span> 参考指定作品
+                        </span>
+                        <p className="text-xs font-black text-slate-900 pl-5">
+                          {referenceWorkTitle}
                         </p>
                       </div>
                     )}
@@ -1047,7 +1190,6 @@ export default function CreatorClient({
                       )
                     })}
 
-                    {/* 合計金額表示カード */}
                     <div className="bg-white p-5 rounded-2xl border-2 border-slate-900 shadow-md flex justify-between items-center">
                       <span className="text-xs font-black text-slate-900">
                         概算見積もり合計
@@ -1061,7 +1203,6 @@ export default function CreatorClient({
                     </div>
                   </div>
 
-                  {/* 送信先リンク */}
                   <div className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-xs space-y-3">
                     <p className="text-xs font-black text-slate-800 flex items-center gap-1.5">
                       <span>📩</span>

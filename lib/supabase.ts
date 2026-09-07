@@ -41,10 +41,11 @@ export type PageBlock = {
 }
 
 export type PortfolioItem = {
-  id?: string
+  id: string
   user_id: string
   title?: string | null
   image_url: string
+  description?: string | null // ← ここを追加！
   before_image_url?: string | null
   is_pinned?: boolean
   sort_order: number
