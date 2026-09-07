@@ -74,11 +74,12 @@ const formatExternalUrl = (url?: string | null) => {
 // カラーコード (Hex / キーワード) を RGBA に変換する補助関数
 const hexToRgba = (hex: string, alpha: number) => {
   if (!hex) return `rgba(31, 41, 55, ${alpha})`
-  if (hex === 'indigo') return `rgba(79, 70, 229, ${alpha})`
-  if (hex === 'rose') return `rgba(244, 63, 94, ${alpha})`
-  if (hex === 'emerald') return `rgba(16, 185, 129, ${alpha})`
-  if (hex === 'amber') return `rgba(245, 158, 11, ${alpha})`
-  if (hex === 'dark') return `rgba(15, 23, 42, ${alpha})`
+  const h = hex.toLowerCase()
+  if (h === 'indigo' || h === '#4f46e5') return `rgba(79, 70, 229, ${alpha})`
+  if (h === 'rose' || h === '#f43f5e') return `rgba(244, 63, 94, ${alpha})`
+  if (h === 'emerald' || h === '#10b981') return `rgba(16, 185, 129, ${alpha})`
+  if (h === 'amber' || h === '#f59e0b') return `rgba(245, 158, 11, ${alpha})`
+  if (h === 'dark' || h === '#0f172a') return `rgba(15, 23, 42, ${alpha})`
 
   let c = hex.replace('#', '')
   if (c.length === 3) {
