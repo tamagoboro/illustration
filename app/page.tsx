@@ -300,13 +300,14 @@ export default function Home() {
 
   return (
     <div
-      className="min-h-screen text-slate-900 pb-32 font-sans antialiased relative bg-fixed bg-cover bg-center"
+      className="min-h-screen text-slate-800 pb-32 font-sans antialiased relative bg-fixed bg-cover bg-center"
       style={{ backgroundImage: `url(${BACKGROUND_IMAGE_URL})` }}
     >
-      <div className="absolute inset-0 bg-slate-900/10 backdrop-brightness-95 pointer-events-none -z-10" />
+      {/* 雲・青空の透明感を出す軽やかなオーバーレイ */}
+      <div className="absolute inset-0 bg-gradient-to-b from-sky-400/20 via-sky-100/10 to-sky-900/20 backdrop-blur-[2px] pointer-events-none -z-10" />
 
       {/* ヘッダー */}
-      <header className="sticky top-0 z-40 px-4 sm:px-8 py-3 bg-white/70 backdrop-blur-xl border-b border-white/50 shadow-xs transition-all">
+      <header className="sticky top-0 z-40 px-4 sm:px-8 py-3 bg-white/80 backdrop-blur-md border-b border-sky-100/60 shadow-xs transition-all">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           
           {/* ロゴ / ブランドエリア */}
@@ -314,14 +315,14 @@ export default function Home() {
             href="/" 
             className="flex items-center gap-2.5 group cursor-pointer select-none"
           >
-            <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-purple-600 via-pink-500 to-rose-400 flex items-center justify-center text-white font-black text-base shadow-md group-hover:scale-105 transition-transform">
-              ✦
+            <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-sky-400 via-sky-300 to-cyan-300 flex items-center justify-center text-white font-black text-base shadow-sm group-hover:scale-105 transition-transform">
+              ☁
             </div>
             <div className="flex flex-col">
-              <span className="text-sm font-black tracking-tight text-slate-800 group-hover:text-purple-700 transition-colors">
+              <span className="text-base font-black tracking-tight text-slate-800 group-hover:text-sky-600 transition-colors">
                 Drawker
               </span>
-              <span className="text-[9px] font-bold text-slate-400 tracking-wider uppercase -mt-0.5">
+              <span className="text-[9px] font-extrabold text-sky-500/80 tracking-wider uppercase -mt-1">
                 Portfolio Search
               </span>
             </div>
@@ -333,15 +334,15 @@ export default function Home() {
             {/* お気に入りフィルターボタン */}
             <button
               onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
-              className={`group px-3.5 py-2 text-xs font-extrabold rounded-2xl border transition-all flex items-center gap-2 cursor-pointer active:scale-95 ${
+              className={`group px-3.5 py-2 text-xs font-bold rounded-2xl border transition-all flex items-center gap-2 cursor-pointer active:scale-95 ${
                 showFavoritesOnly
-                  ? 'bg-rose-500 text-white border-rose-500 shadow-md shadow-rose-200'
-                  : 'bg-white/80 hover:bg-white text-slate-700 hover:text-rose-600 border-slate-200/80 shadow-2xs'
+                  ? 'bg-rose-500 text-white border-rose-500 shadow-sm'
+                  : 'bg-white/90 hover:bg-white text-slate-600 hover:text-rose-500 border-sky-100 shadow-2xs'
               }`}
             >
               <span 
-                className={`text-sm transition-transform group-hover:scale-125 ${
-                  showFavoritesOnly ? 'text-white' : 'text-rose-500'
+                className={`text-sm transition-transform group-hover:scale-110 ${
+                  showFavoritesOnly ? 'text-white' : 'text-rose-400'
                 }`}
               >
                 ♥
@@ -352,7 +353,7 @@ export default function Home() {
                 <span 
                   className={`px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider transition-colors ${
                     showFavoritesOnly 
-                      ? 'bg-white text-rose-600' 
+                      ? 'bg-white text-rose-500' 
                       : 'bg-rose-500 text-white'
                   }`}
                 >
@@ -364,10 +365,10 @@ export default function Home() {
             {/* ログイン / ダッシュボードボタン */}
             <Link
               href={isLoggedIn ? '/dashboard' : '/login'}
-              className={`px-4 py-2 text-xs font-black rounded-2xl shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+              className={`px-4 py-2 text-xs font-bold rounded-2xl shadow-sm hover:shadow transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
                 isLoggedIn
-                  ? 'bg-slate-900 hover:bg-slate-800 text-white border border-slate-700'
-                  : 'bg-gradient-to-r from-purple-600 via-pink-600 to-rose-500 hover:opacity-95 text-white ring-2 ring-purple-500/20 shadow-purple-200'
+                  ? 'bg-slate-800 hover:bg-slate-700 text-white border border-slate-600'
+                  : 'bg-gradient-to-r from-sky-400 to-cyan-400 hover:brightness-105 text-white border border-sky-200'
               }`}
             >
               {isLoggedIn ? (
@@ -377,7 +378,7 @@ export default function Home() {
                 </>
               ) : (
                 <>
-                  <span className="text-amber-300">✦</span>
+                  <span className="text-white">✦</span>
                   <span>クリエイター無料登録</span>
                 </>
               )}
@@ -386,41 +387,44 @@ export default function Home() {
           </div>
         </div>
       </header>
+
       {/* ヒーロー */}
-      <section className="text-center py-10 px-4 max-w-4xl mx-auto space-y-2">
-        <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-wide font-serif drop-shadow-[0_1px_2px_rgba(255,255,255,0.8)]">
-          『誰に頼むか決まらない…』<br />
-          そんな時間もったいない。
+      <section className="text-center py-12 px-4 max-w-4xl mx-auto space-y-3">
+        <span className="inline-block px-3 py-1 bg-white/70 backdrop-blur-md rounded-full text-sky-700 font-bold text-xs tracking-wide shadow-2xs border border-sky-100">
+          理想のイラスト・クリエイターに出会える
+        </span>
+        <h2 className="text-2xl sm:text-4xl font-black text-slate-800 tracking-tight drop-shadow-sm font-serif">
+          『誰に頼むか迷っているなら』
         </h2>
-        <p className="text-2xl sm:text-3xl font-black text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)] tracking-widest font-serif pt-1">
-          自分にぴったりのクリエイター検索
+        <p className="text-xl sm:text-2xl font-bold text-sky-900 drop-shadow-xs tracking-wider pt-1">
+          条件から作品まで、すぐ見つかるクリエイター検索
         </p>
       </section>
 
       {!isLoggedIn && (
         <section className="max-w-7xl mx-auto px-4 sm:px-6 mb-8">
-          <div className="bg-gradient-to-r from-purple-900/90 via-indigo-900/90 to-purple-900/90 backdrop-blur-md rounded-3xl p-5 sm:p-6 text-white border border-purple-400/30 shadow-xl flex flex-col md:flex-row justify-between items-center gap-4">
-            <div className="space-y-1 text-center md:text-left">
+          <div className="bg-gradient-to-r from-sky-500/90 via-sky-400/90 to-cyan-400/90 backdrop-blur-md rounded-3xl p-6 text-white border border-white/40 shadow-lg flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="space-y-1.5 text-center md:text-left">
               <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
-                <span className="text-[10px] font-extrabold bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full">
+                <span className="text-[10px] font-black bg-white text-sky-700 px-2.5 py-0.5 rounded-full shadow-2xs">
                   掲載手数料 0円
                 </span>
-                <span className="text-[10px] font-extrabold bg-purple-400/30 text-purple-100 px-2 py-0.5 rounded-full border border-purple-300/30">
+                <span className="text-[10px] font-bold bg-sky-600/40 text-sky-50 px-2.5 py-0.5 rounded-full border border-sky-200/30">
                   ポートフォリオ1分作成
                 </span>
               </div>
               <h3 className="text-base sm:text-lg font-black tracking-wide">
                 イラストレーター・クリエイターの方へ：作品を掲載しませんか？
               </h3>
-              <p className="text-xs text-purple-200 font-medium">
+              <p className="text-xs text-sky-50 font-medium">
                 料金表やポートフォリオを登録するだけで、直接ご相談を受け付けられます。
               </p>
             </div>
             <Link
               href="/login"
-              className="px-6 py-3 bg-white text-purple-950 hover:bg-purple-50 font-black text-xs rounded-2xl shadow-lg transition-all transform hover:-translate-y-0.5 shrink-0"
+              className="px-6 py-3 bg-white text-sky-700 hover:bg-sky-50 font-black text-xs rounded-2xl shadow flex items-center gap-1 transition-all transform hover:-translate-y-0.5 shrink-0"
             >
-              無料で作品を登録・掲載する →
+              無料で作品を登録・掲載する <span>→</span>
             </Link>
           </div>
         </section>
@@ -431,35 +435,35 @@ export default function Home() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
           {/* サイドバー */}
           <aside className="lg:col-span-1 space-y-6">
-            <div className="bg-white/90 backdrop-blur-md p-5 rounded-3xl border border-white/80 shadow-lg shadow-purple-900/10 space-y-4">
+            <div className="bg-white/80 backdrop-blur-md p-5 rounded-3xl border border-sky-100 shadow-sm space-y-4">
               <div className="flex justify-between items-center pb-1">
-                <div className="flex items-center gap-1.5 text-purple-900">
+                <div className="flex items-center gap-1.5 text-sky-700">
                   <span className="text-xs">⚙</span>
-                  <h2 className="font-black text-xs tracking-wider">
+                  <h2 className="font-extrabold text-xs tracking-wider">
                     FILTER & SEARCH
                   </h2>
                 </div>
                 <button
                   onClick={resetFilters}
-                  className="text-[11px] text-purple-700 font-extrabold hover:underline cursor-pointer"
+                  className="text-[11px] text-sky-600 hover:text-sky-800 font-bold hover:underline cursor-pointer"
                 >
                   リセット
                 </button>
               </div>
 
               <div className="space-y-1">
-                <label className="text-[11px] font-extrabold text-slate-900 block">キーワード</label>
+                <label className="text-[11px] font-bold text-slate-700 block">キーワード</label>
                 <input
                   type="text"
                   placeholder="名前、アイコン、立ち絵など..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3 py-2 rounded-xl border border-sky-100 bg-white/90 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[11px] font-extrabold text-slate-900 block">予算上限</label>
+                <label className="text-[11px] font-bold text-slate-700 block">予算上限</label>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
@@ -467,32 +471,32 @@ export default function Home() {
                     placeholder="指定なし"
                     value={maxPrice}
                     onChange={(e) => setMaxPrice(e.target.value ? Number(e.target.value) : '')}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className="w-full px-3 py-2 rounded-xl border border-sky-100 bg-white/90 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400"
                   />
-                  <span className="text-xs text-slate-800 font-bold whitespace-nowrap">以下</span>
+                  <span className="text-xs text-slate-600 font-medium whitespace-nowrap">以下</span>
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-[11px] font-extrabold text-slate-900 block">希望納期</label>
+                <label className="text-[11px] font-bold text-slate-700 block">希望納期</label>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
                     placeholder="指定なし"
                     value={maxLeadTime}
                     onChange={(e) => setMaxLeadTime(e.target.value ? Number(e.target.value) : '')}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className="w-full px-3 py-2 rounded-xl border border-sky-100 bg-white/90 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400"
                   />
-                  <span className="text-xs text-slate-800 font-bold whitespace-nowrap">日以内</span>
+                  <span className="text-xs text-slate-600 font-medium whitespace-nowrap">日以内</span>
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-[11px] font-extrabold text-slate-900 block">受付状況</label>
+                <label className="text-[11px] font-bold text-slate-700 block">受付状況</label>
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
+                  className="w-full px-3 py-2 rounded-xl border border-sky-100 bg-white/90 text-xs text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-sky-400 cursor-pointer"
                 >
                   <option value="ALL">すべて表示</option>
                   <option value="available">即対応可のみ</option>
@@ -502,25 +506,25 @@ export default function Home() {
 
               <div className="pt-1">
                 <label className="flex items-center justify-between cursor-pointer">
-                  <span className="text-[11px] font-extrabold text-slate-900">商用利用可能のみ</span>
+                  <span className="text-[11px] font-bold text-slate-700">商用利用可能のみ</span>
                   <input
                     type="checkbox"
                     checked={commercialOnly}
                     onChange={(e) => setCommercialOnly(e.target.checked)}
-                    className="w-4 h-4 rounded accent-purple-700 cursor-pointer"
+                    className="w-4 h-4 rounded text-sky-500 accent-sky-500 cursor-pointer"
                   />
                 </label>
               </div>
 
-              <div className="space-y-2 pt-2 border-t border-slate-200">
+              <div className="space-y-2 pt-2 border-t border-sky-100">
                 <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-extrabold text-slate-900 block">
+                  <label className="text-[11px] font-bold text-slate-700 block">
                     テイスト（最大20個）
                   </label>
                   {selectedTastes.length > 0 && (
                     <button
                       onClick={() => setSelectedTastes([])}
-                      className="text-[10px] text-purple-700 hover:underline font-extrabold cursor-pointer"
+                      className="text-[10px] text-sky-600 hover:underline font-bold cursor-pointer"
                     >
                       選択解除
                     </button>
@@ -532,12 +536,12 @@ export default function Home() {
                   placeholder="テイストを検索..."
                   value={tasteSearch}
                   onChange={(e) => setTasteSearch(e.target.value)}
-                  className="w-full px-3 py-1.5 text-[10px] rounded-lg border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3 py-1.5 text-[10px] rounded-lg border border-sky-100 bg-white/90 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400"
                 />
 
                 <div className="flex flex-wrap gap-1 max-h-40 overflow-y-auto pt-1">
                   {displayedTastes.length === 0 ? (
-                    <p className="text-[10px] text-slate-500 py-1 font-bold">
+                    <p className="text-[10px] text-slate-400 py-1 font-bold">
                       一致するテイストが見つかりません
                     </p>
                   ) : (
@@ -549,8 +553,8 @@ export default function Home() {
                           onClick={() => toggleTaste(taste)}
                           className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold transition-all cursor-pointer ${
                             isSelected
-                              ? 'bg-purple-700 text-white'
-                              : 'bg-purple-100 text-purple-900 hover:bg-purple-200'
+                              ? 'bg-sky-500 text-white shadow-2xs'
+                              : 'bg-sky-50 text-sky-700 hover:bg-sky-100'
                           }`}
                         >
                           #{taste}
@@ -565,17 +569,17 @@ export default function Home() {
 
           {/* メインリスト */}
           <section className="lg:col-span-3 space-y-4">
-            <div className="flex justify-between items-center px-2 py-1 rounded-xl bg-white/60 backdrop-blur-md border border-white/80 shadow-sm">
-              <p className="text-xs font-extrabold text-slate-900">
-                該当クリエイター <span className="text-sm font-black text-purple-800 mx-1">{filteredProfiles.length}</span> 名
+            <div className="flex justify-between items-center px-4 py-2 rounded-2xl bg-white/80 backdrop-blur-md border border-sky-100 shadow-2xs">
+              <p className="text-xs font-bold text-slate-700">
+                該当クリエイター <span className="text-sm font-black text-sky-600 mx-1">{filteredProfiles.length}</span> 名
               </p>
 
               <div className="flex items-center gap-2">
-                <span className="text-xs font-extrabold text-slate-900">並び替え:</span>
+                <span className="text-xs font-bold text-slate-600">並び替え:</span>
                 <select
                   value={sortOption}
                   onChange={(e) => setSortOption(e.target.value as any)}
-                  className="px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-extrabold text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
+                  className="px-3 py-1 bg-white border border-sky-100 rounded-xl text-xs font-bold text-slate-700 shadow-2xs focus:outline-none focus:ring-2 focus:ring-sky-400 cursor-pointer"
                 >
                   <option value="random">おすすめ順（標準）</option>
                   <option value="price_asc">価格が安い順</option>
@@ -589,25 +593,25 @@ export default function Home() {
             {loading ? (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {[1, 2, 3].map((n) => (
-                  <div key={n} className="bg-white/90 backdrop-blur-md rounded-3xl p-4 animate-pulse space-y-3 border border-white">
-                    <div className="aspect-square bg-slate-200/80 rounded-2xl" />
-                    <div className="h-4 bg-slate-200/80 rounded w-1/2" />
+                  <div key={n} className="bg-white/80 backdrop-blur-md rounded-3xl p-4 animate-pulse space-y-3 border border-sky-50">
+                    <div className="aspect-square bg-sky-100/60 rounded-2xl" />
+                    <div className="h-4 bg-sky-100/60 rounded w-1/2" />
                   </div>
                 ))}
               </div>
             ) : filteredProfiles.length === 0 ? (
-              <div className="text-center py-20 bg-white/90 backdrop-blur-md rounded-3xl border border-white p-6 shadow-md space-y-4">
-                <p className="text-xs font-extrabold text-slate-800">条件に合うクリエイターが見つかりませんでした</p>
+              <div className="text-center py-20 bg-white/80 backdrop-blur-md rounded-3xl border border-sky-100 p-6 shadow-sm space-y-4">
+                <p className="text-xs font-bold text-slate-600">条件に合うクリエイターが見つかりませんでした</p>
                 <div className="flex justify-center gap-3">
                   <button
                     onClick={resetFilters}
-                    className="px-4 py-2 text-xs font-extrabold text-purple-800 bg-purple-100 rounded-xl hover:bg-purple-200 cursor-pointer"
+                    className="px-4 py-2 text-xs font-bold text-sky-700 bg-sky-50 rounded-xl hover:bg-sky-100 cursor-pointer"
                   >
                     条件をリセット
                   </button>
                   <Link
                     href="/login"
-                    className="px-4 py-2 text-xs font-extrabold text-white bg-purple-700 rounded-xl hover:bg-purple-800 shadow-md"
+                    className="px-4 py-2 text-xs font-bold text-white bg-sky-500 rounded-xl hover:bg-sky-600 shadow-xs"
                   >
                     あなたが最初のクリエイターとして登録する
                   </Link>
@@ -627,10 +631,10 @@ export default function Home() {
                   return (
                     <div
                       key={profile.user_id}
-                      className="bg-white/90 backdrop-blur-md rounded-3xl border border-white shadow-lg shadow-purple-900/10 hover:shadow-xl transition-all duration-300 flex flex-col justify-between overflow-hidden group"
+                      className="bg-white/85 backdrop-blur-md rounded-3xl border border-sky-100/80 shadow-xs hover:shadow-md hover:border-sky-200 transition-all duration-300 flex flex-col justify-between overflow-hidden group"
                     >
                       {/* イラスト画像エリア */}
-                      <div className="relative w-full aspect-square bg-slate-100 overflow-hidden">
+                      <div className="relative w-full aspect-square bg-sky-50/50 overflow-hidden">
                         {profile.thumbnail_url ? (
                           <img
                             src={profile.thumbnail_url}
@@ -638,7 +642,7 @@ export default function Home() {
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                           />
                         ) : (
-                          <div className="w-full h-full flex flex-col items-center justify-center bg-slate-100 text-slate-400">
+                          <div className="w-full h-full flex flex-col items-center justify-center bg-sky-50/80 text-sky-300">
                             <span className="text-[10px] font-black tracking-widest">NO PORTFOLIO</span>
                           </div>
                         )}
@@ -646,14 +650,14 @@ export default function Home() {
                         {/* 左上：ステータス & NEW & 追加バッジ */}
                         <div className="absolute top-2.5 left-2.5 flex flex-wrap items-center gap-1 max-w-[70%]">
                           {isNew && (
-                            <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-pink-600 text-white shadow-md">
+                            <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-pink-500 text-white shadow-xs">
                               NEW
                             </span>
                           )}
 
                           <span
-                            className={`text-[9px] px-2.5 py-0.5 rounded-full font-black text-white shadow-md ${
-                              profile.status === 'available' ? 'bg-emerald-600' : 'bg-amber-600'
+                            className={`text-[9px] px-2.5 py-0.5 rounded-full font-black text-white shadow-xs ${
+                              profile.status === 'available' ? 'bg-emerald-500' : 'bg-amber-500'
                             }`}
                           >
                             {profile.status === 'available' ? '即対応可' : '相談受付中'}
@@ -661,14 +665,14 @@ export default function Home() {
 
                           {/* 完全手描きバッジ */}
                           {isPureHandDrawn && (
-                            <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-indigo-600 text-white shadow-md">
+                            <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-sky-600 text-white shadow-xs">
                               ✦ 完全手描き
                             </span>
                           )}
 
                           {/* R-18対応バッジ */}
                           {isR18Allowed && (
-                            <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-rose-600 text-white shadow-md">
+                            <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-rose-500 text-white shadow-xs">
                               R-18 OK
                             </span>
                           )}
@@ -678,8 +682,8 @@ export default function Home() {
                         <button
                           type="button"
                           onClick={() => toggleFavorite(profile.user_id)}
-                          className={`absolute top-2.5 right-2.5 px-2.5 py-0.5 rounded-full bg-white/95 backdrop-blur-md shadow-md flex items-center gap-1 text-[11px] font-black cursor-pointer active:scale-95 transition-transform ${
-                            isFav ? 'text-rose-600' : 'text-purple-800 hover:text-rose-600'
+                          className={`absolute top-2.5 right-2.5 px-2.5 py-0.5 rounded-full bg-white/90 backdrop-blur-md shadow-xs flex items-center gap-1 text-[11px] font-black cursor-pointer active:scale-95 transition-transform ${
+                            isFav ? 'text-rose-500' : 'text-slate-400 hover:text-rose-500'
                           }`}
                         >
                           <span>♥</span>
@@ -687,15 +691,15 @@ export default function Home() {
                         </button>
 
                         {/* オーバーレイグラデーション & 最低価格 */}
-                        <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-slate-950/90 via-slate-900/50 to-transparent p-3 pt-6 flex justify-between items-end">
+                        <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-slate-900/80 via-slate-900/30 to-transparent p-3 pt-6 flex justify-between items-end">
                           <div>
-                            <span className="text-[9px] text-slate-300 font-extrabold block">最安目安</span>
-                            <span className="text-white font-black text-sm tracking-tight drop-shadow">
+                            <span className="text-[9px] text-sky-100 font-extrabold block">最安目安</span>
+                            <span className="text-white font-black text-sm tracking-tight drop-shadow-xs">
                               {profile.price_min ? `¥${profile.price_min.toLocaleString()}〜` : '応相談'}
                             </span>
                           </div>
                           {profile.commercial_use_allowed && (
-                            <span className="text-[9px] font-black bg-purple-700 text-white px-1.5 py-0.5 rounded shadow">
+                            <span className="text-[9px] font-black bg-cyan-500 text-white px-1.5 py-0.5 rounded shadow-2xs">
                               商用利用OK
                             </span>
                           )}
@@ -706,38 +710,38 @@ export default function Home() {
                       <div className="p-3.5 space-y-2.5 flex-1 flex flex-col justify-between">
                         <div className="space-y-2">
                           <div className="space-y-0.5">
-                            <h3 className="font-black text-xs text-slate-950 line-clamp-1">
+                            <h3 className="font-bold text-xs text-slate-800 line-clamp-1">
                               {profile.display_name}
                             </h3>
-                            <p className="text-[10px] text-slate-700 font-medium line-clamp-2 leading-relaxed">
+                            <p className="text-[10px] text-slate-500 font-medium line-clamp-2 leading-relaxed">
                               {profile.status_comment || 'プロフィール文は設定されていません。'}
                             </p>
                           </div>
 
                           {/* メニュー料金表 */}
-                          <div className="space-y-1 border-t border-slate-100 pt-1.5">
-                            <span className="text-[9px] font-black text-slate-800 block">料金メニュー</span>
+                          <div className="space-y-1 border-t border-sky-100 pt-1.5">
+                            <span className="text-[9px] font-bold text-slate-600 block">料金メニュー</span>
                             {profile.menu_items && profile.menu_items.length > 0 ? (
                               <div className="flex flex-col gap-1">
                                 {profile.menu_items.slice(0, 3).map((menu, index) => (
                                   <div
                                     key={index}
-                                    className="flex justify-between items-center text-[10px] bg-slate-100/70 px-2 py-0.5 rounded-md"
+                                    className="flex justify-between items-center text-[10px] bg-sky-50/50 px-2 py-0.5 rounded-md border border-sky-100/50"
                                   >
-                                    <span className="font-extrabold text-slate-800 line-clamp-1">{menu.title}</span>
-                                    <span className="font-black text-purple-900 whitespace-nowrap">
+                                    <span className="font-bold text-slate-700 line-clamp-1">{menu.title}</span>
+                                    <span className="font-black text-sky-700 whitespace-nowrap">
                                       {typeof menu.price === 'number' ? `¥${menu.price.toLocaleString()}〜` : '応相談'}
                                     </span>
                                   </div>
                                 ))}
                                 {profile.menu_items.length > 3 && (
-                                  <span className="text-[8px] text-slate-500 text-right font-extrabold block">
+                                  <span className="text-[8px] text-slate-400 text-right font-bold block">
                                     他 {profile.menu_items.length - 3} 件のメニュー
                                   </span>
                                 )}
                               </div>
                             ) : (
-                              <div className="text-[10px] text-slate-500 font-bold bg-slate-50 p-1.5 rounded-lg text-center">
+                              <div className="text-[10px] text-slate-400 font-bold bg-sky-50/30 p-1 rounded-lg text-center">
                                 詳細料金はプロフィール参照
                               </div>
                             )}
@@ -746,15 +750,15 @@ export default function Home() {
 
                         <div className="space-y-1.5 pt-1">
                           {/* 仕様目安 */}
-                          <div className="flex justify-between items-center text-[10px] text-slate-700 font-bold">
+                          <div className="flex justify-between items-center text-[10px] text-slate-500 font-bold">
                             <span>納期目安</span>
-                            <span className="font-extrabold text-slate-900">{profile.lead_time_days || 14}日以内</span>
+                            <span className="font-extrabold text-slate-700">{profile.lead_time_days || 14}日以内</span>
                           </div>
 
                           {/* タグ一覧 */}
                           <div className="flex flex-wrap gap-1">
                             {profile.tastes?.map((taste) => (
-                              <span key={taste} className="text-[9px] font-extrabold bg-purple-100 text-purple-900 px-1.5 py-0.5 rounded">
+                              <span key={taste} className="text-[9px] font-bold bg-sky-50 text-sky-700 px-1.5 py-0.5 rounded border border-sky-100">
                                 #{taste}
                               </span>
                             ))}
@@ -765,17 +769,17 @@ export default function Home() {
                         <div className="flex gap-1.5 pt-1">
                           <button
                             onClick={() => toggleCompare(profile)}
-                            className={`flex-1 py-1.5 text-xs font-extrabold rounded-xl border transition-all cursor-pointer ${
+                            className={`flex-1 py-1.5 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
                               isCompared
-                                ? 'bg-purple-200 text-purple-900 border-purple-400'
-                                : 'bg-slate-100 text-purple-900 border-slate-300 hover:bg-purple-100'
+                                ? 'bg-sky-100 text-sky-800 border-sky-300'
+                                : 'bg-white text-slate-600 border-sky-100 hover:bg-sky-50'
                             }`}
                           >
                             + 比較
                           </button>
                           <Link
                             href={`/${profile.user_id}`}
-                            className="flex-1 py-1.5 text-xs font-black text-center text-white bg-purple-700 hover:bg-purple-800 rounded-xl shadow-md transition-all flex items-center justify-center"
+                            className="flex-1 py-1.5 text-xs font-bold text-center text-white bg-sky-500 hover:bg-sky-600 rounded-xl shadow-xs transition-all flex items-center justify-center"
                           >
                             詳細を見る &gt;
                           </Link>
@@ -792,13 +796,13 @@ export default function Home() {
 
       {/* 比較固定バー */}
       {compareList.length > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-950/95 text-white backdrop-blur-xl px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-6 z-40 border border-slate-800">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/90 text-white backdrop-blur-md px-6 py-3 rounded-2xl shadow-lg flex items-center gap-6 z-40 border border-slate-700">
           <div className="text-xs font-bold">
-            比較リスト: <span className="font-black text-purple-400 text-sm mx-1">{compareList.length}</span> / 3 名
+            比較リスト: <span className="font-black text-sky-400 text-sm mx-1">{compareList.length}</span> / 3 名
           </div>
           <button
             onClick={() => setIsCompareOpen(true)}
-            className="px-4 py-2 bg-purple-700 hover:bg-purple-600 text-white rounded-xl text-xs font-black transition-all shadow-md cursor-pointer"
+            className="px-4 py-2 bg-sky-500 hover:bg-sky-400 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
           >
             比較表を開く
           </button>
@@ -807,16 +811,16 @@ export default function Home() {
 
       {/* 比較モーダル（詳細画面） */}
       {isCompareOpen && (
-        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-3xl p-6 w-full max-w-4xl shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center border-b border-slate-200 pb-3">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-4xl shadow-xl relative space-y-4 max-h-[90vh] overflow-y-auto border border-sky-100">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <div>
-                <h3 className="text-sm font-black text-slate-950">クリエイター詳細比較</h3>
-                <p className="text-[11px] text-slate-600 font-bold">選択したクリエイターのメニュー・条件を一覧で比較できます</p>
+                <h3 className="text-sm font-black text-slate-800">クリエイター詳細比較</h3>
+                <p className="text-[11px] text-slate-500 font-bold">選択したクリエイターのメニュー・条件を一覧で比較できます</p>
               </div>
               <button
                 onClick={() => setIsCompareOpen(false)}
-                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-700 font-extrabold text-xs transition-colors cursor-pointer"
+                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 font-bold text-xs transition-colors cursor-pointer"
               >
                 ✕
               </button>
@@ -824,9 +828,9 @@ export default function Home() {
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {compareList.map((item) => (
-                <div key={item.user_id} className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col justify-between space-y-3">
+                <div key={item.user_id} className="bg-sky-50/30 p-4 rounded-2xl border border-sky-100 flex flex-col justify-between space-y-3">
                   <div className="space-y-3">
-                    <div className="relative w-full aspect-video bg-slate-200 rounded-xl overflow-hidden">
+                    <div className="relative w-full aspect-video bg-sky-100/50 rounded-xl overflow-hidden">
                       {item.thumbnail_url ? (
                         <img
                           src={item.thumbnail_url}
@@ -834,39 +838,39 @@ export default function Home() {
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-500 font-extrabold">
+                        <div className="w-full h-full flex items-center justify-center text-[10px] text-sky-300 font-bold">
                           NO IMAGE
                         </div>
                       )}
                     </div>
 
                     <div className="flex justify-between items-start">
-                      <h4 className="font-black text-slate-950 text-xs">{item.display_name}</h4>
+                      <h4 className="font-bold text-slate-800 text-xs">{item.display_name}</h4>
                       <button
                         onClick={() => toggleCompare(item)}
-                        className="text-[10px] text-rose-600 font-extrabold hover:underline cursor-pointer"
+                        className="text-[10px] text-rose-500 font-bold hover:underline cursor-pointer"
                       >
                         削除
                       </button>
                     </div>
 
-                    <div className="text-xs space-y-2 bg-white p-3 rounded-xl border border-slate-200">
+                    <div className="text-xs space-y-2 bg-white p-3 rounded-xl border border-sky-100/60">
                       {/* メニュー一覧 */}
                       <div className="space-y-1 pb-1 border-b border-slate-100">
-                        <span className="text-[10px] font-black text-slate-800 block">主な料金</span>
+                        <span className="text-[10px] font-bold text-slate-700 block">主な料金</span>
                         {item.menu_items && item.menu_items.length > 0 ? (
                           item.menu_items.map((m, idx) => (
                             <div key={idx} className="flex justify-between text-[10px]">
-                              <span className="text-slate-600 font-bold">{m.title}</span>
-                              <span className="font-black text-purple-800">
+                              <span className="text-slate-500 font-medium">{m.title}</span>
+                              <span className="font-bold text-sky-600">
                                 {typeof m.price === 'number' ? `¥${m.price.toLocaleString()}〜` : '応相談'}
                               </span>
                             </div>
                           ))
                         ) : (
                           <div className="flex justify-between text-[10px]">
-                            <span className="text-slate-600 font-bold">最安価格</span>
-                            <span className="font-black text-purple-800">¥{item.price_min?.toLocaleString() || '応相談'}〜</span>
+                            <span className="text-slate-500 font-medium">最安価格</span>
+                            <span className="font-bold text-sky-600">¥{item.price_min?.toLocaleString() || '応相談'}〜</span>
                           </div>
                         )}
                       </div>
@@ -874,64 +878,63 @@ export default function Home() {
                       {/* 制作条件・各種対応項目の比較 */}
                       <div className="space-y-1.5 pt-1">
                         <div className="flex justify-between text-[10px]">
-                          <span className="text-slate-600 font-bold">AI使用方針</span>
-                          <span className="font-black text-indigo-900">
+                          <span className="text-slate-500 font-medium">AI使用方針</span>
+                          <span className="font-bold text-sky-800">
                             {item.ai_usage === 'none' ? '完全手描き' : item.ai_usage === 'partial' ? '一部AI使用' : item.ai_usage === 'main' ? 'AIメイン' : '未設定'}
                           </span>
                         </div>
 
                         <div className="flex justify-between text-[10px]">
-                          <span className="text-slate-600 font-bold">R-18対応</span>
-                          <span className={`font-black ${item.r18_allowed ? 'text-rose-600' : 'text-slate-500'}`}>
+                          <span className="text-slate-500 font-medium">R-18対応</span>
+                          <span className={`font-bold ${item.r18_allowed ? 'text-rose-500' : 'text-slate-400'}`}>
                             {item.r18_allowed ? '可能 (R-18 OK)' : '不可'}
                           </span>
                         </div>
 
                         <div className="flex justify-between text-[10px]">
-                          <span className="text-slate-600 font-bold">無料リテイク</span>
-                          <span className="font-black text-slate-900">
+                          <span className="text-slate-500 font-medium">無料リテイク</span>
+                          <span className="font-bold text-slate-700">
                             {typeof item.free_revision_count === 'number' ? `${item.free_revision_count}回まで` : '要相談'}
                           </span>
                         </div>
 
                         <div className="flex justify-between text-[10px]">
-                          <span className="text-slate-600 font-bold">納期目安</span>
-                          <span className="font-black text-slate-900">{item.lead_time_days || 14}日以内</span>
+                          <span className="text-slate-500 font-medium">納期目安</span>
+                          <span className="font-bold text-slate-700">{item.lead_time_days || 14}日以内</span>
                         </div>
 
                         <div className="flex justify-between text-[10px]">
-                          <span className="text-slate-600 font-bold">特急対応</span>
-                          <span className={`font-black ${item.express_option_available ? 'text-amber-600' : 'text-slate-500'}`}>
+                          <span className="text-slate-500 font-medium">特急対応</span>
+                          <span className={`font-bold ${item.express_option_available ? 'text-amber-500' : 'text-slate-400'}`}>
                             {item.express_option_available ? '相談可' : '不可'}
                           </span>
                         </div>
 
                         <div className="flex justify-between text-[10px]">
-                          <span className="text-slate-600 font-bold">商用利用</span>
-                          <span className={`font-black ${item.commercial_use_allowed ? 'text-emerald-700' : 'text-slate-500'}`}>
+                          <span className="text-slate-500 font-medium">商用利用</span>
+                          <span className={`font-bold ${item.commercial_use_allowed ? 'text-emerald-600' : 'text-slate-400'}`}>
                             {item.commercial_use_allowed ? '可能' : '不可'}
                           </span>
                         </div>
 
                         <div className="flex justify-between text-[10px]">
-                          <span className="text-slate-600 font-bold">著作権譲渡</span>
-                          <span className={`font-black ${item.copyright_transfer_available ? 'text-indigo-700' : 'text-slate-500'}`}>
+                          <span className="text-slate-500 font-medium">著作権譲渡</span>
+                          <span className={`font-bold ${item.copyright_transfer_available ? 'text-sky-700' : 'text-slate-400'}`}>
                             {item.copyright_transfer_available ? '相談可' : '不可'}
                           </span>
                         </div>
 
                         <div className="flex justify-between text-[10px]">
-                          <span className="text-slate-600 font-bold">いいね数</span>
-                          <span className="font-black text-rose-600">♥ {item.likes_count ?? 0}</span>
+                          <span className="text-slate-500 font-medium">いいね数</span>
+                          <span className="font-bold text-rose-500">♥ {item.likes_count ?? 0}</span>
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  {/* 修正箇所：hrefのルートパスを統一 */}
                   <Link
                     href={`/${item.user_id}`}
-                    className="block w-full py-2 bg-purple-700 hover:bg-purple-800 text-white text-xs font-black text-center rounded-xl shadow-md transition-all"
+                    className="block w-full py-2 bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold text-center rounded-xl shadow-xs transition-all"
                   >
                     詳細ページへ
                   </Link>
