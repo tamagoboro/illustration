@@ -24,7 +24,6 @@ const PRESET_TASTES = [
   '著作権譲渡可',
 ]
 
-// SNSプラットフォームの選択肢定義
 const SNS_PLATFORMS = [
   { id: 'twitter', label: '𝕏 (Twitter)' },
   { id: 'instagram', label: 'Instagram' },
@@ -38,7 +37,6 @@ const SNS_PLATFORMS = [
   { id: 'other', label: 'その他' },
 ]
 
-// テーマカラーの定義
 const THEME_COLORS = [
   { id: 'indigo', name: 'インディゴ', bg: 'bg-indigo-600', text: 'text-indigo-600', ring: 'ring-indigo-500', lightBg: 'bg-indigo-50', border: 'border-indigo-200' },
   { id: 'rose', name: 'ローズピンク', bg: 'bg-rose-500', text: 'text-rose-500', ring: 'ring-rose-500', lightBg: 'bg-rose-50', border: 'border-rose-200' },
@@ -105,10 +103,8 @@ export default function Dashboard() {
   const [avatarUrl, setAvatarUrl] = useState('')
   const [priceMin, setPriceMin] = useState<string>('5000')
 
-  // 新機能: テーマカラー State
   const [themeColor, setThemeColor] = useState<string>('indigo')
 
-  // スケジューラー State
   const [availableFromText, setAvailableFromText] = useState('10月上旬〜')
   const [activeProjectsCount, setActiveProjectsCount] = useState<number>(1)
   const [maxProjectsCapacity, setMaxProjectsCapacity] = useState<number>(3)
@@ -125,7 +121,6 @@ export default function Dashboard() {
 
   const [externalEstimationUrl, setExternalEstimationUrl] = useState('')
 
-  // 新機能: マルチSNSリンク State
   const [snsLinks, setSnsLinks] = useState<SnsLinkItem[]>([
     { id: '1', platform: 'twitter', url: '' },
     { id: '2', platform: 'instagram', url: '' }
@@ -179,11 +174,9 @@ export default function Dashboard() {
           )
         }
 
-        // 動的SNSリンクデータの取得・初期化
         if (Array.isArray(profileData.sns_links) && profileData.sns_links.length > 0) {
           setSnsLinks(profileData.sns_links)
         } else {
-          // 後方互換：旧データがあれば初期セット
           const initialLinks: SnsLinkItem[] = []
           if (profileData.twitter_url) initialLinks.push({ id: 'tw', platform: 'twitter', url: profileData.twitter_url })
           if (profileData.instagram_url) initialLinks.push({ id: 'ig', platform: 'instagram', url: profileData.instagram_url })
@@ -240,7 +233,6 @@ export default function Dashboard() {
     checkUserAndFetchData()
   }, [router])
 
-  // SNSリンクの動的追加・削除・更新ハンドラー
   const handleAddSnsLink = () => {
     const newLink: SnsLinkItem = {
       id: Date.now().toString(),
@@ -472,7 +464,6 @@ export default function Dashboard() {
         url: item.url.trim()
       }))
 
-    // 後方互換用の個別URL取得
     const twitterLink = cleanSnsLinks.find((l) => l.platform === 'twitter')?.url || null
     const instagramLink = cleanSnsLinks.find((l) => l.platform === 'instagram')?.url || null
     const pixivLink = cleanSnsLinks.find((l) => l.platform === 'pixiv')?.url || null
@@ -567,8 +558,6 @@ export default function Dashboard() {
   }
 
   const currentPortfolioUrl = typeof window !== 'undefined' && user ? `${window.location.origin}/${user.id}` : ''
-
-  // テーマカラーに応じたクラスのヘルパー取得
   const currentThemeObj = THEME_COLORS.find((t) => t.id === themeColor) || THEME_COLORS[0]
 
   if (loading) {
@@ -761,7 +750,7 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* 新機能: テーマカラー設定エリア */}
+            {/* テーマカラー設定 */}
             <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
               <div>
                 <h3 className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
@@ -792,7 +781,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* 制作スケジューラー & 稼働キャパシティ設定エリア */}
+            {/* スケジューラー設定 */}
             <div className="p-5 rounded-2xl bg-indigo-50/40 border border-indigo-100/80 space-y-4">
               <div>
                 <h3 className="text-xs font-extrabold text-indigo-950 flex items-center gap-1.5">
@@ -1270,7 +1259,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Links & SNS Section (動的追加・マルチリンク対応に拡張) */}
+            {/* Links & SNS Section */}
             <div className="border-t border-slate-100 pt-6 space-y-4">
               <div>
                 <h3 className="font-bold text-slate-900 text-xs">連絡先・SNS / 外部リンク設定</h3>
@@ -1278,7 +1267,6 @@ export default function Dashboard() {
               </div>
 
               <div className="space-y-4">
-                {/* 外部見積もりフォームURL / 見積書作成ページへのリンクエリア */}
                 <div className="space-y-2 p-4 rounded-2xl bg-indigo-50/40 border border-indigo-100">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-slate-800 flex items-center gap-2">
@@ -1316,7 +1304,6 @@ export default function Dashboard() {
                   </p>
                 </div>
 
-                {/* 動的マルチSNSリンク */}
                 <div className="space-y-3 pt-2">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-slate-700 block">SNS / 外部サービスリンク ({snsLinks.length}件)</label>
