@@ -180,37 +180,37 @@ export default function CreatorClient({
     fetchCreatorData()
   }, [id, initialProfile, initialWorks, profile, works.length])
 
-  // テーマカラーの解決（ダッシュボードの16進数・プリセットIDのどちらにも対応）
-const themeColor = useMemo(() => {
-  const rawColor = (profile?.theme_color || profile?.form_config?.themeColor || '#1F2937').toLowerCase()
+  // テーマカラーの解決（profile.theme_color を最優先に評価）
+  const themeColor = useMemo(() => {
+    // 1. ダッシュボード側の設定（profile.theme_color）を最優先。無ければ form_config を使用。
+    const rawColor = (profile?.theme_color || profile?.form_config?.themeColor || '#1F2937').toLowerCase()
 
-  // ID文字列の判定
-  if (rawColor === 'indigo' || rawColor === '#4f46e5') return '#4F46E5'
-  if (rawColor === 'rose' || rawColor === '#f43f5e') return '#F43F5E'
-  if (rawColor === 'emerald' || rawColor === '#10b981') return '#10B981'
-  if (rawColor === 'amber' || rawColor === '#f59e0b') return '#F59E0B'
-  if (rawColor === 'dark' || rawColor === '#0f172a') return '#0F172A'
+    // 2. プリセットID文字列を対応するカラーコードに変換
+    if (rawColor === 'indigo' || rawColor === '#4f46e5') return '#4F46E5'
+    if (rawColor === 'rose' || rawColor === '#f43f5e') return '#F43F5E'
+    if (rawColor === 'emerald' || rawColor === '#10b981') return '#10B981'
+    if (rawColor === 'amber' || rawColor === '#f59e0b') return '#F59E0B'
+    if (rawColor === 'dark' || rawColor === '#0f172a') return '#0F172A'
 
-  // それ以外のカラーコード（#1F2937 など）はそのまま返す
-  return profile?.theme_color || profile?.form_config?.themeColor || '#1F2937'
-}, [profile])
+    // 3. それ以外の 16 進数カラーコード（例: #1F2937）は指定値をそのまま優先適用
+    return profile?.theme_color || profile?.form_config?.themeColor || '#1F2937'
+  }, [profile?.theme_color, profile?.form_config?.themeColor])
 
   // タグリストの規格化 (文字列配列・オブジェクト配列の両方に対応)
-  // オブジェクトかつ name を持つか判定する型ガード関数
-const normalizedTastes = useMemo(() => {
-  if (!profile?.tastes || !Array.isArray(profile.tastes)) return []
-  return profile.tastes
-    .map((item) => {
-      if (typeof item === 'string') return item
-      
-      // item がオブジェクトで 'name' を含む場合に型をキャストして参照
-      if (typeof item === 'object' && item !== null && 'name' in item) {
-        return (item as { name?: string }).name || ''
-      }
-      return ''
-    })
-    .filter((item) => item.length > 0)
-}, [profile?.tastes])
+  const normalizedTastes = useMemo(() => {
+    if (!profile?.tastes || !Array.isArray(profile.tastes)) return []
+    return profile.tastes
+      .map((item) => {
+        if (typeof item === 'string') return item
+        
+        // item がオブジェクトで 'name' を含む場合に型をキャストして参照
+        if (typeof item === 'object' && item !== null && 'name' in item) {
+          return (item as { name?: string }).name || ''
+        }
+        return ''
+      })
+      .filter((item) => item.length > 0)
+  }, [profile?.tastes])
 
   // フォーム設定の安全な取得
   const activeFormConfig = useMemo<FormConfig | null>(() => {
