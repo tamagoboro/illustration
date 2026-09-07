@@ -180,15 +180,19 @@ export default function CreatorClient({
   }, [id, initialProfile, initialWorks, profile, works.length])
 
   // テーマカラーの解決（ダッシュボードの16進数・プリセットIDのどちらにも対応）
-  const themeColor = useMemo(() => {
-    const rawColor = profile?.theme_color || profile?.form_config?.themeColor || '#1F2937'
-    if (rawColor === 'indigo') return '#4F46E5'
-    if (rawColor === 'rose') return '#F43F5E'
-    if (rawColor === 'emerald') return '#10B981'
-    if (rawColor === 'amber') return '#F59E0B'
-    if (rawColor === 'dark') return '#0F172A'
-    return rawColor
-  }, [profile])
+const themeColor = useMemo(() => {
+  const rawColor = (profile?.theme_color || profile?.form_config?.themeColor || '#1F2937').toLowerCase()
+
+  // ID文字列の判定
+  if (rawColor === 'indigo' || rawColor === '#4f46e5') return '#4F46E5'
+  if (rawColor === 'rose' || rawColor === '#f43f5e') return '#F43F5E'
+  if (rawColor === 'emerald' || rawColor === '#10b981') return '#10B981'
+  if (rawColor === 'amber' || rawColor === '#f59e0b') return '#F59E0B'
+  if (rawColor === 'dark' || rawColor === '#0f172a') return '#0F172A'
+
+  // それ以外のカラーコード（#1F2937 など）はそのまま返す
+  return profile?.theme_color || profile?.form_config?.themeColor || '#1F2937'
+}, [profile])
 
   // タグリストの規格化 (文字列配列・オブジェクト配列の両方に対応)
   // オブジェクトかつ name を持つか判定する型ガード関数
