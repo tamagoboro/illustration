@@ -750,36 +750,7 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* テーマカラー設定 */}
-            <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
-              <div>
-                <h3 className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
-                  <span>🎨 テーマカラー・デザイン設定</span>
-                </h3>
-                <p className="text-[11px] text-slate-400 mt-0.5">公開ページのメインアクセントカラーを選択します</p>
-              </div>
-
-              <div className="flex flex-wrap gap-2.5 pt-1">
-                {THEME_COLORS.map((theme) => {
-                  const isSelected = themeColor === theme.id
-                  return (
-                    <button
-                      key={theme.id}
-                      type="button"
-                      onClick={() => setThemeColor(theme.id)}
-                      className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                        isSelected
-                          ? `bg-white border-slate-400 ${theme.text} ring-2 ${theme.ring} shadow-xs`
-                          : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
-                      }`}
-                    >
-                      <span className={`w-3.5 h-3.5 rounded-full ${theme.bg}`} />
-                      {theme.name}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
+          
 
             {/* スケジューラー設定 */}
             <div className="p-5 rounded-2xl bg-indigo-50/40 border border-indigo-100/80 space-y-4">
