@@ -147,10 +147,8 @@ export default function CreatorClient({
 
 useEffect(() => {
   const fetchCreatorData = async () => {
-    // initialProfile がない場合のみローディング表示
     if (!initialProfile) setLoading(true)
 
-    // initialProfile の有無に関わらず、必ず Supabase から最新データを取得する
     const { data: profileData } = await supabase
       .from('profiles')
       .select('*')
@@ -176,7 +174,8 @@ useEffect(() => {
 
   fetchCreatorData()
 }, [id])
-  // テーマカラーの解決（profile.theme_color を最優先に評価）
+
+// テーマカラーの解決（profile.theme_color を最優先に評価）
 const themeColor = useMemo(() => {
   // DBの theme_color を最優先で取得
   const rawColor = profile?.theme_color || profile?.form_config?.themeColor || ''
@@ -192,8 +191,8 @@ const themeColor = useMemo(() => {
   // カラーコード（#xxxxxx）が直接入っている場合はそれを採用
   if (normalized.startsWith('#')) return normalized
 
-  // どれにも該当しない場合の初期値（※ここがピンク(#F43F5E)になっているとピンクになります）
-  return '#F43F5E' // デフォルトをエメラルドにする場合
+  // どれにも該当しない場合の初期値をエメラルド（#10B981）に変更
+  return '#10B981'
 }, [profile])
   // タグリストの規格化 (文字列配列・オブジェクト配列の両方に対応)
   const normalizedTastes = useMemo(() => {
