@@ -33,25 +33,35 @@ type MenuItem = {
   price: number | ''
 }
 
+// テーブル定義に合わせた ExtendedProfile の更新
 type ExtendedProfile = Profile & {
-  menu_items?: MenuItem[]
-  price_min?: number | null
-  ai_usage?: string | null
-  free_revision_count?: number | null
-  express_option_available?: boolean | null
-  copyright_transfer_available?: boolean | null
-  ai_learning_allowed?: boolean | null
-  r18_allowed?: boolean | null
-  tastes?: string[] | null
+  display_name?: string | null
+  status?: string | null
   status_comment?: string | null
+  tastes?: string[] | null
   lead_time_days?: number | null
+  price_min?: number | null
   commercial_use_allowed?: boolean | null
+  avatar_url?: string | null
   external_estimation_url?: string | null
   twitter_url?: string | null
   instagram_url?: string | null
   pixiv_url?: string | null
   website_url?: string | null
+  updated_at?: string | null
+  is_public?: boolean | null
+  likes_count?: number | null
+  menu_items?: MenuItem[] | null
+  ai_usage?: string | null
+  ai_learning_allowed?: boolean | null
+  express_option_available?: boolean | null
+  copyright_transfer_available?: boolean | null
+  free_revision_count?: number | null
+  r18_allowed?: boolean | null
   form_config?: FormConfig | null
+  active_projects_count?: number | null
+  max_projects_capacity?: number | null
+  available_from?: string | null
 }
 
 export default function CreatorClient({
@@ -402,6 +412,28 @@ export default function CreatorClient({
                 </span>
               </div>
 
+              {/* 稼働枠・受任状況表示 */}
+              {(profile.max_projects_capacity != null || profile.available_from) && (
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 space-y-1.5 text-xs">
+                  {profile.max_projects_capacity != null && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-500 font-bold">現在の稼働枠</span>
+                      <span className="font-extrabold text-slate-800">
+                        {profile.active_projects_count ?? 0} / {profile.max_projects_capacity} 件
+                      </span>
+                    </div>
+                  )}
+                  {profile.available_from && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-500 font-bold">受付開始可能日</span>
+                      <span className="font-extrabold text-slate-800">
+                        {profile.available_from}〜
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="space-y-2.5 text-xs text-slate-600 pb-1">
                 {profile.price_min != null && (
                   <div className="flex justify-between items-baseline bg-pink-50/50 p-3 rounded-xl border border-pink-100/80">
@@ -459,7 +491,10 @@ export default function CreatorClient({
                   }`}
                 >
                   <span>{isFavorite ? '❤️' : '🤍'}</span>
-                  <span>{isFavorite ? 'お気に入り登録済み' : 'お気に入りに追加'}</span>
+                  <span>
+                    {isFavorite ? 'お気に入り登録済み' : 'お気に入りに追加'}
+                    {profile.likes_count != null && profile.likes_count > 0 && ` (${profile.likes_count})`}
+                  </span>
                 </button>
               </div>
             </div>
