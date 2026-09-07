@@ -137,7 +137,6 @@ export default function CreatorClient({
     return profile.form_config
   }, [profile])
 
-  // 単一選択・複数選択のハンドラ
   const handleSelectOption = (fieldId: string, optionLabel: string, isCheckbox: boolean) => {
     setFormAnswers((prev) => {
       if (isCheckbox) {
@@ -152,7 +151,6 @@ export default function CreatorClient({
     })
   }
 
-  // 計算ロジック
   const { basePriceTotal, totalPrice } = useMemo(() => {
     if (!activeFormConfig) return { basePriceTotal: 0, totalPrice: 0 }
 
@@ -288,7 +286,7 @@ export default function CreatorClient({
     } catch (error) {
       console.error(error)
       alert('PDFの生成中にエラーが発生しました。')
-} finally { // ← ここを fontally から finally に修正
+    } finally {
       setIsDownloadingPdf(false)
     }
   }
@@ -421,6 +419,11 @@ export default function CreatorClient({
                         ✦ 完全手描き
                       </span>
                     )}
+                    {!profile.ai_learning_allowed && (
+                      <span className="text-[11px] bg-sky-500/10 text-sky-800 font-extrabold px-3 py-0.5 rounded-full border border-sky-200/60 shadow-2xs">
+                        🛡️ AI学習禁止
+                      </span>
+                    )}
                     {profile.r18_allowed && (
                       <span className="text-[11px] bg-rose-500/10 text-rose-800 font-extrabold px-3 py-0.5 rounded-full border border-rose-200/60">
                         R-18 OK
@@ -448,6 +451,14 @@ export default function CreatorClient({
 
             {/* サイド操作枠 */}
             <div className="w-full lg:w-80 bg-white/80 backdrop-blur-md p-5 rounded-2xl border border-white shadow-sm space-y-4 shrink-0">
+              
+              {/* 💡 仲介手数料0% バナー */}
+              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-2.5 text-center">
+                <span className="text-[11px] font-black text-emerald-800 flex items-center justify-center gap-1">
+                  <span>💡</span> 仲介手数料0円・直取引価格でご案内
+                </span>
+              </div>
+
               <div className="space-y-2.5 text-xs text-slate-600 pb-1">
                 {profile.price_min != null && (
                   <div className="flex justify-between items-baseline bg-pink-50/50 p-3 rounded-xl border border-pink-100/80">
@@ -643,7 +654,7 @@ export default function CreatorClient({
         </section>
       </main>
 
-      {/* 💎 フォーム入力 & 統一プレビューモーダル */}
+      {/* フォーム入力 & 統一プレビューモーダル */}
       {isEstimateOpen && activeFormConfig && (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-lg flex items-center justify-center p-3 sm:p-5 z-50 animate-in fade-in duration-200">
           <div className="bg-slate-50/95 backdrop-blur-2xl rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl border border-white/60 overflow-hidden relative">
@@ -685,7 +696,6 @@ export default function CreatorClient({
             {/* モーダルメインコンテンツ */}
             <div className="overflow-y-auto p-5 sm:p-6 space-y-6 flex-1">
               {!generatedSpec ? (
-                /* ─── 回答・入力画面 ─── */
                 <>
                   {/* お名前入力 */}
                   <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-2">
@@ -887,7 +897,6 @@ export default function CreatorClient({
                   })}
                 </>
               ) : (
-                /* ─── プレビュー・仕様書生成完了画面（入力画面とデザインを完全一致） ─── */
                 <div className="space-y-6 animate-in fade-in duration-300">
                   {/* アクションボタン */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -998,9 +1007,15 @@ export default function CreatorClient({
                           href={profile.twitter_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-xl transition flex items-center justify-between text-xs shadow-xs"
+                          onClick={handleCopySpec}
+                          className="w-full py-3.5 px-4 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-xl transition flex items-center justify-between text-xs shadow-xs"
                         >
-                          <span>X (Twitter) の DM で送る</span>
+                          <div className="flex flex-col text-left">
+                            <span>X (Twitter) の DM で送る</span>
+                            <span className="text-[10px] text-slate-400 font-normal">
+                              ※ クリック時に仕様書が自動コピーされます
+                            </span>
+                          </div>
                           <span>↗</span>
                         </a>
                       )}
@@ -1010,10 +1025,16 @@ export default function CreatorClient({
                           href={profile.external_estimation_url}
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={handleCopySpec}
                           style={{ backgroundColor: themeColor }}
-                          className="w-full py-3 px-4 hover:opacity-90 text-white font-extrabold rounded-xl transition flex items-center justify-between text-xs shadow-xs"
+                          className="w-full py-3.5 px-4 hover:opacity-90 text-white font-extrabold rounded-xl transition flex items-center justify-between text-xs shadow-xs"
                         >
-                          <span>外部フォーム / Webサイトで送る</span>
+                          <div className="flex flex-col text-left">
+                            <span>外部フォーム / Webサイトで送る</span>
+                            <span className="text-[10px] text-white/80 font-normal">
+                              ※ クリック時に仕様書が自動コピーされます
+                            </span>
+                          </div>
                           <span>↗</span>
                         </a>
                       )}

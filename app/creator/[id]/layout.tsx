@@ -17,7 +17,6 @@ const getFullImageUrl = (url: string | null | undefined, fallbackUrl: string): s
 
   // すでに完全な http:// または https:// URL の場合
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-    // 古い形式の補正が必要な場合のみ書き換え
     if (trimmed.includes('/storage/v1/object/portfolios/')) {
       return trimmed.replace('/storage/v1/object/portfolios/', '/storage/v1/object/public/portfolios/')
     }
@@ -37,7 +36,6 @@ const getFullImageUrl = (url: string | null | undefined, fallbackUrl: string): s
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params
 
-  // id が form-builder などの固定ページの場合は専用のデフォルトメタデータを返す
   if (!id || id === 'form-builder') {
     return {
       title: 'フォームビルダー | クリエイターツール',
@@ -45,38 +43,42 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     }
   }
 
-  // 1. プロフィール情報（表示名）の取得
   const { data: profile } = await supabase
     .from('profiles')
     .select('display_name')
     .eq('user_id', id)
     .single()
 
-  // 2. ポートフォリオの1枚目の画像（sort_order順で先頭）を取得
   const { data: firstPortfolio } = await supabase
     .from('portfolio_items')
     .select('image_url')
     .eq('user_id', id)
     .order('sort_order', { ascending: true })
-    .limit(1) // ★ .limit(0) から .limit(1) に修正
+    .limit(1)
     .maybeSingle()
 
   const name = profile?.display_name || 'クリエイター'
-
-  // フォールバック（動的OGP画像）の絶対URL
   const fallbackOgUrl = `${siteUrl}/api/og/creator/${id}`
-
-  // 1枚目の画像URLを取得・生成
   const mainImageUrl = getFullImageUrl(firstPortfolio?.image_url, fallbackOgUrl)
 
   return {
     title: `${name} | クリエイターポートフォリオ`,
+    // 標準のrobotsプロパティのみを指定
+    robots: {
+      index: true,
+      follow: true,
+    },
+    // 非標準のAI拒否用メタタグ (noai, noimageai) は other プロパティ (Metadataルートレベル) に指定
+    other: {
+      'robots': 'noai, noimageai',
+      'googlebot': 'noai, noimageai',
+    },
     openGraph: {
       title: `${name} のポートフォリオ`,
       description: `${name} の作品集・参考価格・お問い合わせページです。`,
       images: [
         {
-          url: mainImageUrl, // 必ず https://... の完全なURLが入る
+          url: mainImageUrl,
           width: 1200,
           height: 630,
           alt: `${name} の代表作品`,
