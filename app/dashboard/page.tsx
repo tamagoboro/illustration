@@ -92,6 +92,9 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<'profile' | 'portfolio'>('profile')
   const [user, setUser] = useState<User | null>(null)
 
+  // 未保存変更の管理フラグ
+  const [isDirty, setIsDirty] = useState(false)
+
   const [isPublic, setIsPublic] = useState(true)
   const [displayName, setDisplayName] = useState('')
   const [status, setStatus] = useState<'available' | 'busy' | 'stopped'>('available')
@@ -132,6 +135,36 @@ export default function Dashboard() {
     { title: 'アイコン制作', price: 5000 },
     { title: 'ヘッダー制作', price: 8000 }
   ])
+
+  // ==========================================
+  // 離脱防止アラート (beforeunload) の実装
+  // ==========================================
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault()
+        e.returnValue = '' // ブラウザ標準の離脱確認ダイアログを表示
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [isDirty])
+
+  // ==========================================
+  // タブ切り替え時の確認ダイアログ
+  // ==========================================
+  const handleTabChange = (targetTab: 'profile' | 'portfolio') => {
+    if (activeTab === targetTab) return
+
+    if (isDirty) {
+      const confirmLeave = window.confirm(
+        '保存されていない変更があります。保存せずに別のタブへ移動しますか？\n（※移動しても入力内容は保持されますが、保存はされません）'
+      )
+      if (!confirmLeave) return
+    }
+
+    setActiveTab(targetTab)
+  }
 
   useEffect(() => {
     const checkUserAndFetchData = async () => {
@@ -228,12 +261,14 @@ export default function Dashboard() {
       }
 
       setLoading(false)
+      setIsDirty(false) // 初期読み込み時はフラグをオフに
     }
 
     checkUserAndFetchData()
   }, [router])
 
   const handleAddSnsLink = () => {
+    setIsDirty(true)
     const newLink: SnsLinkItem = {
       id: Date.now().toString(),
       platform: 'twitter',
@@ -243,10 +278,12 @@ export default function Dashboard() {
   }
 
   const handleRemoveSnsLink = (id: string) => {
+    setIsDirty(true)
     setSnsLinks((prev) => prev.filter((item) => item.id !== id))
   }
 
   const handleSnsLinkChange = (id: string, key: 'platform' | 'url', value: string) => {
+    setIsDirty(true)
     setSnsLinks((prev) =>
       prev.map((item) => (item.id === id ? { ...item, [key]: value } : item))
     )
@@ -269,14 +306,17 @@ export default function Dashboard() {
   }
 
   const handleAddMenuItem = () => {
+    setIsDirty(true)
     setMenuItems((prev) => [...prev, { title: '', price: '' }])
   }
 
   const handleRemoveMenuItem = (index: number) => {
+    setIsDirty(true)
     setMenuItems((prev) => prev.filter((_, idx) => idx !== index))
   }
 
   const handleMenuItemChange = (index: number, key: keyof MenuItem, value: any) => {
+    setIsDirty(true)
     setMenuItems((prev) =>
       prev.map((item, idx) => {
         if (idx !== index) return item
@@ -290,6 +330,7 @@ export default function Dashboard() {
   }
 
   const togglePresetTaste = (tag: string) => {
+    setIsDirty(true)
     setTastes((prev) =>
       prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
     )
@@ -298,6 +339,7 @@ export default function Dashboard() {
   const handleAddCustomTaste = () => {
     const trimmed = customTasteInput.trim()
     if (!trimmed) return
+    setIsDirty(true)
     if (!tastes.includes(trimmed)) {
       setTastes((prev) => [...prev, trimmed])
     }
@@ -305,6 +347,7 @@ export default function Dashboard() {
   }
 
   const handleRemoveTaste = (tagToRemove: string) => {
+    setIsDirty(true)
     setTastes((prev) => prev.filter((t) => t !== tagToRemove))
   }
 
@@ -384,6 +427,7 @@ export default function Dashboard() {
         .getPublicUrl(fileName)
 
       setAvatarUrl(normalizeStorageUrl(publicUrlData.publicUrl))
+      setIsDirty(true)
     } catch (error: any) {
       alert('アイコンのアップロードに失敗しました: ' + error.message)
     } finally {
@@ -416,6 +460,7 @@ export default function Dashboard() {
       const nextUrls = [...portfolioUrls]
       nextUrls[index] = normalizeStorageUrl(publicUrlData.publicUrl)
       setPortfolioUrls(nextUrls)
+      setIsDirty(true)
     } catch (error: any) {
       alert('画像のアップロードに失敗しました: ' + error.message)
     } finally {
@@ -511,6 +556,7 @@ export default function Dashboard() {
       alert('保存に失敗しました: ' + error.message)
     } else {
       showSuccessToast('プロフィール情報を更新しました！')
+      setIsDirty(false) // 保存成功時に未保存フラグをリセット
     }
   }
 
@@ -550,9 +596,14 @@ export default function Dashboard() {
 
     setSaving(false)
     showSuccessToast('作品ポートフォリオを更新しました！')
+    setIsDirty(false) // 保存成功時に未保存フラグをリセット
   }
 
   const handleLogout = async () => {
+    if (isDirty) {
+      const confirmLogout = window.confirm('保存されていない変更があります。破棄してログアウトしますか？')
+      if (!confirmLogout) return
+    }
     await supabase.auth.signOut()
     router.push('/')
   }
@@ -589,7 +640,14 @@ export default function Dashboard() {
                 D
               </div>
               <div>
-                <h1 className="text-sm font-bold text-slate-900 leading-none">ダッシュボード</h1>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-sm font-bold text-slate-900 leading-none">ダッシュボード</h1>
+                  {isDirty && (
+                    <span className="px-2 py-0.5 bg-rose-50 text-rose-600 border border-rose-200 rounded-md text-[10px] font-extrabold animate-pulse">
+                      ⚠️ 未保存の変更あり
+                    </span>
+                  )}
+                </div>
                 <p className="text-[11px] text-slate-400 font-medium mt-1">ポートフォリオ ＆ 見積もりフォーム管理</p>
               </div>
             </div>
@@ -704,11 +762,11 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* タブナビゲーション */}
+        {/* タブナビゲーション（確認ダイアログ付き） */}
         <div className="flex p-1 bg-slate-200/60 rounded-2xl max-w-lg mx-auto">
           <button
             type="button"
-            onClick={() => setActiveTab('profile')}
+            onClick={() => handleTabChange('profile')}
             className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               activeTab === 'profile'
                 ? 'bg-white text-slate-900 shadow-sm'
@@ -722,7 +780,7 @@ export default function Dashboard() {
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab('portfolio')}
+            onClick={() => handleTabChange('portfolio')}
             className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               activeTab === 'portfolio'
                 ? 'bg-white text-slate-900 shadow-sm'
@@ -737,7 +795,11 @@ export default function Dashboard() {
         </div>
 
         {activeTab === 'profile' && (
-          <form onSubmit={handleSaveProfile} className="bg-white rounded-3xl border border-slate-200/70 p-6 sm:p-8 space-y-8 shadow-xs">
+          <form 
+            onSubmit={handleSaveProfile} 
+            onChange={() => setIsDirty(true)}
+            className="bg-white rounded-3xl border border-slate-200/70 p-6 sm:p-8 space-y-8 shadow-xs"
+          >
             <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
               <div>
                 <h2 className="font-extrabold text-slate-900 text-base">基本情報の設定</h2>
@@ -750,7 +812,33 @@ export default function Dashboard() {
               )}
             </div>
 
-          
+            {/* テーマカラー選択 */}
+            <div className="p-5 rounded-2xl bg-slate-50/80 border border-slate-200/80 space-y-3">
+              <div>
+                <h3 className="text-xs font-extrabold text-slate-900">🎨 サイトのテーマカラー設定</h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">プロフィールページやダッシュボードのアクセントカラーを選択します</p>
+              </div>
+              <div className="flex flex-wrap gap-2.5 pt-1">
+                {THEME_COLORS.map((color) => (
+                  <button
+                    key={color.id}
+                    type="button"
+                    onClick={() => {
+                      setThemeColor(color.id)
+                      setIsDirty(true)
+                    }}
+                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      themeColor === color.id
+                        ? 'bg-white border-slate-900 shadow-sm ring-2 ring-slate-900/10'
+                        : 'bg-white/60 border-slate-200 text-slate-600 hover:bg-white'
+                    }`}
+                  >
+                    <span className={`w-3.5 h-3.5 rounded-full ${color.bg}`} />
+                    <span>{color.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
 
             {/* スケジューラー設定 */}
             <div className="p-5 rounded-2xl bg-indigo-50/40 border border-indigo-100/80 space-y-4">
@@ -828,7 +916,10 @@ export default function Dashboard() {
 
                 <button
                   type="button"
-                  onClick={() => setIsPublic(!isPublic)}
+                  onClick={() => {
+                    setIsPublic(!isPublic)
+                    setIsDirty(true)
+                  }}
                   className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500/20 ${
                     isPublic ? currentThemeObj.bg : 'bg-slate-300'
                   }`}
@@ -861,7 +952,10 @@ export default function Dashboard() {
                   {avatarUrl && (
                     <button
                       type="button"
-                      onClick={() => setAvatarUrl('')}
+                      onClick={() => {
+                        setAvatarUrl('')
+                        setIsDirty(true)
+                      }}
                       className="text-[11px] text-rose-500 font-bold hover:underline cursor-pointer"
                     >
                       アイコンを解除
@@ -904,7 +998,10 @@ export default function Dashboard() {
                       type="url"
                       placeholder="または画像URLを直接入力 (https://...)"
                       value={avatarUrl}
-                      onChange={(e) => setAvatarUrl(e.target.value)}
+                      onChange={(e) => {
+                        setAvatarUrl(e.target.value)
+                        setIsDirty(true)
+                      }}
                       className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-300 font-mono text-[11px]"
                     />
                   </div>
@@ -915,7 +1012,10 @@ export default function Dashboard() {
                 <label className="text-xs font-bold text-slate-700">現在の受付ステータス</label>
                 <select
                   value={status}
-                  onChange={(e) => setStatus(e.target.value as 'available' | 'busy' | 'stopped')}
+                  onChange={(e) => {
+                    setStatus(e.target.value as 'available' | 'busy' | 'stopped')
+                    setIsDirty(true)
+                  }}
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-semibold text-slate-700 cursor-pointer"
                 >
                   <option value="available">🟢 即対応可</option>
@@ -1008,7 +1108,10 @@ export default function Dashboard() {
                   <input
                     type="checkbox"
                     checked={commercialUseAllowed}
-                    onChange={(e) => setCommercialUseAllowed(e.target.checked)}
+                    onChange={(e) => {
+                      setCommercialUseAllowed(e.target.checked)
+                      setIsDirty(true)
+                    }}
                     className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
                   />
                   <span className="text-xs font-bold text-slate-700">商用利用を可能として掲載する</span>
@@ -1033,7 +1136,10 @@ export default function Dashboard() {
                           name="aiUsage"
                           value="none"
                           checked={aiUsage === 'none'}
-                          onChange={() => setAiUsage('none')}
+                          onChange={() => {
+                            setAiUsage('none')
+                            setIsDirty(true)
+                          }}
                           className="sr-only"
                         />
                         <span>完全手描き (AI不使用)</span>
@@ -1047,7 +1153,10 @@ export default function Dashboard() {
                           name="aiUsage"
                           value="partial"
                           checked={aiUsage === 'partial'}
-                          onChange={() => setAiUsage('partial')}
+                          onChange={() => {
+                            setAiUsage('partial')
+                            setIsDirty(true)
+                          }}
                           className="sr-only"
                         />
                         <span>一部AI補助あり (背景等)</span>
@@ -1061,7 +1170,10 @@ export default function Dashboard() {
                           name="aiUsage"
                           value="full"
                           checked={aiUsage === 'full'}
-                          onChange={() => setAiUsage('full')}
+                          onChange={() => {
+                            setAiUsage('full')
+                            setIsDirty(true)
+                          }}
                           className="sr-only"
                         />
                         <span>AI生成・加筆メイン</span>
@@ -1093,7 +1205,10 @@ export default function Dashboard() {
                     <input
                       type="checkbox"
                       checked={expressOptionAvailable}
-                      onChange={(e) => setExpressOptionAvailable(e.target.checked)}
+                      onChange={(e) => {
+                        setExpressOptionAvailable(e.target.checked)
+                        setIsDirty(true)
+                      }}
                       className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
                     />
                   </label>
@@ -1106,7 +1221,10 @@ export default function Dashboard() {
                     <input
                       type="checkbox"
                       checked={copyrightTransferAvailable}
-                      onChange={(e) => setCopyrightTransferAvailable(e.target.checked)}
+                      onChange={(e) => {
+                        setCopyrightTransferAvailable(e.target.checked)
+                        setIsDirty(true)
+                      }}
                       className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
                     />
                   </label>
@@ -1119,7 +1237,10 @@ export default function Dashboard() {
                     <input
                       type="checkbox"
                       checked={aiLearningAllowed}
-                      onChange={(e) => setAiLearningAllowed(e.target.checked)}
+                      onChange={(e) => {
+                        setAiLearningAllowed(e.target.checked)
+                        setIsDirty(true)
+                      }}
                       className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
                     />
                   </label>
@@ -1132,7 +1253,10 @@ export default function Dashboard() {
                     <input
                       type="checkbox"
                       checked={r18Allowed}
-                      onChange={(e) => setR18Allowed(e.target.checked)}
+                      onChange={(e) => {
+                        setR18Allowed(e.target.checked)
+                        setIsDirty(true)
+                      }}
                       className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
                     />
                   </label>
@@ -1267,12 +1391,12 @@ export default function Dashboard() {
                     type="url"
                     placeholder="https://...（見積書作成ページで自動生成されたURLまたは外部フォームURL）"
                     value={externalEstimationUrl}
-                    onChange={(e) => setExternalEstimationUrl(e.target.value)}
+                    onChange={(e) => {
+                      setExternalEstimationUrl(e.target.value)
+                      setIsDirty(true)
+                    }}
                     className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono text-[11px]"
                   />
-                  <p className="text-[10px] text-slate-400">
-                    ※ 自分で制作していない場合は「未作成」と表示されます。「見積書を作成・編集する」ボタンからフォームを作成してください。
-                  </p>
                 </div>
 
                 <div className="space-y-3 pt-2">
@@ -1339,7 +1463,11 @@ export default function Dashboard() {
         )}
 
         {activeTab === 'portfolio' && (
-          <form onSubmit={handleSavePortfolio} className="bg-white rounded-3xl border border-slate-200/70 p-6 sm:p-8 space-y-8 shadow-xs">
+          <form 
+            onSubmit={handleSavePortfolio} 
+            onChange={() => setIsDirty(true)}
+            className="bg-white rounded-3xl border border-slate-200/70 p-6 sm:p-8 space-y-8 shadow-xs"
+          >
             <div className="border-b border-slate-100 pb-4">
               <h2 className="font-extrabold text-slate-900 text-base">作品ギャラリーの設定</h2>
               <p className="text-xs text-slate-400 mt-1">最大4枚まで登録可能です。1枚目の画像がTwitter OGP・カード一覧の代表画像になります。</p>
@@ -1364,6 +1492,7 @@ export default function Dashboard() {
                           const next = [...portfolioUrls]
                           next[idx] = ''
                           setPortfolioUrls(next)
+                          setIsDirty(true)
                         }}
                         className="text-[11px] text-rose-500 font-bold hover:underline cursor-pointer"
                       >
@@ -1426,6 +1555,7 @@ export default function Dashboard() {
                         const next = [...portfolioUrls]
                         next[idx] = e.target.value
                         setPortfolioUrls(next)
+                        setIsDirty(true)
                       }}
                       className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-300 font-mono text-[11px]"
                     />
