@@ -43,7 +43,7 @@ export async function POST(req: Request) {
     // 4. ツイート文面の作成
     const name = profile.display_name
     const comment = profile.status_comment || profile.bio || 'よろしくお願いします！'
-    const creatorUrl = `https://illustration-jq5k.vercel.app/creator/${profile.user_id}`
+    const creatorUrl = `https://drawker.com/creator/${profile.user_id}`
 
     const tweetText = `${name}\n\n` +
       `「${comment}」\n\n` +
