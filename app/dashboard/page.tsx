@@ -812,33 +812,7 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* テーマカラー選択 */}
-            <div className="p-5 rounded-2xl bg-slate-50/80 border border-slate-200/80 space-y-3">
-              <div>
-                <h3 className="text-xs font-extrabold text-slate-900">🎨 サイトのテーマカラー設定</h3>
-                <p className="text-[11px] text-slate-400 mt-0.5">プロフィールページやダッシュボードのアクセントカラーを選択します</p>
-              </div>
-              <div className="flex flex-wrap gap-2.5 pt-1">
-                {THEME_COLORS.map((color) => (
-                  <button
-                    key={color.id}
-                    type="button"
-                    onClick={() => {
-                      setThemeColor(color.id)
-                      setIsDirty(true)
-                    }}
-                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                      themeColor === color.id
-                        ? 'bg-white border-slate-900 shadow-sm ring-2 ring-slate-900/10'
-                        : 'bg-white/60 border-slate-200 text-slate-600 hover:bg-white'
-                    }`}
-                  >
-                    <span className={`w-3.5 h-3.5 rounded-full ${color.bg}`} />
-                    <span>{color.name}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+            
 
             {/* スケジューラー設定 */}
             <div className="p-5 rounded-2xl bg-indigo-50/40 border border-indigo-100/80 space-y-4">
