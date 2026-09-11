@@ -151,13 +151,12 @@ function CreatorClient({
     fetchCreatorDataAndTrackPV()
   }, [id, router])
 
-  // テーマカラーの取得（プロフィールの定義またはフォーム定義から設定）
   const activeThemeColor = useMemo(() => {
     return (
       profile?.theme_color ||
       profile?.form_config?.theme_color ||
       profile?.form_config?.themeColor ||
-      '#ec4899' // デフォルト: ピンク
+      '#ec4899'
     )
   }, [profile])
 
@@ -747,7 +746,7 @@ function CreatorClient({
                   value={clientName}
                   onChange={(e) => setClientName(e.target.value)}
                   className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2"
-                  style={{ focusRingColor: activeThemeColor }}
+                  style={{ '--tw-ring-color': activeThemeColor } as React.CSSProperties}
                 />
               </div>
 
