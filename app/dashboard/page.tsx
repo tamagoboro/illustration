@@ -136,23 +136,19 @@ export default function Dashboard() {
     { title: 'ヘッダー制作', price: 8000 }
   ])
 
-  // ==========================================
-  // 離脱防止アラート (beforeunload) の実装
-  // ==========================================
+  // 離脱防止アラート
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (isDirty) {
         e.preventDefault()
-        e.returnValue = '' // ブラウザ標準の離脱確認ダイアログを表示
+        e.returnValue = ''
       }
     }
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [isDirty])
 
-  // ==========================================
   // タブ切り替え時の確認ダイアログ
-  // ==========================================
   const handleTabChange = (targetTab: 'profile' | 'portfolio') => {
     if (activeTab === targetTab) return
 
@@ -189,64 +185,64 @@ export default function Dashboard() {
           console.error('Profile fetch error:', profileError)
         }
 
-      if (profileData) {
-        setIsPublic(profileData.is_public ?? true)
-        setDisplayName(profileData.display_name || '')
-        setStatus(profileData.status || 'available')
-        setStatusComment(profileData.status_comment || '')
-        setThemeColor(profileData.theme_color || 'indigo')
-        
-        if (Array.isArray(profileData.tastes)) {
-          setTastes(profileData.tastes.map((t: any) => String(t)))
-        } else {
-          setTastes([])
-        }
-
-        if (Array.isArray(profileData.menu_items) && profileData.menu_items.length > 0) {
-          setMenuItems(
-            profileData.menu_items.map((item: any) => ({
-              title: item.title || '',
-              price: typeof item.price === 'number' ? item.price : (item.price === '' ? '' : safeParseInt(item.price) ?? '')
-            }))
-          )
-        }
-
-        if (Array.isArray(profileData.sns_links) && profileData.sns_links.length > 0) {
-          setSnsLinks(profileData.sns_links)
-        } else {
-          const initialLinks: SnsLinkItem[] = []
-          if (profileData.twitter_url) initialLinks.push({ id: 'tw', platform: 'twitter', url: profileData.twitter_url })
-          if (profileData.instagram_url) initialLinks.push({ id: 'ig', platform: 'instagram', url: profileData.instagram_url })
-          if (profileData.pixiv_url) initialLinks.push({ id: 'px', platform: 'pixiv', url: profileData.pixiv_url })
-          if (profileData.website_url) initialLinks.push({ id: 'web', platform: 'website', url: profileData.website_url })
+        if (profileData) {
+          setIsPublic(profileData.is_public ?? true)
+          setDisplayName(profileData.display_name || '')
+          setStatus(profileData.status || 'available')
+          setStatusComment(profileData.status_comment || '')
+          setThemeColor(profileData.theme_color || 'indigo')
           
-          if (initialLinks.length > 0) {
-            setSnsLinks(initialLinks)
+          if (Array.isArray(profileData.tastes)) {
+            setTastes(profileData.tastes.map((t: any) => String(t)))
+          } else {
+            setTastes([])
           }
+
+          if (Array.isArray(profileData.menu_items) && profileData.menu_items.length > 0) {
+            setMenuItems(
+              profileData.menu_items.map((item: any) => ({
+                title: item.title || '',
+                price: typeof item.price === 'number' ? item.price : (item.price === '' ? '' : safeParseInt(item.price) ?? '')
+              }))
+            )
+          }
+
+          if (Array.isArray(profileData.sns_links) && profileData.sns_links.length > 0) {
+            setSnsLinks(profileData.sns_links)
+          } else {
+            const initialLinks: SnsLinkItem[] = []
+            if (profileData.twitter_url) initialLinks.push({ id: 'tw', platform: 'twitter', url: profileData.twitter_url })
+            if (profileData.instagram_url) initialLinks.push({ id: 'ig', platform: 'instagram', url: profileData.instagram_url })
+            if (profileData.pixiv_url) initialLinks.push({ id: 'px', platform: 'pixiv', url: profileData.pixiv_url })
+            if (profileData.website_url) initialLinks.push({ id: 'web', platform: 'website', url: profileData.website_url })
+            
+            if (initialLinks.length > 0) {
+              setSnsLinks(initialLinks)
+            }
+          }
+
+          const parsedLeadTime = safeParseInt(profileData.lead_time_days)
+          setLeadTimeDays(parsedLeadTime !== null ? String(parsedLeadTime) : '')
+
+          const parsedPriceMin = safeParseInt(profileData.price_min)
+          setPriceMin(parsedPriceMin !== null ? String(parsedPriceMin) : '')
+
+          setCommercialUseAllowed(profileData.commercial_use_allowed ?? true)
+          setAvatarUrl(normalizeStorageUrl(profileData.avatar_url || ''))
+          setExternalEstimationUrl(profileData.external_estimation_url || '')
+
+          setAiUsage(profileData.ai_usage || 'none')
+          setAiLearningAllowed(profileData.ai_learning_allowed ?? false)
+          setExpressOptionAvailable(profileData.express_option_available ?? false)
+          setCopyrightTransferAvailable(profileData.copyright_transfer_available ?? false)
+          const parsedFreeRevision = safeParseInt(profileData.free_revision_count)
+          setFreeRevisionCount(parsedFreeRevision !== null ? String(parsedFreeRevision) : '2')
+          setR18Allowed(profileData.r18_allowed ?? false)
+
+          if (profileData.available_from_text) setAvailableFromText(profileData.available_from_text)
+          if (typeof profileData.active_projects_count === 'number') setActiveProjectsCount(profileData.active_projects_count)
+          if (typeof profileData.max_projects_capacity === 'number') setMaxProjectsCapacity(profileData.max_projects_capacity)
         }
-
-        const parsedLeadTime = safeParseInt(profileData.lead_time_days)
-        setLeadTimeDays(parsedLeadTime !== null ? String(parsedLeadTime) : '')
-
-        const parsedPriceMin = safeParseInt(profileData.price_min)
-        setPriceMin(parsedPriceMin !== null ? String(parsedPriceMin) : '')
-
-        setCommercialUseAllowed(profileData.commercial_use_allowed ?? true)
-        setAvatarUrl(normalizeStorageUrl(profileData.avatar_url || ''))
-        setExternalEstimationUrl(profileData.external_estimation_url || '')
-
-        setAiUsage(profileData.ai_usage || 'none')
-        setAiLearningAllowed(profileData.ai_learning_allowed ?? false)
-        setExpressOptionAvailable(profileData.express_option_available ?? false)
-        setCopyrightTransferAvailable(profileData.copyright_transfer_available ?? false)
-        const parsedFreeRevision = safeParseInt(profileData.free_revision_count)
-        setFreeRevisionCount(parsedFreeRevision !== null ? String(parsedFreeRevision) : '2')
-        setR18Allowed(profileData.r18_allowed ?? false)
-
-        if (profileData.available_from_text) setAvailableFromText(profileData.available_from_text)
-        if (typeof profileData.active_projects_count === 'number') setActiveProjectsCount(profileData.active_projects_count)
-        if (typeof profileData.max_projects_capacity === 'number') setMaxProjectsCapacity(profileData.max_projects_capacity)
-      }
 
         const { data: portfolioData, error: portfolioError } = await supabase
           .from('portfolio_items')
@@ -268,9 +264,9 @@ export default function Dashboard() {
           setPortfolioUrls(urls)
         }
 
-        setIsDirty(false) // 初期読み込み時はフラグをオフに
+        setIsDirty(false)
       } catch (error: any) {
-        console.error('データ読み込み中に予期しないエラーが発生しました:', error)
+        console.error('データ読み込みエラー:', error)
         alert('データの読み込みに失敗しました。通信環境をご確認の上、ページを再読み込みしてください。')
       } finally {
         setLoading(false)
@@ -324,7 +320,7 @@ export default function Dashboard() {
       showSuccessToast('ステータスを更新しました！')
     } catch (error: any) {
       console.error('ステータス更新エラー:', error)
-      setStatus(previousStatus) // 失敗時は表示を元に戻す
+      setStatus(previousStatus)
       alert('ステータスの更新に失敗しました: ' + (error?.message || '不明なエラー'))
     }
   }
@@ -375,13 +371,38 @@ export default function Dashboard() {
     setTastes((prev) => prev.filter((t) => t !== tagToRemove))
   }
 
-  const compressImage = (
+  // 作品画像の順序変更（前後の入れ替え）機能
+  const handleMovePortfolioUrl = (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1
+    if (targetIndex < 0 || targetIndex >= portfolioUrls.length) return
+
+    const newUrls = [...portfolioUrls]
+    const temp = newUrls[index]
+    newUrls[index] = newUrls[targetIndex]
+    newUrls[targetIndex] = temp
+
+    setPortfolioUrls(newUrls)
+    setIsDirty(true)
+  }
+
+  // ファイル検証付き画像圧縮関数
+  const validateAndCompressImage = (
     file: File, 
     index: number | 'avatar', 
     maxWidth = 1200, 
     quality = 0.8
   ): Promise<{ blob: Blob; mimeType: string; extension: string }> => {
     return new Promise((resolve, reject) => {
+      // ファイルサイズの事前検証 (最大10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        return reject(new Error('ファイルサイズが大きすぎます (10MB以下の画像を選択してください)'))
+      }
+
+      // ファイル形式の検証
+      if (!file.type.startsWith('image/')) {
+        return reject(new Error('画像ファイルを選択してください'))
+      }
+
       const img = new Image()
       const objectUrl = URL.createObjectURL(file)
 
@@ -414,7 +435,7 @@ export default function Dashboard() {
         canvas.toBlob(
           (blob) => {
             if (blob) resolve({ blob, mimeType, extension })
-            else reject(new Error('Blob convert error'))
+            else reject(new Error('画像圧縮に失敗しました'))
           },
           mimeType,
           quality
@@ -422,7 +443,7 @@ export default function Dashboard() {
       }
       img.onerror = (err) => {
         URL.revokeObjectURL(objectUrl)
-        reject(err)
+        reject(new Error('画像の読み込みに失敗しました。正しい画像形式かご確認ください。'))
       }
       img.src = objectUrl
     })
@@ -434,7 +455,7 @@ export default function Dashboard() {
 
     try {
       setUploadingAvatar(true)
-      const { blob, mimeType, extension } = await compressImage(file, 'avatar', 600, 0.85)
+      const { blob, mimeType, extension } = await validateAndCompressImage(file, 'avatar', 600, 0.85)
       const fileName = `${user.id}/avatar_${Date.now()}.${extension}`
 
       const { error: uploadError } = await supabase.storage
@@ -453,7 +474,7 @@ export default function Dashboard() {
       setAvatarUrl(normalizeStorageUrl(publicUrlData.publicUrl))
       setIsDirty(true)
     } catch (error: any) {
-      alert('アイコンのアップロードに失敗しました: ' + error.message)
+      alert(error.message || 'アイコンのアップロードに失敗しました')
     } finally {
       setUploadingAvatar(false)
     }
@@ -465,7 +486,7 @@ export default function Dashboard() {
 
     try {
       setUploadingIndex(index)
-      const { blob, mimeType, extension } = await compressImage(file, index, 1200, 0.8)
+      const { blob, mimeType, extension } = await validateAndCompressImage(file, index, 1200, 0.8)
       const fileName = `${user.id}/${Date.now()}_${index}.${extension}`
 
       const { error: uploadError } = await supabase.storage
@@ -486,7 +507,7 @@ export default function Dashboard() {
       setPortfolioUrls(nextUrls)
       setIsDirty(true)
     } catch (error: any) {
-      alert('画像のアップロードに失敗しました: ' + error.message)
+      alert(error.message || '画像のアップロードに失敗しました')
     } finally {
       setUploadingIndex(null)
     }
@@ -503,72 +524,72 @@ export default function Dashboard() {
     setSaving(true)
 
     try {
-    const cleanInteger = (val: any): number | null => {
-      if (val === null || val === undefined || typeof val === 'object') return null
-      const str = String(val).replace(/[{}]/g, '').trim()
-      if (str === '' || str === 'null' || str === 'undefined') return null
-      const parsed = parseInt(str, 10)
-      return isNaN(parsed) ? null : parsed
-    }
+      const cleanInteger = (val: any): number | null => {
+        if (val === null || val === undefined || typeof val === 'object') return null
+        const str = String(val).replace(/[{}]/g, '').trim()
+        if (str === '' || str === 'null' || str === 'undefined') return null
+        const parsed = parseInt(str, 10)
+        return isNaN(parsed) ? null : parsed
+      }
 
-    const finalPriceMin = cleanInteger(priceMin)
-    const finalLeadTimeDays = cleanInteger(leadTimeDays)
-    const finalFreeRevisionCount = cleanInteger(freeRevisionCount)
+      const finalPriceMin = cleanInteger(priceMin)
+      const finalLeadTimeDays = cleanInteger(leadTimeDays)
+      const finalFreeRevisionCount = cleanInteger(freeRevisionCount)
 
-    const cleanTastes = Array.isArray(tastes) 
-      ? tastes.map((t) => String(t).trim()).filter((t) => t.length > 0)
-      : []
+      const cleanTastes = Array.isArray(tastes) 
+        ? tastes.map((t) => String(t).trim()).filter((t) => t.length > 0)
+        : []
 
-    const cleanMenuItems = menuItems
-      .filter((item) => item.title.trim().length > 0)
-      .map((item) => ({
-        title: item.title.trim(),
-        price: typeof item.price === 'number' ? item.price : ''
-      }))
+      const cleanMenuItems = menuItems
+        .filter((item) => item.title.trim().length > 0)
+        .map((item) => ({
+          title: item.title.trim(),
+          price: typeof item.price === 'number' ? item.price : ''
+        }))
 
-    const cleanSnsLinks = snsLinks
-      .filter((item) => item.url.trim().length > 0)
-      .map((item) => ({
-        id: item.id,
-        platform: item.platform,
-        url: item.url.trim()
-      }))
+      const cleanSnsLinks = snsLinks
+        .filter((item) => item.url.trim().length > 0)
+        .map((item) => ({
+          id: item.id,
+          platform: item.platform,
+          url: item.url.trim()
+        }))
 
-    const twitterLink = cleanSnsLinks.find((l) => l.platform === 'twitter')?.url || null
-    const instagramLink = cleanSnsLinks.find((l) => l.platform === 'instagram')?.url || null
-    const pixivLink = cleanSnsLinks.find((l) => l.platform === 'pixiv')?.url || null
-    const websiteLink = cleanSnsLinks.find((l) => l.platform === 'website')?.url || null
+      const twitterLink = cleanSnsLinks.find((l) => l.platform === 'twitter')?.url || null
+      const instagramLink = cleanSnsLinks.find((l) => l.platform === 'instagram')?.url || null
+      const pixivLink = cleanSnsLinks.find((l) => l.platform === 'pixiv')?.url || null
+      const websiteLink = cleanSnsLinks.find((l) => l.platform === 'website')?.url || null
 
-    const profilePayload = {
-      user_id: user.id,
-      is_public: Boolean(isPublic),
-      display_name: displayName ? displayName.trim() : '',
-      status: status,
-      status_comment: statusComment ? statusComment.trim() : null,
-      theme_color: themeColor,
-      tastes: cleanTastes,
-      menu_items: cleanMenuItems,
-      sns_links: cleanSnsLinks,
-      lead_time_days: finalLeadTimeDays,
-      price_min: finalPriceMin,
-      commercial_use_allowed: Boolean(commercialUseAllowed),
-      avatar_url: avatarUrl ? normalizeStorageUrl(avatarUrl.trim()) : null,
-      external_estimation_url: externalEstimationUrl ? externalEstimationUrl.trim() : null,
-      twitter_url: twitterLink,
-      instagram_url: instagramLink,
-      pixiv_url: pixivLink,
-      website_url: websiteLink,
-      ai_usage: aiUsage,
-      ai_learning_allowed: Boolean(aiLearningAllowed),
-      express_option_available: Boolean(expressOptionAvailable),
-      copyright_transfer_available: Boolean(copyrightTransferAvailable),
-      free_revision_count: finalFreeRevisionCount,
-      r18_allowed: Boolean(r18Allowed),
-      available_from_text: availableFromText,
-      active_projects_count: activeProjectsCount,
-      max_projects_capacity: maxProjectsCapacity,
-      updated_at: new Date().toISOString(),
-    }
+      const profilePayload = {
+        user_id: user.id,
+        is_public: Boolean(isPublic),
+        display_name: displayName ? displayName.trim() : '',
+        status: status,
+        status_comment: statusComment ? statusComment.trim() : null,
+        theme_color: themeColor,
+        tastes: cleanTastes,
+        menu_items: cleanMenuItems,
+        sns_links: cleanSnsLinks,
+        lead_time_days: finalLeadTimeDays,
+        price_min: finalPriceMin,
+        commercial_use_allowed: Boolean(commercialUseAllowed),
+        avatar_url: avatarUrl ? normalizeStorageUrl(avatarUrl.trim()) : null,
+        external_estimation_url: externalEstimationUrl ? externalEstimationUrl.trim() : null,
+        twitter_url: twitterLink,
+        instagram_url: instagramLink,
+        pixiv_url: pixivLink,
+        website_url: websiteLink,
+        ai_usage: aiUsage,
+        ai_learning_allowed: Boolean(aiLearningAllowed),
+        express_option_available: Boolean(expressOptionAvailable),
+        copyright_transfer_available: Boolean(copyrightTransferAvailable),
+        free_revision_count: finalFreeRevisionCount,
+        r18_allowed: Boolean(r18Allowed),
+        available_from_text: availableFromText,
+        active_projects_count: activeProjectsCount,
+        max_projects_capacity: maxProjectsCapacity,
+        updated_at: new Date().toISOString(),
+      }
 
       const { error } = await supabase
         .from('profiles')
@@ -579,7 +600,7 @@ export default function Dashboard() {
         alert('保存に失敗しました: ' + error.message)
       } else {
         showSuccessToast('プロフィール情報を更新しました！')
-        setIsDirty(false) // 保存成功時に未保存フラグをリセット
+        setIsDirty(false)
       }
     } catch (error: any) {
       console.error('プロフィール保存中に予期しないエラーが発生しました:', error)
@@ -623,7 +644,7 @@ export default function Dashboard() {
       }
 
       showSuccessToast('作品ポートフォリオを更新しました！')
-      setIsDirty(false) // 保存成功時に未保存フラグをリセット
+      setIsDirty(false)
     } catch (error: any) {
       console.error('ポートフォリオ保存エラー:', error)
       alert('作品情報の更新に失敗しました: ' + (error?.message || '不明なエラー'))
@@ -802,7 +823,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* タブナビゲーション（確認ダイアログ付き） */}
+        {/* タブナビゲーション */}
         <div className="flex p-1 bg-slate-200/60 rounded-2xl max-w-lg mx-auto">
           <button
             type="button"
@@ -852,7 +873,33 @@ export default function Dashboard() {
               )}
             </div>
 
-            
+            {/* テーマカラー選択UI (新機能) */}
+            <div className="p-4 rounded-2xl border border-slate-200/80 bg-slate-50/40 space-y-3">
+              <label className="text-xs font-bold text-slate-700 block">テーマカラー設定</label>
+              <div className="flex flex-wrap gap-2.5">
+                {THEME_COLORS.map((t) => {
+                  const isSelected = themeColor === t.id
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => {
+                        setThemeColor(t.id)
+                        setIsDirty(true)
+                      }}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                        isSelected
+                          ? `${t.lightBg} ${t.border} ${t.text} ring-2 ${t.ring}`
+                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span className={`w-3.5 h-3.5 rounded-full ${t.bg}`} />
+                      {t.name}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
 
             {/* スケジューラー設定 */}
             <div className="p-5 rounded-2xl bg-indigo-50/40 border border-indigo-100/80 space-y-4">
@@ -1499,20 +1546,44 @@ export default function Dashboard() {
                         </span>
                       )}
                     </label>
-                    {url && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const next = [...portfolioUrls]
-                          next[idx] = ''
-                          setPortfolioUrls(next)
-                          setIsDirty(true)
-                        }}
-                        className="text-[11px] text-rose-500 font-bold hover:underline cursor-pointer"
-                      >
-                        画像を削除
-                      </button>
-                    )}
+
+                    {/* 画像の順序移動および削除ボタン (新機能) */}
+                    <div className="flex items-center gap-2">
+                      {idx > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => handleMovePortfolioUrl(idx, 'up')}
+                          className="text-[11px] text-slate-500 hover:text-slate-900 font-bold px-1.5 py-0.5 bg-slate-200/60 rounded cursor-pointer"
+                          title="前に移動"
+                        >
+                          ← 前へ
+                        </button>
+                      )}
+                      {idx < portfolioUrls.length - 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleMovePortfolioUrl(idx, 'down')}
+                          className="text-[11px] text-slate-500 hover:text-slate-900 font-bold px-1.5 py-0.5 bg-slate-200/60 rounded cursor-pointer"
+                          title="後に移動"
+                        >
+                          次へ →
+                        </button>
+                      )}
+                      {url && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = [...portfolioUrls]
+                            next[idx] = ''
+                            setPortfolioUrls(next)
+                            setIsDirty(true)
+                          }}
+                          className="text-[11px] text-rose-500 font-bold hover:underline cursor-pointer ml-1"
+                        >
+                          削除
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="w-full aspect-[4/3] rounded-xl border border-slate-200 bg-white overflow-hidden flex items-center justify-center relative shadow-xs">
