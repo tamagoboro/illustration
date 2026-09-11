@@ -56,7 +56,6 @@ type ExtendedProfile = Profile & {
   instagram_url?: string | null
   pixiv_url?: string | null
   website_url?: string | null
-  theme_color?: string | null
   form_config?: FormConfig | null
 }
 
@@ -86,7 +85,8 @@ function CreatorClient({
   const BACKGROUND_IMAGE_URL =
     'https://qcklfkslqtjnxufqcqyi.supabase.co/storage/v1/object/public/portfolios/bg.png'
 
-  useEffect(() => {
+    useEffect(() => {
+    // URLのIDが 'form-buirelder' だった場合は実際の編集ページへ移動させる
     if (id === 'form-builder') {
       router.push('/dashboard/form-builder')
       return
@@ -150,15 +150,6 @@ function CreatorClient({
 
     fetchCreatorDataAndTrackPV()
   }, [id, router])
-
-  const activeThemeColor = useMemo(() => {
-    return (
-      profile?.theme_color ||
-      profile?.form_config?.theme_color ||
-      profile?.form_config?.themeColor ||
-      '#ec4899'
-    )
-  }, [profile])
 
   const activeFormConfig = useMemo<FormConfig | null>(() => {
     if (!profile?.form_config) return null
@@ -385,10 +376,7 @@ function CreatorClient({
         style={{ backgroundImage: `url(${BACKGROUND_IMAGE_URL})` }}
       >
         <div className="p-8 bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-2xl flex flex-col items-center space-y-3">
-          <div
-            className="w-8 h-8 border-3 border-t-transparent rounded-full animate-spin"
-            style={{ borderColor: `${activeThemeColor} transparent ${activeThemeColor} ${activeThemeColor}` }}
-          />
+          <div className="w-8 h-8 border-3 border-pink-500 border-t-transparent rounded-full animate-spin" />
           <p className="text-xs font-black text-slate-600 tracking-widest uppercase">Loading...</p>
         </div>
       </div>
@@ -404,11 +392,7 @@ function CreatorClient({
         <div className="p-8 bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-white/60 text-center space-y-3 max-w-sm w-full">
           <p className="text-slate-700 font-bold text-sm">クリエイターが見つかりませんでした</p>
           <p className="text-xs text-slate-400">ID: {id || '（未指定）'}</p>
-          <Link
-            href="/"
-            className="font-semibold text-xs inline-flex items-center gap-1 mt-2 hover:underline"
-            style={{ color: activeThemeColor }}
-          >
+          <Link href="/" className="text-pink-600 hover:text-pink-700 font-semibold text-xs inline-flex items-center gap-1 mt-2">
             ← 検索結果に戻る
           </Link>
         </div>
@@ -434,7 +418,7 @@ function CreatorClient({
         <div className="max-w-5xl mx-auto flex justify-between items-center">
           <Link
             href="/"
-            className="text-xs font-bold text-slate-600 hover:opacity-80 transition-opacity flex items-center gap-1.5"
+            className="text-xs font-bold text-slate-600 hover:text-pink-600 transition-colors flex items-center gap-1.5"
           >
             <span>←</span> 検索結果へ戻る
           </Link>
@@ -485,14 +469,7 @@ function CreatorClient({
 
                   <div className="flex flex-wrap gap-1.5">
                     {profile.ai_usage === 'none' && (
-                      <span
-                        className="text-[11px] font-extrabold px-3 py-0.5 rounded-full border shadow-2xs"
-                        style={{
-                          backgroundColor: `${activeThemeColor}15`,
-                          color: activeThemeColor,
-                          borderColor: `${activeThemeColor}40`,
-                        }}
-                      >
+                      <span className="text-[11px] bg-pink-500/10 text-pink-700 font-extrabold px-3 py-0.5 rounded-full border border-pink-200/60 shadow-2xs">
                         ✦ 完全手描き
                       </span>
                     )}
@@ -524,18 +501,9 @@ function CreatorClient({
             <div className="w-full lg:w-80 bg-white/80 backdrop-blur-md p-5 rounded-2xl border border-white shadow-sm space-y-4 shrink-0">
               <div className="space-y-2.5 text-xs text-slate-600 pb-1">
                 {profile.price_min != null && (
-                  <div
-                    className="flex justify-between items-baseline p-3 rounded-xl border"
-                    style={{
-                      backgroundColor: `${activeThemeColor}0D`,
-                      borderColor: `${activeThemeColor}30`,
-                    }}
-                  >
+                  <div className="flex justify-between items-baseline bg-pink-50/50 p-3 rounded-xl border border-pink-100/80">
                     <span className="font-bold text-slate-500">最低参考価格</span>
-                    <span
-                      className="font-black text-lg"
-                      style={{ color: activeThemeColor }}
-                    >
+                    <span className="font-black text-pink-600 text-lg">
                       ¥{profile.price_min.toLocaleString()}〜
                     </span>
                   </div>
@@ -557,9 +525,10 @@ function CreatorClient({
               <div className="space-y-2 pt-1">
                 {activeFormConfig ? (
                   <button
-                    onClick={() => setIsEstimateOpen(true)}
-                    className="w-full py-3.5 text-white font-extrabold rounded-xl transition-all shadow-lg active:scale-[0.98] text-sm cursor-pointer flex items-center justify-center gap-2"
-                    style={{ backgroundColor: activeThemeColor }}
+                    onClick={() => {
+                      setIsEstimateOpen(true)
+                    }}
+                    className="w-full py-3.5 bg-pink-500 hover:bg-pink-600 active:scale-[0.98] text-white font-extrabold rounded-xl transition-all shadow-lg shadow-pink-200/50 text-sm cursor-pointer flex items-center justify-center gap-2"
                   >
                     <span>🎨</span> 簡単見積もり・仕様書作成
                   </button>
@@ -642,10 +611,7 @@ function CreatorClient({
             ].map((spec, i) => (
               <div key={i} className="p-3.5 bg-white/60 rounded-2xl border border-white/80 space-y-1 shadow-2xs">
                 <span className="text-[11px] font-bold text-slate-400 block">{spec.label}</span>
-                <span
-                  className="text-xs font-extrabold block"
-                  style={{ color: spec.highlight ? activeThemeColor : '#1e293b' }}
-                >
+                <span className={`text-xs font-extrabold block ${spec.highlight ? 'text-pink-600' : 'text-slate-800'}`}>
                   {spec.value}
                 </span>
               </div>
@@ -665,14 +631,7 @@ function CreatorClient({
                   className="p-4 bg-white/60 border border-white/80 rounded-2xl flex justify-between items-center hover:bg-white transition shadow-2xs"
                 >
                   <span className="text-xs font-bold text-slate-700">{item.title}</span>
-                  <span
-                    className="text-xs font-black px-2.5 py-1 rounded-lg border"
-                    style={{
-                      color: activeThemeColor,
-                      backgroundColor: `${activeThemeColor}0D`,
-                      borderColor: `${activeThemeColor}30`,
-                    }}
-                  >
+                  <span className="text-xs font-black text-pink-600 bg-pink-50/80 px-2.5 py-1 rounded-lg border border-pink-100">
                     {typeof item.price === 'number' ? `¥${item.price.toLocaleString()}〜` : '要相談'}
                   </span>
                 </div>
@@ -745,8 +704,7 @@ function CreatorClient({
                   placeholder="例: 山田太郎"
                   value={clientName}
                   onChange={(e) => setClientName(e.target.value)}
-                  className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2"
-                  style={{ '--tw-ring-color': activeThemeColor } as React.CSSProperties}
+                  className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
                 />
               </div>
 
@@ -777,10 +735,7 @@ function CreatorClient({
                   <div key={field.id} className="space-y-2 bg-slate-50/70 p-4 rounded-2xl border border-slate-100">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        <h4
-                          className="text-xs font-extrabold text-slate-900 border-l-2 pl-2"
-                          style={{ borderColor: activeThemeColor }}
-                        >
+                        <h4 className="text-xs font-extrabold text-slate-900 border-l-2 border-pink-500 pl-2">
                           {title}
                         </h4>
                         {field.required && (
@@ -790,14 +745,7 @@ function CreatorClient({
                         )}
                       </div>
                       {field.price ? (
-                        <span
-                          className="text-[11px] font-black px-2 py-0.5 rounded-full border"
-                          style={{
-                            color: activeThemeColor,
-                            backgroundColor: `${activeThemeColor}0D`,
-                            borderColor: `${activeThemeColor}20`,
-                          }}
-                        >
+                        <span className="text-[11px] font-black text-pink-600 bg-pink-50 px-2 py-0.5 rounded-full border border-pink-100">
                           +¥{field.price.toLocaleString()}
                         </span>
                       ) : null}
@@ -821,10 +769,7 @@ function CreatorClient({
                               }`}
                             >
                               <span>{opt.label}</span>
-                              <span
-                                className="text-[11px]"
-                                style={{ color: isSelected ? '#f472b6' : activeThemeColor }}
-                              >
+                              <span className={`text-[11px] ${isSelected ? 'text-pink-300' : 'text-pink-600'}`}>
                                 {opt.price > 0
                                   ? isPercent
                                     ? `+${opt.price}% ${calcVal > 0 ? `(+¥${calcVal.toLocaleString()})` : ''}`
@@ -856,10 +801,7 @@ function CreatorClient({
                               }`}
                             >
                               <span>{opt.label}</span>
-                              <span
-                                className="text-[11px]"
-                                style={{ color: isSelected ? '#f472b6' : activeThemeColor }}
-                              >
+                              <span className={`text-[11px] ${isSelected ? 'text-pink-300' : 'text-pink-600'}`}>
                                 {opt.price > 0
                                   ? isPercent
                                     ? `+${opt.price}% ${calcVal > 0 ? `(+¥${calcVal.toLocaleString()})` : ''}`
@@ -878,7 +820,7 @@ function CreatorClient({
                         placeholder="内容を入力してください"
                         value={formAnswers[field.id] || ''}
                         onChange={(e) => handleInputChange(field.id, e.target.value)}
-                        className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2"
+                        className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
                       />
                     )}
 
@@ -888,7 +830,7 @@ function CreatorClient({
                         placeholder="構図、キャラクターの特徴、納期のご希望などがあればご記入ください"
                         value={formAnswers[field.id] || ''}
                         onChange={(e) => handleInputChange(field.id, e.target.value)}
-                        className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2"
+                        className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
                       />
                     )}
 
@@ -915,7 +857,7 @@ function CreatorClient({
                 <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">
                   概算合計金額
                 </span>
-                <span className="text-xl sm:text-2xl font-black" style={{ color: activeThemeColor }}>
+                <span className="text-xl sm:text-2xl font-black text-pink-600">
                   ¥{totalPrice.toLocaleString()}
                   <span className="text-xs text-slate-500 font-normal ml-1">(税込)</span>
                 </span>
@@ -961,8 +903,7 @@ function CreatorClient({
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={trackEstimateCalc}
-                      className="w-full py-2.5 px-4 text-white font-extrabold rounded-xl transition flex items-center justify-between text-xs"
-                      style={{ backgroundColor: activeThemeColor }}
+                      className="w-full py-2.5 px-4 bg-pink-500 hover:bg-pink-600 text-white font-extrabold rounded-xl transition flex items-center justify-between text-xs"
                     >
                       <span>外部フォーム / Webサイトで送る</span>
                       <span>↗</span>
@@ -998,8 +939,7 @@ function CreatorClient({
                   href={profile.external_estimation_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full py-3.5 px-4 text-white font-extrabold rounded-2xl transition flex items-center justify-between text-xs shadow-md"
-                  style={{ backgroundColor: activeThemeColor }}
+                  className="w-full py-3.5 px-4 bg-pink-500 hover:bg-pink-600 text-white font-extrabold rounded-2xl transition flex items-center justify-between text-xs shadow-md shadow-pink-200"
                 >
                   <span>📋 外部見積もりフォーム</span>
                   <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-md">開く ↗</span>
