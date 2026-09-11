@@ -10,6 +10,24 @@ type Props = {
 const SITE_NAME = 'Drawker（ドローカー）'
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://drawker.app'
 
+// Supabase Storageの画像パスを完全なPublic URLに変換するヘルパー
+const getFullImageUrl = (url: string | null | undefined, fallbackUrl: string): string => {
+  if (!url || !url.trim()) return fallbackUrl
+  const trimmed = url.trim()
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    if (trimmed.includes('/storage/v1/object/portfolios/')) {
+      return trimmed.replace('/storage/v1/object/portfolios/', '/storage/v1/object/public/portfolios/')
+    }
+    return trimmed
+  }
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+  if (supabaseUrl) {
+    const cleanPath = trimmed.startsWith('/') ? trimmed.slice(1) : trimmed
+    return `${supabaseUrl}/storage/v1/object/public/portfolios/${cleanPath}`
+  }
+  return fallbackUrl
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params
 
@@ -26,11 +44,24 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     }
   }
 
+  // 代表作品の画像を取得（アバター未設定時のOGP画像フォールバック用）
+  const { data: firstPortfolio } = await supabase
+    .from('portfolio_items')
+    .select('image_url')
+    .eq('user_id', id)
+    .order('sort_order', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
   const title = `${profile.display_name}のイラスト料金・ポートフォリオ依頼 | ${SITE_NAME}`
   const commercialText = profile.commercial_use_allowed ? '商用利用可' : '個人利用限定'
   const leadTimeText = profile.lead_time_days ? `最短${profile.lead_time_days}日でお届け` : '納期要相談'
   const description = `イラストレーター【${profile.display_name}】への直接依頼・見積もりページ。${leadTimeText} / ${commercialText}。SNSアイコン、キャラデザイン、立ち絵、ヘッダー等の制作実績・料金表を公開中！`
-  const ogImage = profile.avatar_url || `${BASE_URL}/OGP-img.png`
+
+  // アバターまたは最初のポートフォリオ画像を、正規化した完全URLで使用
+  const fallbackOgUrl = `${BASE_URL}/OGP-img.png`
+  const rawOgImage = profile.avatar_url || firstPortfolio?.image_url
+  const ogImage = getFullImageUrl(rawOgImage, fallbackOgUrl)
   const canonicalUrl = `${BASE_URL}/creator/${id}`
 
   // Twitter URLの末尾スラッシュを除去してからユーザー名を抽出
@@ -61,6 +92,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       follow: true,
       'max-image-preview': 'large',
       'max-snippet': -1,
+    },
+    other: {
+      robots: 'noai, noimageai',
+      googlebot: 'noai, noimageai',
     },
     openGraph: {
       title,

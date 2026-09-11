@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { createBrowserClient } from '@supabase/ssr'
 
 export type Profile = {
   id?: string
@@ -55,4 +55,9 @@ export type PortfolioItem = {
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// utils/supabase/client.ts と同じ createBrowserClient (@supabase/ssr) を使用。
+// 以前は @supabase/supabase-js の createClient を直接使っていたため、
+// このファイル経由のクライアントと utils/supabase/client.ts 経由のクライアントとで
+// 認証セッションのCookie同期のされ方が異なり、ページによってログイン状態の
+// 見え方が食い違うことがあった。ここを揃えることでその不整合を解消する。
+export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey)

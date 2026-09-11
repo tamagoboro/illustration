@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { supabase, Profile } from '@/lib/supabase'
+import { useCompareStore } from '@/store/useCompareStore'
 
 // メニュー項目の型定義
 type MenuItem = {
@@ -52,11 +53,17 @@ export default function Home() {
   const [commercialOnly, setCommercialOnly] = useState(false)
   const [sortOption, setSortOption] = useState<'random' | 'price_asc' | 'price_desc' | 'likes_desc' | 'likes_asc'>('random')
 
-  // お気に入り・比較ステート
+  // お気に入りステート
   const [favorites, setFavorites] = useState<string[]>([])
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false)
-  const [compareList, setCompareList] = useState<ProfileWithImage[]>([])
   const [isCompareOpen, setIsCompareOpen] = useState(false)
+
+  // 比較リストは useCompareStore（zustand・永続化）で /compare ページと共有する
+  const { selectedIds: compareIds, toggleIllustrator } = useCompareStore()
+  const compareList = useMemo(
+    () => profiles.filter((p) => compareIds.includes(p.user_id)),
+    [profiles, compareIds]
+  )
 
   // 初回描画時に localStorage から復元
   useEffect(() => {
@@ -66,15 +73,6 @@ export default function Home() {
         setFavorites(JSON.parse(storedFavs))
       } catch (e) {
         console.error('Failed to load favorites from localStorage', e)
-      }
-    }
-
-    const storedCompare = localStorage.getItem('compare_creators')
-    if (storedCompare) {
-      try {
-        setCompareList(JSON.parse(storedCompare))
-      } catch (e) {
-        console.error('Failed to load compare list from localStorage', e)
       }
     }
   }, [])
@@ -177,14 +175,7 @@ export default function Home() {
         p.user_id === userId ? { ...p, likes_count: newLikes } : p
       )
     )
-
-    setCompareList((prevCompare) => {
-      const nextCompare = prevCompare.map((p) =>
-        p.user_id === userId ? { ...p, likes_count: newLikes } : p
-      )
-      localStorage.setItem('compare_creators', JSON.stringify(nextCompare))
-      return nextCompare
-    })
+    // compareList は profiles から自動導出されるため、上の setProfiles だけで比較モーダルのいいね数も同期される
 
     const { error } = await supabase.rpc('increment_likes', {
       target_user_id: userId,
@@ -202,26 +193,6 @@ export default function Home() {
         ? prev.filter((t) => t !== taste)
         : [...prev, taste]
     )
-  }
-
-  const toggleCompare = (profile: ProfileWithImage) => {
-    setCompareList((prev) => {
-      const exists = prev.some((p) => p.user_id === profile.user_id)
-      let nextList: ProfileWithImage[]
-
-      if (exists) {
-        nextList = prev.filter((p) => p.user_id !== profile.user_id)
-      } else {
-        if (prev.length >= 3) {
-          alert('比較できるのは最大3名までです')
-          return prev
-        }
-        nextList = [...prev, profile]
-      }
-
-      localStorage.setItem('compare_creators', JSON.stringify(nextList))
-      return nextList
-    })
   }
 
   const resetFilters = () => {
@@ -621,7 +592,7 @@ export default function Home() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {filteredProfiles.map((profile) => {
                   const isFav = favorites.includes(profile.user_id)
-                  const isCompared = compareList.some((p) => p.user_id === profile.user_id)
+                  const isCompared = compareIds.includes(profile.user_id)
                   const isNew = isRecentlyUpdated(profile.updated_at)
                   
                   // 条件判定（完全手描き＆R-18対応）
@@ -768,7 +739,7 @@ export default function Home() {
                         {/* アクションボタン */}
                         <div className="flex gap-1.5 pt-1">
                           <button
-                            onClick={() => toggleCompare(profile)}
+                            onClick={() => toggleIllustrator(profile.user_id)}
                             className={`flex-1 py-1.5 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
                               isCompared
                                 ? 'bg-sky-100 text-sky-800 border-sky-300'
@@ -847,7 +818,7 @@ export default function Home() {
                     <div className="flex justify-between items-start">
                       <h4 className="font-bold text-slate-800 text-xs">{item.display_name}</h4>
                       <button
-                        onClick={() => toggleCompare(item)}
+                        onClick={() => toggleIllustrator(item.user_id)}
                         className="text-[10px] text-rose-500 font-bold hover:underline cursor-pointer"
                       >
                         削除
