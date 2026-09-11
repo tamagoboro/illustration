@@ -168,22 +168,26 @@ export default function Dashboard() {
 
   useEffect(() => {
     const checkUserAndFetchData = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        router.push('/login')
-        return
-      }
-      setUser(user)
+      try {
+        const { data: { user }, error: authError } = await supabase.auth.getUser()
+        if (authError) {
+          console.error('認証情報取得エラー:', authError)
+        }
+        if (!user) {
+          router.push('/login')
+          return
+        }
+        setUser(user)
 
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle()
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('user_id', user.id)
+          .maybeSingle()
 
-      if (profileError) {
-        console.error('Profile fetch error:', profileError)
-      }
+        if (profileError) {
+          console.error('Profile fetch error:', profileError)
+        }
 
       if (profileData) {
         setIsPublic(profileData.is_public ?? true)
@@ -244,24 +248,33 @@ export default function Dashboard() {
         if (typeof profileData.max_projects_capacity === 'number') setMaxProjectsCapacity(profileData.max_projects_capacity)
       }
 
-      const { data: portfolioData } = await supabase
-        .from('portfolio_items')
-        .select('image_url, sort_order')
-        .eq('user_id', user.id)
-        .order('sort_order', { ascending: true })
+        const { data: portfolioData, error: portfolioError } = await supabase
+          .from('portfolio_items')
+          .select('image_url, sort_order')
+          .eq('user_id', user.id)
+          .order('sort_order', { ascending: true })
 
-      if (portfolioData && portfolioData.length > 0) {
-        const urls = ['', '', '', '']
-        portfolioData.forEach((item) => {
-          if (item.sort_order < 4) {
-            urls[item.sort_order] = normalizeStorageUrl(item.image_url || '')
-          }
-        })
-        setPortfolioUrls(urls)
+        if (portfolioError) {
+          console.error('ポートフォリオ取得エラー:', portfolioError)
+        }
+
+        if (portfolioData && portfolioData.length > 0) {
+          const urls = ['', '', '', '']
+          portfolioData.forEach((item) => {
+            if (item.sort_order < 4) {
+              urls[item.sort_order] = normalizeStorageUrl(item.image_url || '')
+            }
+          })
+          setPortfolioUrls(urls)
+        }
+
+        setIsDirty(false) // 初期読み込み時はフラグをオフに
+      } catch (error: any) {
+        console.error('データ読み込み中に予期しないエラーが発生しました:', error)
+        alert('データの読み込みに失敗しました。通信環境をご確認の上、ページを再読み込みしてください。')
+      } finally {
+        setLoading(false)
       }
-
-      setLoading(false)
-      setIsDirty(false) // 初期読み込み時はフラグをオフに
     }
 
     checkUserAndFetchData()
@@ -296,13 +309,24 @@ export default function Dashboard() {
   }
 
   const handleQuickStatusChange = async (newStatus: 'available' | 'busy' | 'stopped') => {
+    const previousStatus = status
     setStatus(newStatus)
     if (!user) return
-    await supabase
-      .from('profiles')
-      .update({ status: newStatus, updated_at: new Date().toISOString() })
-      .eq('user_id', user.id)
-    showSuccessToast('ステータスを更新しました！')
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ status: newStatus, updated_at: new Date().toISOString() })
+        .eq('user_id', user.id)
+
+      if (error) throw error
+
+      showSuccessToast('ステータスを更新しました！')
+    } catch (error: any) {
+      console.error('ステータス更新エラー:', error)
+      setStatus(previousStatus) // 失敗時は表示を元に戻す
+      alert('ステータスの更新に失敗しました: ' + (error?.message || '不明なエラー'))
+    }
   }
 
   const handleAddMenuItem = () => {
@@ -478,6 +502,7 @@ export default function Dashboard() {
     if (!user) return
     setSaving(true)
 
+    try {
     const cleanInteger = (val: any): number | null => {
       if (val === null || val === undefined || typeof val === 'object') return null
       const str = String(val).replace(/[{}]/g, '').trim()
@@ -545,18 +570,22 @@ export default function Dashboard() {
       updated_at: new Date().toISOString(),
     }
 
-    const { error } = await supabase
-      .from('profiles')
-      .upsert(profilePayload, { onConflict: 'user_id' })
+      const { error } = await supabase
+        .from('profiles')
+        .upsert(profilePayload, { onConflict: 'user_id' })
 
-    setSaving(false)
-
-    if (error) {
-      console.error('保存エラー詳細:', JSON.stringify(error, null, 2))
-      alert('保存に失敗しました: ' + error.message)
-    } else {
-      showSuccessToast('プロフィール情報を更新しました！')
-      setIsDirty(false) // 保存成功時に未保存フラグをリセット
+      if (error) {
+        console.error('保存エラー詳細:', JSON.stringify(error, null, 2))
+        alert('保存に失敗しました: ' + error.message)
+      } else {
+        showSuccessToast('プロフィール情報を更新しました！')
+        setIsDirty(false) // 保存成功時に未保存フラグをリセット
+      }
+    } catch (error: any) {
+      console.error('プロフィール保存中に予期しないエラーが発生しました:', error)
+      alert('保存に失敗しました。通信環境をご確認の上、もう一度お試しください。')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -565,38 +594,42 @@ export default function Dashboard() {
     if (!user) return
     setSaving(true)
 
-    const { error: deleteError } = await supabase
-      .from('portfolio_items')
-      .delete()
-      .eq('user_id', user.id)
-
-    if (deleteError) {
-      console.error('既存ポートフォリオ削除エラー:', deleteError)
-    }
-
-    const itemsToInsert = portfolioUrls
-      .map((url, idx) => ({
-        user_id: user.id,
-        image_url: normalizeStorageUrl(url),
-        sort_order: idx,
-      }))
-      .filter((item) => item.image_url.length > 0)
-
-    if (itemsToInsert.length > 0) {
-      const { error: insertError } = await supabase
+    try {
+      const { error: deleteError } = await supabase
         .from('portfolio_items')
-        .insert(itemsToInsert)
+        .delete()
+        .eq('user_id', user.id)
 
-      if (insertError) {
-        alert('作品情報の更新に失敗しました: ' + insertError.message)
-        setSaving(false)
-        return
+      if (deleteError) {
+        throw deleteError
       }
-    }
 
-    setSaving(false)
-    showSuccessToast('作品ポートフォリオを更新しました！')
-    setIsDirty(false) // 保存成功時に未保存フラグをリセット
+      const itemsToInsert = portfolioUrls
+        .map((url, idx) => ({
+          user_id: user.id,
+          image_url: normalizeStorageUrl(url),
+          sort_order: idx,
+        }))
+        .filter((item) => item.image_url.length > 0)
+
+      if (itemsToInsert.length > 0) {
+        const { error: insertError } = await supabase
+          .from('portfolio_items')
+          .insert(itemsToInsert)
+
+        if (insertError) {
+          throw insertError
+        }
+      }
+
+      showSuccessToast('作品ポートフォリオを更新しました！')
+      setIsDirty(false) // 保存成功時に未保存フラグをリセット
+    } catch (error: any) {
+      console.error('ポートフォリオ保存エラー:', error)
+      alert('作品情報の更新に失敗しました: ' + (error?.message || '不明なエラー'))
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleLogout = async () => {
@@ -604,8 +637,15 @@ export default function Dashboard() {
       const confirmLogout = window.confirm('保存されていない変更があります。破棄してログアウトしますか？')
       if (!confirmLogout) return
     }
-    await supabase.auth.signOut()
-    router.push('/')
+
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
+      router.push('/')
+    } catch (error: any) {
+      console.error('ログアウトエラー:', error)
+      alert('ログアウトに失敗しました: ' + (error?.message || '不明なエラー'))
+    }
   }
 
   const currentPortfolioUrl = typeof window !== 'undefined' && user ? `${window.location.origin}/${user.id}` : ''
