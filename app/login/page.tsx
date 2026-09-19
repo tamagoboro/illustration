@@ -71,7 +71,7 @@ export default function LoginPage() {
       if (error) {
         setErrorMsg('ログインに失敗しました。メールアドレスとパスワードを確認してください。')
       } else {
-        router.push('/dashboard')
+        router.push('/')
       }
     }
 
