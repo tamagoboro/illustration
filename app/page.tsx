@@ -52,6 +52,11 @@ export default function Home() {
   const [maxLeadTime, setMaxLeadTime] = useState<number | ''>('')
   const [maxPrice, setMaxPrice] = useState<number | ''>('')
   const [commercialOnly, setCommercialOnly] = useState(false)
+  const [expressOnly, setExpressOnly] = useState(false)
+  const [r18Only, setR18Only] = useState(false)
+  const [handDrawnOnly, setHandDrawnOnly] = useState(false)
+  const [copyrightTransferOnly, setCopyrightTransferOnly] = useState(false)
+  const [freeRevisionOnly, setFreeRevisionOnly] = useState(false)
   const [sortOption, setSortOption] = useState<'random' | 'price_asc' | 'price_desc' | 'likes_desc' | 'likes_asc'>('random')
 
   // お気に入りステート
@@ -204,6 +209,11 @@ export default function Home() {
     setMaxLeadTime('')
     setMaxPrice('')
     setCommercialOnly(false)
+    setExpressOnly(false)
+    setR18Only(false)
+    setHandDrawnOnly(false)
+    setCopyrightTransferOnly(false)
+    setFreeRevisionOnly(false)
     setShowFavoritesOnly(false)
     setSortOption('random')
   }
@@ -231,6 +241,21 @@ export default function Home() {
       const matchesCommercial =
         !commercialOnly || profile.commercial_use_allowed === true
 
+      const matchesExpress =
+        !expressOnly || profile.express_option_available === true
+
+      const matchesR18 =
+        !r18Only || profile.r18_allowed === true
+
+      const matchesHandDrawn =
+        !handDrawnOnly || profile.ai_usage === 'none'
+
+      const matchesCopyrightTransfer =
+        !copyrightTransferOnly || profile.copyright_transfer_available === true
+
+      const matchesFreeRevision =
+        !freeRevisionOnly || (typeof profile.free_revision_count === 'number' && profile.free_revision_count >= 1)
+
       const matchesFavorite =
         !showFavoritesOnly || favorites.includes(profile.user_id)
 
@@ -241,6 +266,11 @@ export default function Home() {
         matchesLeadTime &&
         matchesPrice &&
         matchesCommercial &&
+        matchesExpress &&
+        matchesR18 &&
+        matchesHandDrawn &&
+        matchesCopyrightTransfer &&
+        matchesFreeRevision &&
         matchesFavorite
       )
     })
@@ -258,9 +288,16 @@ export default function Home() {
       if (sortOption === 'likes_asc') {
         return (a.likes_count ?? 0) - (b.likes_count ?? 0)
       }
+      if (sortOption === 'random') {
+        // サンプル作品（またはアバター）が無いクリエイターは、おすすめ順で上位に来ないよう後ろに回す。
+        // 同じグループ内の順序はフェッチ時にシャッフル済みのため、ここでは崩さずグループだけ入れ替える。
+        const aHasThumbnail = a.thumbnail_url ? 1 : 0
+        const bHasThumbnail = b.thumbnail_url ? 1 : 0
+        if (aHasThumbnail !== bHasThumbnail) return bHasThumbnail - aHasThumbnail
+      }
       return 0
     })
-  }, [profiles, searchTerm, selectedTastes, statusFilter, maxLeadTime, maxPrice, commercialOnly, showFavoritesOnly, favorites, sortOption])
+  }, [profiles, searchTerm, selectedTastes, statusFilter, maxLeadTime, maxPrice, commercialOnly, expressOnly, r18Only, handDrawnOnly, copyrightTransferOnly, freeRevisionOnly, showFavoritesOnly, favorites, sortOption])
 
   const displayedTastes = useMemo(() => {
     return Array.from(new Set(profiles.flatMap((p) => p.tastes || [])))
@@ -482,24 +519,121 @@ export default function Home() {
                   </select>
                 </div>
 
-                <label className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-sky-50/70 border border-sky-100 cursor-pointer">
-                  <span className="text-[11px] font-bold text-slate-600">商用利用可能のみ</span>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={commercialOnly}
-                    onClick={() => setCommercialOnly(!commercialOnly)}
-                    className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-200 cursor-pointer ${
-                      commercialOnly ? 'bg-sky-500' : 'bg-slate-300'
-                    }`}
-                  >
-                    <span
-                      className={`pointer-events-none absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-md transition-transform duration-200 ${
-                        commercialOnly ? 'translate-x-4' : 'translate-x-0.5'
+                <div className="space-y-2">
+                  <label className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-sky-50/70 border border-sky-100 cursor-pointer">
+                    <span className="text-[11px] font-bold text-slate-600">商用利用可能のみ</span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={commercialOnly}
+                      onClick={() => setCommercialOnly(!commercialOnly)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-200 cursor-pointer ${
+                        commercialOnly ? 'bg-sky-500' : 'bg-slate-300'
                       }`}
-                    />
-                  </button>
-                </label>
+                    >
+                      <span
+                        className={`pointer-events-none absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-md transition-transform duration-200 ${
+                          commercialOnly ? 'translate-x-4' : 'translate-x-0.5'
+                        }`}
+                      />
+                    </button>
+                  </label>
+
+                  <label className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-sky-50/70 border border-sky-100 cursor-pointer">
+                    <span className="text-[11px] font-bold text-slate-600">急ぎ・特急対応のみ</span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={expressOnly}
+                      onClick={() => setExpressOnly(!expressOnly)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-200 cursor-pointer ${
+                        expressOnly ? 'bg-sky-500' : 'bg-slate-300'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-md transition-transform duration-200 ${
+                          expressOnly ? 'translate-x-4' : 'translate-x-0.5'
+                        }`}
+                      />
+                    </button>
+                  </label>
+
+                  <label className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-rose-50/70 border border-rose-100 cursor-pointer">
+                    <span className="text-[11px] font-bold text-slate-600">R-18（成人向け）対応のみ</span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={r18Only}
+                      onClick={() => setR18Only(!r18Only)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-200 cursor-pointer ${
+                        r18Only ? 'bg-rose-500' : 'bg-slate-300'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-md transition-transform duration-200 ${
+                          r18Only ? 'translate-x-4' : 'translate-x-0.5'
+                        }`}
+                      />
+                    </button>
+                  </label>
+
+                  <label className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-sky-50/70 border border-sky-100 cursor-pointer">
+                    <span className="text-[11px] font-bold text-slate-600">完全手描きのみ</span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={handDrawnOnly}
+                      onClick={() => setHandDrawnOnly(!handDrawnOnly)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-200 cursor-pointer ${
+                        handDrawnOnly ? 'bg-sky-500' : 'bg-slate-300'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-md transition-transform duration-200 ${
+                          handDrawnOnly ? 'translate-x-4' : 'translate-x-0.5'
+                        }`}
+                      />
+                    </button>
+                  </label>
+
+                  <label className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-sky-50/70 border border-sky-100 cursor-pointer">
+                    <span className="text-[11px] font-bold text-slate-600">著作権譲渡可能のみ</span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={copyrightTransferOnly}
+                      onClick={() => setCopyrightTransferOnly(!copyrightTransferOnly)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-200 cursor-pointer ${
+                        copyrightTransferOnly ? 'bg-sky-500' : 'bg-slate-300'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-md transition-transform duration-200 ${
+                          copyrightTransferOnly ? 'translate-x-4' : 'translate-x-0.5'
+                        }`}
+                      />
+                    </button>
+                  </label>
+
+                  <label className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-sky-50/70 border border-sky-100 cursor-pointer">
+                    <span className="text-[11px] font-bold text-slate-600">無料リテイクありのみ</span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={freeRevisionOnly}
+                      onClick={() => setFreeRevisionOnly(!freeRevisionOnly)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-200 cursor-pointer ${
+                        freeRevisionOnly ? 'bg-sky-500' : 'bg-slate-300'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-md transition-transform duration-200 ${
+                          freeRevisionOnly ? 'translate-x-4' : 'translate-x-0.5'
+                        }`}
+                      />
+                    </button>
+                  </label>
+                </div>
 
                 <div className="space-y-2.5 pt-4 border-t border-slate-100">
                   <div className="flex items-center justify-between">
