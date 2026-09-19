@@ -1,8 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/utils/supabase/client'
-import { Profile } from '@/types/database'
+import { supabase, Profile } from '@/lib/supabase'
 import { useCompareStore } from '@/store/useCompareStore'
 import Link from 'next/link'
 import { ArrowLeft, Check, X, ExternalLink, Trash2, Sparkles } from 'lucide-react'
@@ -22,7 +21,6 @@ export default function ComparePage() {
   const [profiles, setProfiles] = useState<ExtendedProfile[]>([])
   const [loading, setLoading] = useState(true)
   const { selectedIds, toggleIllustrator, clear } = useCompareStore()
-  const supabase = createClient()
 
   useEffect(() => {
     async function fetchProfiles() {
@@ -206,7 +204,7 @@ export default function ComparePage() {
                   ? '完全手描き（未使用）'
                   : p.ai_usage === 'partial'
                   ? '一部AI補助あり'
-                  : p.ai_usage === 'main'
+                  : p.ai_usage === 'full'
                   ? 'AIメイン制作'
                   : '未指定'}
               </div>

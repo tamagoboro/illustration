@@ -37,7 +37,7 @@ export default function SettingsPage() {
         const { data, error } = await supabase
           .from('profiles')
           .select('*')
-          .eq('id', user.id)
+          .eq('user_id', user.id)
           .single()
 
         if (error) throw error
@@ -140,7 +140,7 @@ export default function SettingsPage() {
           form_config: formConfig,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', userId)
+        .eq('user_id', userId)
 
       if (error) throw error
       alert('設定を保存しました！')

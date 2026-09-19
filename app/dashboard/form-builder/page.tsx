@@ -224,12 +224,12 @@ export default function FormBuilderPage() {
 
     const { error } = await supabase
       .from('profiles')
-      .update({ form_config: config })
-      .eq('user_id', userId)
+      .upsert({ user_id: userId, form_config: config }, { onConflict: 'user_id' })
 
     setSaving(false)
     if (error) {
-      alert('保存に失敗しました: ' + error.message)
+      console.error('見積もりフォーム保存エラー:', error)
+      alert('保存に失敗しました。通信環境をご確認のうえ、もう一度お試しください。入力した内容はこの画面には残っていますので、もう一度保存ボタンを押してみてください。')
     } else {
       alert('✨ 見積もりフォームを更新・データベースへ保存しました！')
     }

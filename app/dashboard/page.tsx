@@ -321,7 +321,7 @@ export default function Dashboard() {
     } catch (error: any) {
       console.error('ステータス更新エラー:', error)
       setStatus(previousStatus)
-      alert('ステータスの更新に失敗しました: ' + (error?.message || '不明なエラー'))
+      alert('ステータスの更新に失敗しました。通信環境をご確認のうえ、もう一度お試しください。')
     }
   }
 
@@ -453,15 +453,23 @@ export default function Dashboard() {
     const file = e.target.files?.[0]
     if (!file || !user) return
 
+    let compressed
+    try {
+      compressed = await validateAndCompressImage(file, 'avatar', 600, 0.85)
+    } catch (error: any) {
+      // ここでのエラーは事前のファイル検証によるもので、原因と対処法がすでに文章になっている
+      alert(error.message || '画像の読み込みに失敗しました。別の画像でもう一度お試しください。')
+      return
+    }
+
     try {
       setUploadingAvatar(true)
-      const { blob, mimeType, extension } = await validateAndCompressImage(file, 'avatar', 600, 0.85)
-      const fileName = `${user.id}/avatar_${Date.now()}.${extension}`
+      const fileName = `${user.id}/avatar_${Date.now()}.${compressed.extension}`
 
       const { error: uploadError } = await supabase.storage
         .from('portfolios')
-        .upload(fileName, blob, {
-          contentType: mimeType,
+        .upload(fileName, compressed.blob, {
+          contentType: compressed.mimeType,
           upsert: true,
         })
 
@@ -474,7 +482,8 @@ export default function Dashboard() {
       setAvatarUrl(normalizeStorageUrl(publicUrlData.publicUrl))
       setIsDirty(true)
     } catch (error: any) {
-      alert(error.message || 'アイコンのアップロードに失敗しました')
+      console.error('アイコンアップロードエラー:', error)
+      alert('アイコンのアップロードに失敗しました。通信環境をご確認のうえ、もう一度お試しください。')
     } finally {
       setUploadingAvatar(false)
     }
@@ -484,15 +493,23 @@ export default function Dashboard() {
     const file = e.target.files?.[0]
     if (!file || !user) return
 
+    let compressed
+    try {
+      compressed = await validateAndCompressImage(file, index, 1200, 0.8)
+    } catch (error: any) {
+      // ここでのエラーは事前のファイル検証によるもので、原因と対処法がすでに文章になっている
+      alert(error.message || '画像の読み込みに失敗しました。別の画像でもう一度お試しください。')
+      return
+    }
+
     try {
       setUploadingIndex(index)
-      const { blob, mimeType, extension } = await validateAndCompressImage(file, index, 1200, 0.8)
-      const fileName = `${user.id}/${Date.now()}_${index}.${extension}`
+      const fileName = `${user.id}/${Date.now()}_${index}.${compressed.extension}`
 
       const { error: uploadError } = await supabase.storage
         .from('portfolios')
-        .upload(fileName, blob, {
-          contentType: mimeType,
+        .upload(fileName, compressed.blob, {
+          contentType: compressed.mimeType,
           upsert: true,
         })
 
@@ -507,7 +524,8 @@ export default function Dashboard() {
       setPortfolioUrls(nextUrls)
       setIsDirty(true)
     } catch (error: any) {
-      alert(error.message || '画像のアップロードに失敗しました')
+      console.error('作品画像アップロードエラー:', error)
+      alert('画像のアップロードに失敗しました。通信環境をご確認のうえ、もう一度お試しください。')
     } finally {
       setUploadingIndex(null)
     }
@@ -597,7 +615,7 @@ export default function Dashboard() {
 
       if (error) {
         console.error('保存エラー詳細:', JSON.stringify(error, null, 2))
-        alert('保存に失敗しました: ' + error.message)
+        alert('保存に失敗しました。通信環境をご確認のうえ、もう一度お試しください。入力内容は消えていませんので、そのまま再度保存ボタンを押してみてください。')
       } else {
         showSuccessToast('プロフィール情報を更新しました！')
         setIsDirty(false)
@@ -647,7 +665,7 @@ export default function Dashboard() {
       setIsDirty(false)
     } catch (error: any) {
       console.error('ポートフォリオ保存エラー:', error)
-      alert('作品情報の更新に失敗しました: ' + (error?.message || '不明なエラー'))
+      alert('作品情報の更新に失敗しました。通信環境をご確認のうえ、もう一度お試しください。お手数をおかけしますが、画像を選び直してから再度お試しいただくと解決することもあります。')
     } finally {
       setSaving(false)
     }
@@ -655,7 +673,9 @@ export default function Dashboard() {
 
   const handleLogout = async () => {
     if (isDirty) {
-      const confirmLogout = window.confirm('保存されていない変更があります。破棄してログアウトしますか？')
+      const confirmLogout = window.confirm(
+        'まだ保存されていない変更があります。このままログアウトすると変更内容は失われてしまいます。破棄してログアウトしてもよろしいですか？'
+      )
       if (!confirmLogout) return
     }
 
@@ -665,11 +685,11 @@ export default function Dashboard() {
       router.push('/')
     } catch (error: any) {
       console.error('ログアウトエラー:', error)
-      alert('ログアウトに失敗しました: ' + (error?.message || '不明なエラー'))
+      alert('ログアウトに失敗しました。通信環境をご確認のうえ、もう一度お試しください。')
     }
   }
 
-  const currentPortfolioUrl = typeof window !== 'undefined' && user ? `${window.location.origin}/${user.id}` : ''
+  const currentPortfolioUrl = typeof window !== 'undefined' && user ? `${window.location.origin}/creator/${user.id}` : ''
   const currentThemeObj = THEME_COLORS.find((t) => t.id === themeColor) || THEME_COLORS[0]
 
   if (loading) {
@@ -758,7 +778,7 @@ export default function Dashboard() {
             <div className="flex items-center gap-2 shrink-0">
               {user && (
                 <Link
-                  href={`/${user.id}`}
+                  href={`/creator/${user.id}`}
                   target="_blank"
                   className={`px-3 py-1.5 text-xs font-bold ${currentThemeObj.text} ${currentThemeObj.lightBg} hover:opacity-80 rounded-xl transition-all flex items-center gap-1 border ${currentThemeObj.border}`}
                 >
@@ -1438,7 +1458,7 @@ export default function Dashboard() {
                       )}
                     </label>
                     <Link
-                      href="/form-builder"
+                      href="/dashboard/form-builder"
                       className={`text-xs font-bold ${currentThemeObj.text} hover:underline flex items-center gap-1`}
                     >
                       <span>見積書を作成・編集する</span>

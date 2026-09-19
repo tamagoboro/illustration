@@ -55,9 +55,9 @@ export type PortfolioItem = {
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-// utils/supabase/client.ts と同じ createBrowserClient (@supabase/ssr) を使用。
-// 以前は @supabase/supabase-js の createClient を直接使っていたため、
-// このファイル経由のクライアントと utils/supabase/client.ts 経由のクライアントとで
-// 認証セッションのCookie同期のされ方が異なり、ページによってログイン状態の
-// 見え方が食い違うことがあった。ここを揃えることでその不整合を解消する。
+// createBrowserClient (@supabase/ssr) を使用。
+// 以前は @supabase/supabase-js の createClient を直接使うファイルが分かれていたため、
+// クライアントごとに認証セッションのCookie同期のされ方が異なり、ページによって
+// ログイン状態の見え方が食い違うことがあった。全ページでこのシングルトンに
+// 揃えることでその不整合を解消している。
 export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey)

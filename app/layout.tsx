@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 
-const rawSiteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+const rawSiteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://drawker.com'
 const siteUrl = rawSiteUrl.startsWith('http') ? rawSiteUrl : `https://${rawSiteUrl}`
 
 const siteTitle = ' Drawker | イラスト依頼・ポートフォリオ比較プラットフォーム'

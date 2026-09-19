@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { supabase, Profile } from '@/lib/supabase'
 import { useCompareStore } from '@/store/useCompareStore'
+import { SlidersHorizontal, RotateCcw, Search, Wallet, Clock, Tag } from 'lucide-react'
 
 // メニュー項目の型定義
 type MenuItem = {
@@ -406,133 +407,147 @@ export default function Home() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
           {/* サイドバー */}
           <aside className="lg:col-span-1 space-y-6">
-            <div className="bg-white/80 backdrop-blur-md p-5 rounded-3xl border border-sky-100 shadow-sm space-y-4">
-              <div className="flex justify-between items-center pb-1">
-                <div className="flex items-center gap-1.5 text-sky-700">
-                  <span className="text-xs">⚙</span>
-                  <h2 className="font-extrabold text-xs tracking-wider">
-                    FILTER & SEARCH
-                  </h2>
+            <div className="bg-white/80 backdrop-blur-md rounded-3xl border border-sky-100/80 shadow-sm shadow-sky-100/40 overflow-hidden">
+              {/* ヘッダー */}
+              <div className="flex justify-between items-center px-5 py-4 bg-gradient-to-r from-sky-500 via-sky-400 to-cyan-400">
+                <div className="flex items-center gap-2 text-white">
+                  <SlidersHorizontal size={14} strokeWidth={2.5} />
+                  <h2 className="font-black text-xs tracking-wider">絞り込み検索</h2>
                 </div>
                 <button
                   onClick={resetFilters}
-                  className="text-[11px] text-sky-600 hover:text-sky-800 font-bold hover:underline cursor-pointer"
+                  className="flex items-center gap-1 text-[11px] text-white/90 hover:text-white font-bold cursor-pointer transition-colors"
                 >
-                  リセット
+                  <RotateCcw size={11} /> リセット
                 </button>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-700 block">キーワード</label>
-                <input
-                  type="text"
-                  placeholder="名前、アイコン、立ち絵など..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-sky-100 bg-white/90 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-700 block">予算上限</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    step="1000"
-                    placeholder="指定なし"
-                    value={maxPrice}
-                    onChange={(e) => setMaxPrice(e.target.value ? Number(e.target.value) : '')}
-                    className="w-full px-3 py-2 rounded-xl border border-sky-100 bg-white/90 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400"
-                  />
-                  <span className="text-xs text-slate-600 font-medium whitespace-nowrap">以下</span>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-700 block">希望納期</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    placeholder="指定なし"
-                    value={maxLeadTime}
-                    onChange={(e) => setMaxLeadTime(e.target.value ? Number(e.target.value) : '')}
-                    className="w-full px-3 py-2 rounded-xl border border-sky-100 bg-white/90 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400"
-                  />
-                  <span className="text-xs text-slate-600 font-medium whitespace-nowrap">日以内</span>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-700 block">受付状況</label>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-sky-100 bg-white/90 text-xs text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-sky-400 cursor-pointer"
-                >
-                  <option value="ALL">すべて表示</option>
-                  <option value="available">即対応可のみ</option>
-                  <option value="busy">相談受付中</option>
-                </select>
-              </div>
-
-              <div className="pt-1">
-                <label className="flex items-center justify-between cursor-pointer">
-                  <span className="text-[11px] font-bold text-slate-700">商用利用可能のみ</span>
-                  <input
-                    type="checkbox"
-                    checked={commercialOnly}
-                    onChange={(e) => setCommercialOnly(e.target.checked)}
-                    className="w-4 h-4 rounded text-sky-500 accent-sky-500 cursor-pointer"
-                  />
-                </label>
-              </div>
-
-              <div className="space-y-2 pt-2 border-t border-sky-100">
-                <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-bold text-slate-700 block">
-                    テイスト（最大20個）
+              <div className="p-5 space-y-5">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1.5">
+                    <Search size={12} className="text-sky-400" /> キーワード
                   </label>
-                  {selectedTastes.length > 0 && (
-                    <button
-                      onClick={() => setSelectedTastes([])}
-                      className="text-[10px] text-sky-600 hover:underline font-bold cursor-pointer"
-                    >
-                      選択解除
-                    </button>
-                  )}
+                  <input
+                    type="text"
+                    placeholder="名前、アイコン、立ち絵など..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50/70 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:bg-white focus:border-sky-300 transition-all"
+                  />
                 </div>
 
-                <input
-                  type="text"
-                  placeholder="テイストを検索..."
-                  value={tasteSearch}
-                  onChange={(e) => setTasteSearch(e.target.value)}
-                  className="w-full px-3 py-1.5 text-[10px] rounded-lg border border-sky-100 bg-white/90 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400"
-                />
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1.5">
+                    <Wallet size={12} className="text-sky-400" /> 予算上限
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      step="1000"
+                      placeholder="指定なし"
+                      value={maxPrice}
+                      onChange={(e) => setMaxPrice(e.target.value ? Number(e.target.value) : '')}
+                      className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50/70 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:bg-white focus:border-sky-300 transition-all"
+                    />
+                    <span className="text-xs text-slate-500 font-bold whitespace-nowrap">以下</span>
+                  </div>
+                </div>
 
-                <div className="flex flex-wrap gap-1 max-h-40 overflow-y-auto pt-1">
-                  {displayedTastes.length === 0 ? (
-                    <p className="text-[10px] text-slate-400 py-1 font-bold">
-                      一致するテイストが見つかりません
-                    </p>
-                  ) : (
-                    displayedTastes.map((taste) => {
-                      const isSelected = selectedTastes.includes(taste)
-                      return (
-                        <button
-                          key={taste}
-                          onClick={() => toggleTaste(taste)}
-                          className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold transition-all cursor-pointer ${
-                            isSelected
-                              ? 'bg-sky-500 text-white shadow-2xs'
-                              : 'bg-sky-50 text-sky-700 hover:bg-sky-100'
-                          }`}
-                        >
-                          #{taste}
-                        </button>
-                      )
-                    })
-                  )}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1.5">
+                    <Clock size={12} className="text-sky-400" /> 希望納期
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      placeholder="指定なし"
+                      value={maxLeadTime}
+                      onChange={(e) => setMaxLeadTime(e.target.value ? Number(e.target.value) : '')}
+                      className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50/70 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:bg-white focus:border-sky-300 transition-all"
+                    />
+                    <span className="text-xs text-slate-500 font-bold whitespace-nowrap">日以内</span>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-500 block">受付状況</label>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50/70 text-xs text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-sky-400 focus:bg-white focus:border-sky-300 transition-all cursor-pointer"
+                  >
+                    <option value="ALL">すべて表示</option>
+                    <option value="available">即対応可のみ</option>
+                    <option value="busy">相談受付中</option>
+                  </select>
+                </div>
+
+                <label className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-sky-50/70 border border-sky-100 cursor-pointer">
+                  <span className="text-[11px] font-bold text-slate-600">商用利用可能のみ</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={commercialOnly}
+                    onClick={() => setCommercialOnly(!commercialOnly)}
+                    className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-200 cursor-pointer ${
+                      commercialOnly ? 'bg-sky-500' : 'bg-slate-300'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-md transition-transform duration-200 ${
+                        commercialOnly ? 'translate-x-4' : 'translate-x-0.5'
+                      }`}
+                    />
+                  </button>
+                </label>
+
+                <div className="space-y-2.5 pt-4 border-t border-slate-100">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1.5">
+                      <Tag size={12} className="text-sky-400" /> テイスト（最大20個）
+                    </label>
+                    {selectedTastes.length > 0 && (
+                      <button
+                        onClick={() => setSelectedTastes([])}
+                        className="text-[10px] text-sky-600 hover:underline font-bold cursor-pointer"
+                      >
+                        選択解除
+                      </button>
+                    )}
+                  </div>
+
+                  <input
+                    type="text"
+                    placeholder="テイストを検索..."
+                    value={tasteSearch}
+                    onChange={(e) => setTasteSearch(e.target.value)}
+                    className="w-full px-3.5 py-2 text-[11px] rounded-xl border border-slate-200 bg-slate-50/70 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:bg-white focus:border-sky-300 transition-all"
+                  />
+
+                  <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto pt-1">
+                    {displayedTastes.length === 0 ? (
+                      <p className="text-[10px] text-slate-400 py-1 font-bold">
+                        一致するテイストが見つかりません
+                      </p>
+                    ) : (
+                      displayedTastes.map((taste) => {
+                        const isSelected = selectedTastes.includes(taste)
+                        return (
+                          <button
+                            key={taste}
+                            onClick={() => toggleTaste(taste)}
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold transition-all cursor-pointer border ${
+                              isSelected
+                                ? 'bg-sky-500 text-white border-sky-500 shadow-sm shadow-sky-200'
+                                : 'bg-white text-sky-600 border-sky-100 hover:border-sky-300 hover:bg-sky-50'
+                            }`}
+                          >
+                            #{taste}
+                          </button>
+                        )
+                      })
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -628,10 +643,18 @@ export default function Home() {
 
                           <span
                             className={`text-[9px] px-2.5 py-0.5 rounded-full font-black text-white shadow-xs ${
-                              profile.status === 'available' ? 'bg-emerald-500' : 'bg-amber-500'
+                              profile.status === 'available'
+                                ? 'bg-emerald-500'
+                                : profile.status === 'stopped'
+                                ? 'bg-rose-500'
+                                : 'bg-amber-500'
                             }`}
                           >
-                            {profile.status === 'available' ? '即対応可' : '相談受付中'}
+                            {profile.status === 'available'
+                              ? '即対応可'
+                              : profile.status === 'stopped'
+                              ? '受注停止中'
+                              : '相談受付中'}
                           </span>
 
                           {/* 完全手描きバッジ */}
@@ -749,7 +772,7 @@ export default function Home() {
                             + 比較
                           </button>
                           <Link
-                            href={`/${profile.user_id}`}
+                            href={`/creator/${profile.user_id}`}
                             className="flex-1 py-1.5 text-xs font-bold text-center text-white bg-sky-500 hover:bg-sky-600 rounded-xl shadow-xs transition-all flex items-center justify-center"
                           >
                             詳細を見る &gt;
@@ -851,7 +874,7 @@ export default function Home() {
                         <div className="flex justify-between text-[10px]">
                           <span className="text-slate-500 font-medium">AI使用方針</span>
                           <span className="font-bold text-sky-800">
-                            {item.ai_usage === 'none' ? '完全手描き' : item.ai_usage === 'partial' ? '一部AI使用' : item.ai_usage === 'main' ? 'AIメイン' : '未設定'}
+                            {item.ai_usage === 'none' ? '完全手描き' : item.ai_usage === 'partial' ? '一部AI使用' : item.ai_usage === 'full' ? 'AIメイン' : '未設定'}
                           </span>
                         </div>
 
@@ -904,7 +927,7 @@ export default function Home() {
                   </div>
 
                   <Link
-                    href={`/${item.user_id}`}
+                    href={`/creator/${item.user_id}`}
                     className="block w-full py-2 bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold text-center rounded-xl shadow-xs transition-all"
                   >
                     詳細ページへ

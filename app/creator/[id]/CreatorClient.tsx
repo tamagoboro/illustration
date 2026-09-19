@@ -34,6 +34,25 @@ type MenuItem = {
   price: number | ''
 }
 
+type SnsLinkItem = {
+  id: string
+  platform: string
+  url: string
+}
+
+const SNS_PLATFORM_LABELS: Record<string, string> = {
+  twitter: '𝕏 (Twitter) DM',
+  instagram: 'Instagram DM',
+  pixiv: 'Pixiv メッセージ',
+  youtube: 'YouTube',
+  bluesky: 'Bluesky',
+  skeb: 'Skeb',
+  coconala: 'ココナラ',
+  twitch: 'Twitch',
+  website: '公式Webサイト',
+  other: 'その他リンク',
+}
+
 type ExtendedProfile = Profile & {
   display_name?: string | null
   status?: 'available' | 'busy' | 'stopped' | string | null
@@ -63,6 +82,7 @@ type ExtendedProfile = Profile & {
   max_projects_capacity?: number | null
   available_from_text?: string | null
   theme_color?: string | null
+  sns_links?: SnsLinkItem[] | null
 }
 
 const formatExternalUrl = (url?: string | null) => {
@@ -147,16 +167,18 @@ export default function CreatorClient({
 
 useEffect(() => {
   const fetchCreatorData = async () => {
-    if (!initialProfile) setLoading(true)
+    if (!initialProfile) {
+      setLoading(true)
 
-    const { data: profileData } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('user_id', id)
-      .single()
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', id)
+        .single()
 
-    if (profileData) {
-      setProfile(profileData as ExtendedProfile)
+      if (profileData) {
+        setProfile(profileData as ExtendedProfile)
+      }
     }
 
     if (works.length === 0) {
@@ -167,6 +189,15 @@ useEffect(() => {
         .order('sort_order', { ascending: true })
 
       if (worksData) setWorks(worksData)
+    }
+
+    try {
+      await supabase.from('analytics_logs').insert({
+        creator_id: id,
+        event_type: 'pv',
+      })
+    } catch (e) {
+      console.error('PV tracking error:', e)
     }
 
     setLoading(false)
@@ -320,14 +351,39 @@ const themeColor = useMemo(() => {
     setGeneratedSpec(specLines.join('\n'))
   }
 
-  const handleCopySpec = () => {
+  const trackEstimateCalc = async () => {
+    if (!activeFormConfig) return
+    const selectedOptions: string[] = []
+    activeFormConfig.fields.forEach((field) => {
+      const answer = formAnswers[field.id]
+      if (!answer) return
+      if (Array.isArray(answer)) {
+        selectedOptions.push(...answer)
+      } else if (field.type === 'radio' || field.type === 'checkbox') {
+        selectedOptions.push(String(answer))
+      }
+    })
+
+    try {
+      await supabase.from('analytics_logs').insert({
+        creator_id: id,
+        event_type: 'estimate_calc',
+        metadata: { options: selectedOptions },
+      })
+    } catch (e) {
+      console.error('Estimate tracking error:', e)
+    }
+  }
+
+  const handleCopySpec = async () => {
     if (!generatedSpec) return
+    await trackEstimateCalc()
     navigator.clipboard.writeText(generatedSpec)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const handleToggleFavorite = () => {
+  const handleToggleFavorite = async () => {
     const storedFavs = localStorage.getItem('favorite_creators')
     let favArray: string[] = storedFavs ? JSON.parse(storedFavs) : []
 
@@ -337,6 +393,15 @@ const themeColor = useMemo(() => {
     } else {
       favArray.push(id)
       setIsFavorite(true)
+
+      try {
+        await supabase.from('analytics_logs').insert({
+          creator_id: id,
+          event_type: 'favorite',
+        })
+      } catch (e) {
+        console.error('Favorite tracking error:', e)
+      }
     }
 
     localStorage.setItem('favorite_creators', JSON.stringify(favArray))
@@ -398,9 +463,7 @@ const themeColor = useMemo(() => {
     profile.instagram_url ||
     profile.pixiv_url ||
     profile.website_url
-    
-  console.log('DBのtheme_color値:', profile?.theme_color);
-  console.log('決定されたthemeColor:', themeColor);
+
   // ステータス表示のラベル生成
   const getStatusLabel = () => {
     if (profile.status === 'stopped') return '受注停止'
@@ -683,8 +746,8 @@ const themeColor = useMemo(() => {
                     <span>🧮</span> 簡単見積もり・仕様書作成
                   </button>
                 ) : (
-                  <div className="w-full py-3 px-3 bg-sky-100/80 text-sky-400 font-bold rounded-xl text-xs text-center border border-sky-200/60">
-                    見積もりフォーム未設定
+                  <div className="w-full py-3 px-3 bg-sky-100/80 text-sky-500 font-bold rounded-xl text-xs text-center border border-sky-200/60 leading-relaxed">
+                    見積もりシミュレーターは準備中です。<br />下の「直接相談・お問い合わせ」から気軽にご相談ください。
                   </div>
                 )}
 
@@ -941,9 +1004,10 @@ const themeColor = useMemo(() => {
                         : activeFormConfig.title || '簡単見積もり・仕様書作成'}
                     </h3>
                   </div>
-                  {activeFormConfig.description && !generatedSpec && (
+                  {!generatedSpec && (
                     <p className="text-xs font-medium text-sky-500 whitespace-pre-wrap pl-7">
-                      {activeFormConfig.description}
+                      {activeFormConfig.description ||
+                        'ご希望の内容を選んでいただくだけで、その場で概算金額と依頼内容のまとめが作成されます。まずは気軽に選んでみてください。'}
                     </p>
                   )}
                   {referenceWorkTitle && !generatedSpec && (
@@ -1127,8 +1191,9 @@ const themeColor = useMemo(() => {
                   <div className="p-4 bg-sky-900 rounded-2xl text-white font-mono text-xs leading-relaxed whitespace-pre-wrap select-all shadow-inner">
                     {generatedSpec}
                   </div>
-                  <p className="text-[11px] text-sky-500 text-center font-medium">
-                    上記のテキストをコピーして、ダイレクトメッセージやお問合せフォームに貼り付けて送信してください。
+                  <p className="text-[11px] text-sky-500 text-center font-medium leading-relaxed">
+                    お疲れさまでした！上記のテキストをコピーして、ダイレクトメッセージやお問合せフォームに貼り付けてお送りください。<br />
+                    ※あくまで概算のシミュレーションです。実際の金額や納期は、クリエイターとのやり取りの中で相談しながら決めていただけますので、気軽にご連絡ください。
                   </p>
                 </div>
               )}
@@ -1213,38 +1278,66 @@ const themeColor = useMemo(() => {
                   <span>↗</span>
                 </a>
               )}
-              {profile.twitter_url && (
-                <a
-                  href={formatExternalUrl(profile.twitter_url)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full py-3 px-4 bg-sky-900 text-white font-bold rounded-xl text-xs transition hover:bg-sky-800 flex items-center justify-between"
-                >
-                  <span>𝕏 (Twitter) DM</span>
-                  <span>↗</span>
-                </a>
-              )}
-              {profile.instagram_url && (
-                <a
-                  href={formatExternalUrl(profile.instagram_url)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-pink-500 text-white font-bold rounded-xl text-xs transition hover:opacity-90 flex items-center justify-between"
-                >
-                  <span>Instagram DM</span>
-                  <span>↗</span>
-                </a>
-              )}
-              {profile.website_url && (
-                <a
-                  href={formatExternalUrl(profile.website_url)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full py-3 px-4 bg-sky-100 text-sky-800 font-bold rounded-xl text-xs transition hover:bg-sky-200 flex items-center justify-between"
-                >
-                  <span>公式Webサイト</span>
-                  <span>↗</span>
-                </a>
+              {profile.sns_links && profile.sns_links.length > 0 ? (
+                profile.sns_links.map((link) => (
+                  <a
+                    key={link.id}
+                    href={formatExternalUrl(link.url)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-3 px-4 bg-sky-100 text-sky-800 font-bold rounded-xl text-xs transition hover:bg-sky-200 flex items-center justify-between"
+                  >
+                    <span>{SNS_PLATFORM_LABELS[link.platform] || link.platform}</span>
+                    <span>↗</span>
+                  </a>
+                ))
+              ) : (
+                <>
+                  {profile.twitter_url && (
+                    <a
+                      href={formatExternalUrl(profile.twitter_url)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-3 px-4 bg-sky-900 text-white font-bold rounded-xl text-xs transition hover:bg-sky-800 flex items-center justify-between"
+                    >
+                      <span>𝕏 (Twitter) DM</span>
+                      <span>↗</span>
+                    </a>
+                  )}
+                  {profile.instagram_url && (
+                    <a
+                      href={formatExternalUrl(profile.instagram_url)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-pink-500 text-white font-bold rounded-xl text-xs transition hover:opacity-90 flex items-center justify-between"
+                    >
+                      <span>Instagram DM</span>
+                      <span>↗</span>
+                    </a>
+                  )}
+                  {profile.pixiv_url && (
+                    <a
+                      href={formatExternalUrl(profile.pixiv_url)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-3 px-4 bg-blue-500 text-white font-bold rounded-xl text-xs transition hover:bg-blue-600 flex items-center justify-between"
+                    >
+                      <span>Pixiv メッセージ</span>
+                      <span>↗</span>
+                    </a>
+                  )}
+                  {profile.website_url && (
+                    <a
+                      href={formatExternalUrl(profile.website_url)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-3 px-4 bg-sky-100 text-sky-800 font-bold rounded-xl text-xs transition hover:bg-sky-200 flex items-center justify-between"
+                    >
+                      <span>公式Webサイト</span>
+                      <span>↗</span>
+                    </a>
+                  )}
+                </>
               )}
             </div>
 

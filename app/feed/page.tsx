@@ -389,7 +389,7 @@ export default function FeedPage() {
                 >
                   {/* ヘッダー（アイコン・名前・編集/削除ボタン） */}
                   <div className="flex items-center justify-between">
-                    <Link href={`/${post.user_id}`} className="flex items-center gap-3 group">
+                    <Link href={`/creator/${post.user_id}`} className="flex items-center gap-3 group">
                       <div className="w-10 h-10 rounded-full bg-slate-100 overflow-hidden border border-slate-200/60 shrink-0 group-hover:scale-105 transition-transform">
                         {post.profiles?.avatar_url ? (
                           <img
@@ -436,7 +436,7 @@ export default function FeedPage() {
                         </>
                       )}
                       <Link
-                        href={`/${post.user_id}`}
+                        href={`/creator/${post.user_id}`}
                         className="text-[11px] font-bold text-pink-600 bg-pink-50 hover:bg-pink-100 px-3 py-1.5 rounded-full transition"
                       >
                         依頼窓口 →
@@ -508,7 +508,10 @@ export default function FeedPage() {
                     </button>
 
                     <button
-                      onClick={() => setOpenCommentPostId(openCommentPostId === post.id ? null : post.id)}
+                      onClick={() => {
+                        setOpenCommentPostId(openCommentPostId === post.id ? null : post.id)
+                        setCommentInput('')
+                      }}
                       className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-slate-600 px-3 py-1.5 rounded-full hover:bg-slate-50 transition cursor-pointer"
                     >
                       <span>💬</span>
@@ -524,7 +527,7 @@ export default function FeedPage() {
                         <div className="space-y-2.5 max-h-48 overflow-y-auto pr-1">
                           {post.post_comments.map((comment) => (
                             <div key={comment.id} className="bg-slate-50 p-2.5 rounded-2xl flex gap-2.5">
-                              <Link href={`/${comment.user_id}`} className="shrink-0">
+                              <Link href={`/creator/${comment.user_id}`} className="shrink-0">
                                 <div className="w-6 h-6 rounded-full bg-slate-200 overflow-hidden">
                                   {comment.profiles?.avatar_url && (
                                     <img src={comment.profiles.avatar_url} alt="" className="w-full h-full object-cover" />

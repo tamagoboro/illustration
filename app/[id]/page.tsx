@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { supabase, Profile, PortfolioItem } from '@/lib/supabase'
 
 type Option = {
@@ -68,7 +67,6 @@ function CreatorClient({
   initialProfile?: ExtendedProfile | null
   initialWorks?: PortfolioItem[]
 }) {
-  const router = useRouter()
   const [profile, setProfile] = useState<ExtendedProfile | null>(initialProfile || null)
   const [works, setWorks] = useState<PortfolioItem[]>(initialWorks)
   const [loading, setLoading] = useState(true)
@@ -80,18 +78,11 @@ function CreatorClient({
   const [formAnswers, setFormAnswers] = useState<Record<string, any>>({})
   const [clientName, setClientName] = useState('')
   const [copied, setCopied] = useState(false)
-  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false)
 
   const BACKGROUND_IMAGE_URL =
     'https://qcklfkslqtjnxufqcqyi.supabase.co/storage/v1/object/public/portfolios/bg.png'
 
     useEffect(() => {
-    // URLのIDが 'form-buirelder' だった場合は実際の編集ページへ移動させる
-    if (id === 'form-builder') {
-      router.push('/dashboard/form-builder')
-      return
-    }
-
     if (!id) {
       setLoading(false)
       return
@@ -120,7 +111,7 @@ function CreatorClient({
         if (profileError) {
           console.error('Profile fetch error:', profileError)
         }
-        if (profileData) {
+        if (profileData && profileData.is_public !== false) {
           setProfile(profileData as ExtendedProfile)
         }
 
@@ -149,7 +140,7 @@ function CreatorClient({
     }
 
     fetchCreatorDataAndTrackPV()
-  }, [id, router])
+  }, [id])
 
   const activeFormConfig = useMemo<FormConfig | null>(() => {
     if (!profile?.form_config) return null
@@ -290,61 +281,6 @@ function CreatorClient({
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const handleDownloadPDF = async () => {
-    if (!activeFormConfig) return
-    await trackEstimateCalc()
-
-    try {
-      setIsDownloadingPdf(true)
-      const formattedAnswers: { label: string; value: string }[] = []
-
-      if (clientName.trim()) {
-        formattedAnswers.push({ label: '依頼者名', value: clientName })
-      }
-
-      activeFormConfig.fields.forEach((field) => {
-        if (field.type === 'note' || field.type === 'faq') return
-        const title = field.label || field.title || '設問'
-        const answer = formAnswers[field.id]
-        if (!answer || (Array.isArray(answer) && answer.length === 0)) return
-
-        if (Array.isArray(answer)) {
-          formattedAnswers.push({ label: title, value: answer.join(', ') })
-        } else {
-          formattedAnswers.push({ label: title, value: String(answer) })
-        }
-      })
-
-      const response = await fetch('/api/estimate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          creatorName: profile?.display_name || 'クリエイター',
-          formTitle: activeFormConfig.title || '概算見積もり・仕様書',
-          answers: formattedAnswers,
-          totalPrice,
-        }),
-      })
-
-      if (!response.ok) throw new Error('PDFの生成に失敗しました')
-
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `見積仕様書_${profile?.display_name || 'creator'}_${Date.now()}.pdf`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
-    } catch (error) {
-      console.error(error)
-      alert('PDFの生成中にエラーが発生しました。')
-    } finally {
-      setIsDownloadingPdf(false)
-    }
-  }
-
   const handleToggleFavorite = async () => {
     const storedFavs = localStorage.getItem('favorite_creators')
     let favArray: string[] = storedFavs ? JSON.parse(storedFavs) : []
@@ -453,6 +389,8 @@ function CreatorClient({
                       className={`inline-flex items-center gap-1.5 text-xs font-extrabold px-3 py-1 rounded-full border shadow-2xs ${
                         profile.status === 'available'
                           ? 'bg-emerald-500/10 text-emerald-800 border-emerald-500/30'
+                          : profile.status === 'stopped'
+                          ? 'bg-rose-500/10 text-rose-800 border-rose-500/30'
                           : 'bg-amber-500/10 text-amber-800 border-amber-500/30'
                       }`}
                     >
@@ -460,10 +398,16 @@ function CreatorClient({
                         className={`w-2 h-2 rounded-full ${
                           profile.status === 'available'
                             ? 'bg-emerald-500 animate-pulse'
+                            : profile.status === 'stopped'
+                            ? 'bg-rose-500'
                             : 'bg-amber-500'
                         }`}
                       />
-                      {profile.status === 'available' ? '即対応可' : '相談受付中'}
+                      {profile.status === 'available'
+                        ? '即対応可'
+                        : profile.status === 'stopped'
+                        ? '受注停止中'
+                        : '相談受付中'}
                     </span>
                   </div>
 
@@ -575,7 +519,7 @@ function CreatorClient({
                     ? '完全手描き（未使用）'
                     : profile.ai_usage === 'partial'
                     ? '一部AI補助あり'
-                    : profile.ai_usage === 'main'
+                    : profile.ai_usage === 'full'
                     ? 'AIメイン制作'
                     : '未指定',
                 highlight: profile.ai_usage === 'none',
@@ -863,22 +807,13 @@ function CreatorClient({
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-2">
                 <button
                   onClick={handleCopySpec}
                   className="py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl transition text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md"
                 >
                   <span>{copied ? '✅' : '📋'}</span>
                   <span>{copied ? 'コピー完了！' : '仕様書テキストをコピー'}</span>
-                </button>
-
-                <button
-                  onClick={handleDownloadPDF}
-                  disabled={isDownloadingPdf}
-                  className="py-3 bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 text-white font-extrabold rounded-xl transition text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md"
-                >
-                  <span>📄</span>
-                  <span>{isDownloadingPdf ? 'PDF生成中...' : 'PDF形式でダウンロード'}</span>
                 </button>
               </div>
 

@@ -37,7 +37,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     .eq('user_id', id)
     .single()
 
-  if (!profile) {
+  if (!profile || profile.is_public === false) {
     return {
       title: `クリエイターが見つかりません | ${SITE_NAME}`,
       robots: { index: false, follow: false },
@@ -58,8 +58,23 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const leadTimeText = profile.lead_time_days ? `最短${profile.lead_time_days}日でお届け` : '納期要相談'
   const description = `イラストレーター【${profile.display_name}】への直接依頼・見積もりページ。${leadTimeText} / ${commercialText}。SNSアイコン、キャラデザイン、立ち絵、ヘッダー等の制作実績・料金表を公開中！`
 
+  // SNSシェア時（OGP・Twitterカード）はSEO用タイトルと分け、シンプルな個人カードにする
+  // 改行はX(Twitter)のカードでは無視され price と comment がくっついて表示されるため、
+  // 区切り文字「／」で連結する。プロフィール文が長い場合はカード側で不自然に
+  // 切れないよう、ここで先に90文字＋「…」に丸める。
+  const priceText = profile.price_min
+    ? `最低参考価格${profile.price_min.toLocaleString()}円〜`
+    : '料金：応相談'
+  const rawProfileText =
+    profile.status_comment?.trim() || `${profile.display_name}のポートフォリオ・見積もりページ`
+  const profileText =
+    rawProfileText.length > 90 ? `${rawProfileText.slice(0, 90)}…` : rawProfileText
+  const shareTitle = `Drawker｜${profile.display_name}`
+  const shareDescription = `${priceText} ／ ${profileText}`
+
   // 最初のポートフォリオ画像（なければアバター）を、正規化した完全URLで使用
-  const fallbackOgUrl = `${BASE_URL}/OGP-img.png`
+  // どちらも無いクリエイターは、名前・アバター・代表作を合成した動的OGPカードにフォールバック
+  const fallbackOgUrl = `${BASE_URL}/api/og/creator/${id}`
   const rawOgImage = firstPortfolio?.image_url || profile.avatar_url
   const ogImage = getFullImageUrl(rawOgImage, fallbackOgUrl)
   const canonicalUrl = `${BASE_URL}/creator/${id}`
@@ -98,8 +113,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       googlebot: 'noai, noimageai',
     },
     openGraph: {
-      title,
-      description,
+      title: shareTitle,
+      description: shareDescription,
       url: canonicalUrl,
       siteName: SITE_NAME,
       locale: 'ja_JP',
@@ -115,8 +130,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     },
     twitter: {
       card: 'summary_large_image',
-      title,
-      description,
+      title: shareTitle,
+      description: shareDescription,
       images: [ogImage],
       ...(twitterHandle && {
         creator: `@${twitterHandle}`,
@@ -134,7 +149,7 @@ export default async function Page({ params }: Props) {
     .eq('user_id', id)
     .single()
 
-  if (!profile) {
+  if (!profile || profile.is_public === false) {
     notFound()
   }
 
