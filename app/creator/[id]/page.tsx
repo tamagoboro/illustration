@@ -159,6 +159,14 @@ export default async function Page({ params }: Props) {
     .eq('user_id', id)
     .order('sort_order', { ascending: true })
 
+  // 複数の見積もりフォームに対応。新形式（estimate_forms）が無ければ
+  // 旧形式（profiles.form_config）を1件だけのフォームとして扱う（後方互換）
+  const { data: estimateForms } = await supabase
+    .from('estimate_forms')
+    .select('*')
+    .eq('user_id', id)
+    .order('sort_order', { ascending: true })
+
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Person',
@@ -197,6 +205,7 @@ export default async function Page({ params }: Props) {
         id={id}
         initialProfile={profile}
         initialWorks={initialWorks || []}
+        initialForms={estimateForms || []}
       />
     </>
   )

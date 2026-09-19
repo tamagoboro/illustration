@@ -25,8 +25,21 @@ type Field = {
 type FormConfig = {
   title?: string
   description?: string
-  themeColor?: string
+  theme_color?: string
   fields: Field[]
+}
+
+// 見積もりフォームは複数持てる（estimate_forms テーブル）。
+// 旧形式で1件だけ profiles.form_config に保存されている場合は、
+// ここに合わせた形に変換して同じ扱いにする（後方互換）。
+type EstimateFormRow = {
+  id: string
+  title: string
+  description: string
+  theme_color: string
+  is_accepting: boolean
+  fields: Field[]
+  sort_order: number
 }
 
 type MenuItem = {
@@ -114,20 +127,25 @@ export default function CreatorClient({
   id,
   initialProfile,
   initialWorks = [],
+  initialForms = [],
 }: {
   id: string
   initialProfile?: ExtendedProfile | null
   initialWorks?: PortfolioItem[]
+  initialForms?: EstimateFormRow[]
 }) {
   const router = useRouter()
   const [profile, setProfile] = useState<ExtendedProfile | null>(initialProfile || null)
   const [works, setWorks] = useState<PortfolioItem[]>(initialWorks)
+  const [forms, setForms] = useState<EstimateFormRow[]>(initialForms)
   const [loading, setLoading] = useState(!initialProfile)
   const [isFavorite, setIsFavorite] = useState(false)
 
   // モーダル管理
   const [isEstimateOpen, setIsEstimateOpen] = useState(false)
   const [isContactOpen, setIsContactOpen] = useState(false)
+  const [isFormPickerOpen, setIsFormPickerOpen] = useState(false)
+  const [selectedFormId, setSelectedFormId] = useState<string | null>(null)
   const [selectedWork, setSelectedWork] = useState<PortfolioItem | null>(null)
 
   // フォーム選択状態管理
@@ -143,7 +161,7 @@ export default function CreatorClient({
 
   // モーダル表示時の背景スクロール抑制
   useEffect(() => {
-    if (isEstimateOpen || isContactOpen || selectedWork) {
+    if (isEstimateOpen || isContactOpen || isFormPickerOpen || selectedWork) {
       document.body.style.overflow = 'hidden'
     } else {
       document.body.style.overflow = 'unset'
@@ -151,7 +169,13 @@ export default function CreatorClient({
     return () => {
       document.body.style.overflow = 'unset'
     }
-  }, [isEstimateOpen, isContactOpen, selectedWork])
+  }, [isEstimateOpen, isContactOpen, isFormPickerOpen, selectedWork])
+
+  // 開いているフォームが切り替わったら、前のフォームの回答・生成済み仕様書を引き継がない
+  useEffect(() => {
+    setFormAnswers({})
+    setGeneratedSpec(null)
+  }, [selectedFormId])
 
   useEffect(() => {
     const storedFavs = localStorage.getItem('favorite_creators')
@@ -191,6 +215,16 @@ useEffect(() => {
       if (worksData) setWorks(worksData)
     }
 
+    if (forms.length === 0) {
+      const { data: formsData } = await supabase
+        .from('estimate_forms')
+        .select('*')
+        .eq('user_id', id)
+        .order('sort_order', { ascending: true })
+
+      if (formsData) setForms(formsData as EstimateFormRow[])
+    }
+
     try {
       await supabase.from('analytics_logs').insert({
         creator_id: id,
@@ -210,7 +244,7 @@ useEffect(() => {
 // テーマカラーの解決（profile.theme_color を絶対的な最優先に評価）
 const themeColor = useMemo(() => {
   // 1. まず DB の profiles.theme_color を最優先。次に form_config 側を見る
-  const rawColor = profile?.theme_color || profile?.form_config?.themeColor || ''
+  const rawColor = profile?.theme_color || profile?.form_config?.theme_color || ''
   const normalized = rawColor.toString().trim().toLowerCase()
 
   // 2. キーワード判定（DBのデータ形式に完全一致させる）
@@ -225,7 +259,7 @@ const themeColor = useMemo(() => {
 
   // 4. どれにもヒットしない場合のデフォルト値（必要に応じて変更）
   return '#10B981'
-}, [profile?.theme_color, profile?.form_config?.themeColor])
+}, [profile?.theme_color, profile?.form_config?.theme_color])
   // タグリストの規格化 (文字列配列・オブジェクト配列の両方に対応)
   const normalizedTastes = useMemo(() => {
     if (!profile?.tastes || !Array.isArray(profile.tastes)) return []
@@ -242,14 +276,46 @@ const themeColor = useMemo(() => {
       .filter((item) => item.length > 0)
   }, [profile?.tastes])
 
-  // フォーム設定の安全な取得
-  const activeFormConfig = useMemo<FormConfig | null>(() => {
-    if (!profile?.form_config) return null
-    if (!profile.form_config.fields || !Array.isArray(profile.form_config.fields) || profile.form_config.fields.length === 0) {
-      return null
+  // 選択可能な見積もりフォーム一覧。新形式（estimate_forms）が1件でもあればそちらを使い、
+  // 無ければ旧形式（profiles.form_config、1人1フォーム）を1件だけのリストとして扱う（後方互換）
+  const availableForms = useMemo<EstimateFormRow[]>(() => {
+    if (forms.length > 0) {
+      return forms.filter((f) => f.is_accepting !== false)
     }
-    return profile.form_config
-  }, [profile])
+
+    const legacy = profile?.form_config
+    if (legacy && Array.isArray(legacy.fields) && legacy.fields.length > 0) {
+      return [
+        {
+          id: 'legacy',
+          title: legacy.title || '簡単見積もり・仕様書作成',
+          description: legacy.description || '',
+          theme_color: legacy.theme_color || '',
+          is_accepting: true,
+          fields: legacy.fields,
+          sort_order: 0,
+        },
+      ]
+    }
+
+    return []
+  }, [forms, profile])
+
+  const activeFormConfig = useMemo<EstimateFormRow | null>(() => {
+    return availableForms.find((f) => f.id === selectedFormId) || null
+  }, [availableForms, selectedFormId])
+
+  const modalThemeColor = activeFormConfig?.theme_color || themeColor
+
+  // 見積もりボタン押下時の共通処理（フォームが1つならそのまま開き、複数なら選択させる）
+  const openEstimateFlow = () => {
+    if (availableForms.length === 1) {
+      setSelectedFormId(availableForms[0].id)
+      setIsEstimateOpen(true)
+    } else if (availableForms.length > 1) {
+      setIsFormPickerOpen(true)
+    }
+  }
 
   const handleSelectOption = (fieldId: string, optionLabel: string, isCheckbox: boolean) => {
     setFormAnswers((prev) => {
@@ -314,8 +380,7 @@ const themeColor = useMemo(() => {
   const handleOpenEstimateWithWork = (work: PortfolioItem) => {
     setSelectedWork(null)
     setReferenceWorkTitle(work.title || 'ポートフォリオ掲載作品')
-    setGeneratedSpec(null)
-    setIsEstimateOpen(true)
+    openEstimateFlow()
   }
 
   const handleGenerateSpec = () => {
@@ -733,17 +798,16 @@ const themeColor = useMemo(() => {
               </div>
 
               <div className="space-y-2 pt-1">
-                {activeFormConfig ? (
+                {availableForms.length > 0 ? (
                   <button
                     onClick={() => {
                       setReferenceWorkTitle(null)
-                      setGeneratedSpec(null)
-                      setIsEstimateOpen(true)
+                      openEstimateFlow()
                     }}
                     style={{ backgroundColor: themeColor }}
                     className="w-full py-3.5 hover:opacity-90 active:scale-[0.98] text-white font-extrabold rounded-xl transition-all shadow-lg text-sm cursor-pointer flex items-center justify-center gap-2"
                   >
-                    <span>🧮</span> 簡単見積もり・仕様書作成
+                    <span>🧮</span> {availableForms.length > 1 ? '見積もりフォームを選んで作成' : '簡単見積もり・仕様書作成'}
                   </button>
                 ) : (
                   <div className="w-full py-3 px-3 bg-sky-100/80 text-sky-500 font-bold rounded-xl text-xs text-center border border-sky-200/60 leading-relaxed">
@@ -955,7 +1019,7 @@ const themeColor = useMemo(() => {
               <span className="text-xs font-bold text-sky-500">
                 この作品のようなテイストで依頼したい場合:
               </span>
-              {activeFormConfig ? (
+              {availableForms.length > 0 ? (
                 <button
                   onClick={() => handleOpenEstimateWithWork(selectedWork)}
                   style={{ backgroundColor: themeColor }}
@@ -989,7 +1053,7 @@ const themeColor = useMemo(() => {
             <div 
               className="p-5 sm:p-6 border-b border-sky-200/60 shrink-0 relative overflow-hidden"
               style={{
-                background: `linear-gradient(135deg, ${hexToRgba(themeColor, 0.12)} 0%, #ffffff00 100%)`
+                background: `linear-gradient(135deg, ${hexToRgba(modalThemeColor, 0.12)} 0%, #ffffff00 100%)`
               }}
             >
               <div className="flex justify-between items-start gap-4">
@@ -1219,7 +1283,7 @@ const themeColor = useMemo(() => {
                     </button>
                     <button
                       onClick={handleGenerateSpec}
-                      style={{ backgroundColor: themeColor }}
+                      style={{ backgroundColor: modalThemeColor }}
                       className="px-5 py-2.5 text-white font-extrabold text-xs rounded-xl shadow-md hover:opacity-90 active:scale-[0.98] transition cursor-pointer"
                     >
                       仕様書を生成する →
@@ -1236,13 +1300,55 @@ const themeColor = useMemo(() => {
                   </button>
                   <button
                     onClick={handleCopySpec}
-                    style={{ backgroundColor: themeColor }}
+                    style={{ backgroundColor: modalThemeColor }}
                     className="flex-1 py-2.5 text-white font-extrabold text-xs rounded-xl shadow-md hover:opacity-90 active:scale-[0.98] transition cursor-pointer text-center"
                   >
                     {copied ? '✓ コピー完了！' : '📋 仕様書テキストをコピー'}
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 見積もりフォーム選択 モーダル（複数フォームがある場合のみ表示） */}
+      {isFormPickerOpen && (
+        <div className="fixed inset-0 bg-sky-950/70 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl border border-sky-100 relative">
+            <button
+              onClick={() => setIsFormPickerOpen(false)}
+              aria-label="閉じる"
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-sky-100 hover:bg-sky-200 text-sky-600 flex items-center justify-center text-xs font-black transition cursor-pointer"
+            >
+              ✕
+            </button>
+
+            <div className="space-y-1 text-center">
+              <h3 className="text-base font-black text-sky-900">どのご依頼内容ですか？</h3>
+              <p className="text-xs text-sky-400">内容に合った見積もりフォームを選んでください</p>
+            </div>
+
+            <div className="space-y-2 pt-1 max-h-[60vh] overflow-y-auto">
+              {availableForms.map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => {
+                    setSelectedFormId(f.id)
+                    setIsFormPickerOpen(false)
+                    setIsEstimateOpen(true)
+                  }}
+                  className="w-full text-left p-3.5 rounded-xl border border-sky-200 hover:bg-sky-50 transition cursor-pointer flex items-center justify-between gap-2"
+                >
+                  <div className="min-w-0">
+                    <span className="text-xs font-black text-sky-900 block truncate">{f.title}</span>
+                    {f.description && (
+                      <span className="text-[11px] text-sky-400 line-clamp-1">{f.description}</span>
+                    )}
+                  </div>
+                  <span className="text-sky-300 shrink-0">→</span>
+                </button>
+              ))}
             </div>
           </div>
         </div>

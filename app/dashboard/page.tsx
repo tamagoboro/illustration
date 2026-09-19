@@ -89,7 +89,7 @@ export default function Dashboard() {
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null)
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
-  const [activeTab, setActiveTab] = useState<'profile' | 'portfolio'>('profile')
+  const [activeTab, setActiveTab] = useState<'basic' | 'pricing' | 'contact' | 'portfolio'>('basic')
   const [user, setUser] = useState<User | null>(null)
 
   // 未保存変更の管理フラグ
@@ -150,7 +150,7 @@ export default function Dashboard() {
   }, [isDirty])
 
   // タブ切り替え時の確認ダイアログ
-  const handleTabChange = (targetTab: 'profile' | 'portfolio') => {
+  const handleTabChange = (targetTab: 'basic' | 'pricing' | 'contact' | 'portfolio') => {
     if (activeTab === targetTab) return
 
     if (isDirty) {
@@ -855,347 +855,345 @@ export default function Dashboard() {
         </div>
 
         {/* タブナビゲーション */}
-        <div className="flex p-1 bg-slate-200/60 rounded-2xl max-w-lg mx-auto">
+        <div className="flex p-1 bg-slate-200/60 rounded-2xl max-w-2xl mx-auto overflow-x-auto">
           <button
             type="button"
-            onClick={() => handleTabChange('profile')}
-            className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              activeTab === 'profile'
+            onClick={() => handleTabChange('basic')}
+            className={`flex-1 py-2.5 px-2 text-[11px] sm:text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
+              activeTab === 'basic'
                 ? 'bg-white text-slate-900 shadow-sm'
                 : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>
-            基本プロフィール
+            基本情報
+          </button>
+          <button
+            type="button"
+            onClick={() => handleTabChange('pricing')}
+            className={`flex-1 py-2.5 px-2 text-[11px] sm:text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
+              activeTab === 'pricing'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
+            </svg>
+            料金・条件
+          </button>
+          <button
+            type="button"
+            onClick={() => handleTabChange('contact')}
+            className={`flex-1 py-2.5 px-2 text-[11px] sm:text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
+              activeTab === 'contact'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
+            </svg>
+            タグ・SNS
           </button>
           <button
             type="button"
             onClick={() => handleTabChange('portfolio')}
-            className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            className={`flex-1 py-2.5 px-2 text-[11px] sm:text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
               activeTab === 'portfolio'
                 ? 'bg-white text-slate-900 shadow-sm'
                 : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
             作品ギャラリー
           </button>
         </div>
 
-        {activeTab === 'profile' && (
-          <form 
-            onSubmit={handleSaveProfile} 
+        {activeTab !== 'portfolio' && (
+          <form
+            onSubmit={handleSaveProfile}
             onChange={() => setIsDirty(true)}
             className="bg-white rounded-3xl border border-slate-200/70 p-6 sm:p-8 space-y-8 shadow-xs"
           >
-            <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
-              <div>
-                <h2 className="font-extrabold text-slate-900 text-base">基本情報の設定</h2>
-                <p className="text-xs text-slate-400 mt-1">公開プロフィールに反映される基本情報です</p>
-              </div>
-              {avatarUrl && (
-                <div className="w-12 h-12 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shadow-xs shrink-0">
-                  <img src={avatarUrl} alt="アバタープレビュー" className="w-full h-full object-cover" />
-                </div>
-              )}
-            </div>
-
-            {/* テーマカラー選択UI (新機能) */}
-            <div className="p-4 rounded-2xl border border-slate-200/80 bg-slate-50/40 space-y-3">
-              <label className="text-xs font-bold text-slate-700 block">テーマカラー設定</label>
-              <div className="flex flex-wrap gap-2.5">
-                {THEME_COLORS.map((t) => {
-                  const isSelected = themeColor === t.id
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => {
-                        setThemeColor(t.id)
-                        setIsDirty(true)
-                      }}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                        isSelected
-                          ? `${t.lightBg} ${t.border} ${t.text} ring-2 ${t.ring}`
-                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      <span className={`w-3.5 h-3.5 rounded-full ${t.bg}`} />
-                      {t.name}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
-            {/* スケジューラー設定 */}
-            <div className="p-5 rounded-2xl bg-indigo-50/40 border border-indigo-100/80 space-y-4">
-              <div>
-                <h3 className="text-xs font-extrabold text-indigo-950 flex items-center gap-1.5">
-                  <span>📅 制作スケジューラー ＆ 稼働状況設定</span>
-                </h3>
-                <p className="text-[11px] text-slate-500 mt-0.5">着手可能時期や現在抱えている案件の枠数を公開できます</p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">着手可能時期の表示テキスト</label>
-                  <input
-                    type="text"
-                    placeholder="例: 10月上旬〜 / 即日着手可能"
-                    value={availableFromText}
-                    onChange={(e) => setAvailableFromText(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <div className="flex justify-between items-center">
-                    <label className="text-xs font-bold text-slate-700">キャパシティゲージ（受任状況）</label>
-                    <span className="text-xs font-extrabold text-indigo-600">
-                      現在 {activeProjectsCount} / {maxProjectsCapacity} 件
-                    </span>
+            {activeTab === 'basic' && (
+              <div className="space-y-8">
+                <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
+                  <div>
+                    <h2 className="font-extrabold text-slate-900 text-base">基本情報の設定</h2>
+                    <p className="text-xs text-slate-400 mt-1">公開プロフィールに反映される基本情報です</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-slate-200">
-                      <span className="text-[10px] text-slate-400 font-bold shrink-0">進行中:</span>
-                      <input
-                        type="number"
-                        min="0"
-                        value={activeProjectsCount}
-                        onChange={(e) => setActiveProjectsCount(Math.max(0, parseInt(e.target.value, 10) || 0))}
-                        className="w-full text-xs font-bold text-slate-800 focus:outline-none"
-                      />
-                    </div>
-                    <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-slate-200">
-                      <span className="text-[10px] text-slate-400 font-bold shrink-0">最大枠:</span>
-                      <input
-                        type="number"
-                        min="1"
-                        value={maxProjectsCapacity}
-                        onChange={(e) => setMaxProjectsCapacity(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                        className="w-full text-xs font-bold text-slate-800 focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className={`p-4 rounded-2xl border transition-all ${
-              isPublic 
-                ? 'bg-emerald-50/50 border-emerald-200/80' 
-                : 'bg-amber-50/50 border-amber-200/80'
-            }`}>
-              <div className="flex items-center justify-between gap-4">
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2.5 h-2.5 rounded-full ${isPublic ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-                    <span className="text-xs font-extrabold text-slate-800">
-                      {isPublic ? '現在：公開中' : '現在：非公開（下書き）'}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 leading-relaxed">
-                    {isPublic 
-                      ? '検索一覧や外部URLからプロフィールを閲覧できる状態です。' 
-                      : '検索一覧から除外され、外部からプロフィールを見ることができなくなります。'}
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsPublic(!isPublic)
-                    setIsDirty(true)
-                  }}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500/20 ${
-                    isPublic ? currentThemeObj.bg : 'bg-slate-300'
-                  }`}
-                >
-                  <span
-                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                      isPublic ? 'translate-x-5' : 'translate-x-0'
-                    }`}
-                  />
-                </button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <div className="space-y-1.5 sm:col-span-2">
-                <label className="text-xs font-bold text-slate-700">表示名 (クリエイター名) <span className="text-rose-500">*</span></label>
-                <input
-                  type="text"
-                  required
-                  placeholder="例: イラスト屋 たろう"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
-                />
-              </div>
-
-              <div className="space-y-3 sm:col-span-2 p-4 rounded-2xl border border-slate-200/80 bg-slate-50/40">
-                <div className="flex justify-between items-center">
-                  <label className="text-xs font-bold text-slate-700 block">プロフィールアイコン画像</label>
                   {avatarUrl && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAvatarUrl('')
-                        setIsDirty(true)
-                      }}
-                      className="text-[11px] text-rose-500 font-bold hover:underline cursor-pointer"
-                    >
-                      アイコンを解除
-                    </button>
+                    <div className="w-12 h-12 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shadow-xs shrink-0">
+                      <img src={avatarUrl} alt="アバタープレビュー" className="w-full h-full object-cover" />
+                    </div>
                   )}
                 </div>
 
-                <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-full border border-slate-200 bg-white overflow-hidden flex items-center justify-center relative shadow-xs shrink-0">
-                    {uploadingAvatar ? (
-                      <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                    ) : avatarUrl ? (
-                      <img src={avatarUrl} alt="アバター" className="w-full h-full object-cover" />
-                    ) : (
-                      <svg className="w-8 h-8 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                      </svg>
+                {/* テーマカラー選択UI */}
+                <div className="p-4 rounded-2xl border border-slate-200/80 bg-slate-50/40 space-y-3">
+                  <label className="text-xs font-bold text-slate-700 block">テーマカラー設定</label>
+                  <div className="flex flex-wrap gap-2.5">
+                    {THEME_COLORS.map((t) => {
+                      const isSelected = themeColor === t.id
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => {
+                            setThemeColor(t.id)
+                            setIsDirty(true)
+                          }}
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                            isSelected
+                              ? `${t.lightBg} ${t.border} ${t.text} ring-2 ${t.ring}`
+                              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                          }`}
+                        >
+                          <span className={`w-3.5 h-3.5 rounded-full ${t.bg}`} />
+                          {t.name}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* スケジューラー設定 */}
+                <div className="p-5 rounded-2xl bg-indigo-50/40 border border-indigo-100/80 space-y-4">
+                  <div>
+                    <h3 className="text-xs font-extrabold text-indigo-950 flex items-center gap-1.5">
+                      <span>📅 制作スケジューラー ＆ 稼働状況設定</span>
+                    </h3>
+                    <p className="text-[11px] text-slate-500 mt-0.5">着手可能時期や現在抱えている案件の枠数を公開できます</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700">着手可能時期の表示テキスト</label>
+                      <input
+                        type="text"
+                        placeholder="例: 10月上旬〜 / 即日着手可能"
+                        value={availableFromText}
+                        onChange={(e) => setAvailableFromText(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-center">
+                        <label className="text-xs font-bold text-slate-700">キャパシティゲージ（受任状況）</label>
+                        <span className="text-xs font-extrabold text-indigo-600">
+                          現在 {activeProjectsCount} / {maxProjectsCapacity} 件
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-slate-200">
+                          <span className="text-[10px] text-slate-400 font-bold shrink-0">進行中:</span>
+                          <input
+                            type="number"
+                            min="0"
+                            value={activeProjectsCount}
+                            onChange={(e) => setActiveProjectsCount(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                            className="w-full text-xs font-bold text-slate-800 focus:outline-none"
+                          />
+                        </div>
+                        <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-slate-200">
+                          <span className="text-[10px] text-slate-400 font-bold shrink-0">最大枠:</span>
+                          <input
+                            type="number"
+                            min="1"
+                            value={maxProjectsCapacity}
+                            onChange={(e) => setMaxProjectsCapacity(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                            className="w-full text-xs font-bold text-slate-800 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className={`p-4 rounded-2xl border transition-all ${
+                  isPublic
+                    ? 'bg-emerald-50/50 border-emerald-200/80'
+                    : 'bg-amber-50/50 border-amber-200/80'
+                }`}>
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2.5 h-2.5 rounded-full ${isPublic ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                        <span className="text-xs font-extrabold text-slate-800">
+                          {isPublic ? '現在：公開中' : '現在：非公開（下書き）'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 leading-relaxed">
+                        {isPublic
+                          ? '検索一覧や外部URLからプロフィールを閲覧できる状態です。'
+                          : '検索一覧から除外され、外部からプロフィールを見ることができなくなります。'}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsPublic(!isPublic)
+                        setIsDirty(true)
+                      }}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500/20 ${
+                        isPublic ? currentThemeObj.bg : 'bg-slate-300'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                          isPublic ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">表示名 (クリエイター名) <span className="text-rose-500">*</span></label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="例: イラスト屋 たろう"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
+                  />
+                </div>
+
+                <div className="space-y-3 p-4 rounded-2xl border border-slate-200/80 bg-slate-50/40">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-bold text-slate-700 block">プロフィールアイコン画像</label>
+                    {avatarUrl && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAvatarUrl('')
+                          setIsDirty(true)
+                        }}
+                        className="text-[11px] text-rose-500 font-bold hover:underline cursor-pointer"
+                      >
+                        アイコンを解除
+                      </button>
                     )}
                   </div>
 
-                  <div className="flex-1 space-y-2">
-                    <label className="block">
-                      <span className="sr-only">ファイルから選択</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        disabled={uploadingAvatar}
-                        onChange={handleAvatarFileUpload}
-                        className="block w-full text-xs text-slate-500
-                          file:mr-3 file:py-2 file:px-4
-                          file:rounded-xl file:border-0
-                          file:text-xs file:font-bold
-                          file:bg-indigo-50 file:text-indigo-700
-                          hover:file:bg-indigo-100
-                          file:cursor-pointer cursor-pointer transition-all"
-                      />
-                    </label>
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-full border border-slate-200 bg-white overflow-hidden flex items-center justify-center relative shadow-xs shrink-0">
+                      {uploadingAvatar ? (
+                        <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                      ) : avatarUrl ? (
+                        <img src={avatarUrl} alt="アバター" className="w-full h-full object-cover" />
+                      ) : (
+                        <svg className="w-8 h-8 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                      )}
+                    </div>
 
-                    <input
-                      type="url"
-                      placeholder="または画像URLを直接入力 (https://...)"
-                      value={avatarUrl}
-                      onChange={(e) => {
-                        setAvatarUrl(e.target.value)
-                        setIsDirty(true)
-                      }}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-300 font-mono text-[11px]"
-                    />
+                    <div className="flex-1 space-y-2">
+                      <label className="block">
+                        <span className="sr-only">ファイルから選択</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          disabled={uploadingAvatar}
+                          onChange={handleAvatarFileUpload}
+                          className="block w-full text-xs text-slate-500
+                            file:mr-3 file:py-2 file:px-4
+                            file:rounded-xl file:border-0
+                            file:text-xs file:font-bold
+                            file:bg-indigo-50 file:text-indigo-700
+                            hover:file:bg-indigo-100
+                            file:cursor-pointer cursor-pointer transition-all"
+                        />
+                      </label>
+
+                      <input
+                        type="url"
+                        placeholder="または画像URLを直接入力 (https://...)"
+                        value={avatarUrl}
+                        onChange={(e) => {
+                          setAvatarUrl(e.target.value)
+                          setIsDirty(true)
+                        }}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-300 font-mono text-[11px]"
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">現在の受付ステータス</label>
-                <select
-                  value={status}
-                  onChange={(e) => {
-                    setStatus(e.target.value as 'available' | 'busy' | 'stopped')
-                    setIsDirty(true)
-                  }}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-semibold text-slate-700 cursor-pointer"
-                >
-                  <option value="available">🟢 即対応可</option>
-                  <option value="busy">🟡 相談受付中</option>
-                  <option value="stopped">🔴 受注停止</option>
-                </select>
-              </div>
+                <div className="p-4 rounded-2xl border border-slate-200/80 bg-slate-50/60 flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <span className="text-xs font-bold text-slate-700 block">現在の受付ステータス</span>
+                    <span className="text-[11px] text-slate-400">ページ上部のクイック切替ボタンで変更できます（押すとすぐ公開に反映されます）</span>
+                  </div>
+                  <span className={`text-xs font-extrabold px-3 py-1.5 rounded-xl border shrink-0 ${
+                    status === 'available'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : status === 'stopped'
+                      ? 'bg-rose-50 text-rose-700 border-rose-200'
+                      : 'bg-amber-50 text-amber-700 border-amber-200'
+                  }`}>
+                    {status === 'available' ? '🟢 即対応可' : status === 'stopped' ? '🔴 受注停止' : '🟡 相談受付中'}
+                  </span>
+                </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">参考最低価格 (円)</label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-semibold">¥</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="500"
-                    placeholder="5000"
-                    value={priceMin}
-                    onChange={(e) => setPriceMin(e.target.value)}
-                    className={`w-full pl-8 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-bold ${currentThemeObj.text}`}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">自己紹介・PRコメント</label>
+                  <textarea
+                    rows={4}
+                    placeholder="作風や得意なジャンル、実績などのアピール文を入力してください"
+                    value={statusComment}
+                    onChange={(e) => setStatusComment(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all leading-relaxed font-medium"
                   />
                 </div>
               </div>
+            )}
 
-              <div className="space-y-3 sm:col-span-2 border-t border-slate-100 pt-6">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 block">料金メニュー設定</label>
-                    <p className="text-[11px] text-slate-400 mt-0.5">一覧カードや比較画面で表示される主な料金ラインナップです</p>
+            {activeTab === 'pricing' && (
+              <div className="space-y-8">
+                <div className="border-b border-slate-100 pb-4">
+                  <h2 className="font-extrabold text-slate-900 text-base">料金・受託条件の設定</h2>
+                  <p className="text-xs text-slate-400 mt-1">依頼を検討する人が特に気にする金額・制作条件です</p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">参考最低価格 (円)</label>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-semibold">¥</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="500"
+                      placeholder="5000"
+                      value={priceMin}
+                      onChange={(e) => setPriceMin(e.target.value)}
+                      className={`w-full pl-8 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-bold ${currentThemeObj.text}`}
+                    />
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleAddMenuItem}
-                    className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1"
-                  >
-                    ＋ メニューを追加
-                  </button>
                 </div>
 
-                <div className="space-y-2">
-                  {menuItems.map((item, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        placeholder="例: アイコン制作"
-                        value={item.title}
-                        onChange={(e) => handleMenuItemChange(idx, 'title', e.target.value)}
-                        className="flex-2 px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium"
-                      />
-                      <div className="relative flex-1">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-semibold">¥</span>
-                        <input
-                          type="number"
-                          step="500"
-                          placeholder="5000"
-                          value={item.price}
-                          onChange={(e) => handleMenuItemChange(idx, 'price', e.target.value)}
-                          className={`w-full pl-7 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-bold ${currentThemeObj.text}`}
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveMenuItem(idx)}
-                        className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer text-xs font-bold"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                  {menuItems.length === 0 && (
-                    <p className="text-xs text-slate-300 italic py-1">メニューが設定されていません</p>
-                  )}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">目安納期 (日数)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="14"
+                    value={leadTimeDays}
+                    onChange={(e) => setLeadTimeDays(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
+                  />
                 </div>
-              </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">目安納期 (日数)</label>
-                <input
-                  type="number"
-                  min="1"
-                  placeholder="14"
-                  value={leadTimeDays}
-                  onChange={(e) => setLeadTimeDays(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
-                />
-              </div>
-
-              <div className="space-y-1.5 flex flex-col justify-end">
                 <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50/50 cursor-pointer hover:bg-slate-100/50 transition-colors">
                   <input
                     type="checkbox"
@@ -1208,341 +1206,390 @@ export default function Dashboard() {
                   />
                   <span className="text-xs font-bold text-slate-700">商用利用を可能として掲載する</span>
                 </label>
-              </div>
 
-              <div className="space-y-4 sm:col-span-2 border-t border-slate-100 pt-6">
-                <div>
-                  <h3 className="text-xs font-bold text-slate-900">制作条件・受託範囲の設定</h3>
-                  <p className="text-[11px] text-slate-400 mt-0.5">依頼者とのミスマッチを防ぐための詳細条件です</p>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                  <div className="space-y-1.5 sm:col-span-2 bg-slate-50/60 p-3.5 rounded-2xl border border-slate-200/80">
-                    <label className="text-xs font-bold text-slate-700 block">生成AIの使用方針</label>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      <label className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
-                        aiUsage === 'none' ? `${currentThemeObj.lightBg} ${currentThemeObj.border} ${currentThemeObj.text}` : 'bg-white border-slate-200 text-slate-600'
-                      }`}>
-                        <input
-                          type="radio"
-                          name="aiUsage"
-                          value="none"
-                          checked={aiUsage === 'none'}
-                          onChange={() => {
-                            setAiUsage('none')
-                            setIsDirty(true)
-                          }}
-                          className="sr-only"
-                        />
-                        <span>完全手描き (AI不使用)</span>
-                      </label>
-                      
-                      <label className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
-                        aiUsage === 'partial' ? `${currentThemeObj.lightBg} ${currentThemeObj.border} ${currentThemeObj.text}` : 'bg-white border-slate-200 text-slate-600'
-                      }`}>
-                        <input
-                          type="radio"
-                          name="aiUsage"
-                          value="partial"
-                          checked={aiUsage === 'partial'}
-                          onChange={() => {
-                            setAiUsage('partial')
-                            setIsDirty(true)
-                          }}
-                          className="sr-only"
-                        />
-                        <span>一部AI補助あり (背景等)</span>
-                      </label>
-
-                      <label className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
-                        aiUsage === 'full' ? `${currentThemeObj.lightBg} ${currentThemeObj.border} ${currentThemeObj.text}` : 'bg-white border-slate-200 text-slate-600'
-                      }`}>
-                        <input
-                          type="radio"
-                          name="aiUsage"
-                          value="full"
-                          checked={aiUsage === 'full'}
-                          onChange={() => {
-                            setAiUsage('full')
-                            setIsDirty(true)
-                          }}
-                          className="sr-only"
-                        />
-                        <span>AI生成・加筆メイン</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5 bg-slate-50/60 p-3.5 rounded-2xl border border-slate-200/80 flex flex-col justify-between">
-                    <label className="text-xs font-bold text-slate-700">無料リテイク（修正）回数</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min="0"
-                        max="10"
-                        placeholder="2"
-                        value={freeRevisionCount}
-                        onChange={(e) => setFreeRevisionCount(e.target.value)}
-                        className="w-24 px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                      />
-                      <span className="text-xs font-bold text-slate-500">回まで無料対応</span>
-                    </div>
-                  </div>
-
-                  <label className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-200/80 bg-slate-50/60 cursor-pointer hover:bg-slate-100/50 transition-colors">
+                <div className="space-y-3 border-t border-slate-100 pt-6">
+                  <div className="flex justify-between items-center">
                     <div>
-                      <span className="text-xs font-bold text-slate-700 block">急ぎ・特急対応</span>
-                      <span className="text-[10px] text-slate-400">短納期での相談（要相談/追加料金）</span>
+                      <label className="text-xs font-bold text-slate-700 block">料金メニュー設定</label>
+                      <p className="text-[11px] text-slate-400 mt-0.5">一覧カードや比較画面で表示される主な料金ラインナップです</p>
                     </div>
-                    <input
-                      type="checkbox"
-                      checked={expressOptionAvailable}
-                      onChange={(e) => {
-                        setExpressOptionAvailable(e.target.checked)
-                        setIsDirty(true)
-                      }}
-                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
-                    />
-                  </label>
-
-                  <label className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-200/80 bg-slate-50/60 cursor-pointer hover:bg-slate-100/50 transition-colors">
-                    <div>
-                      <span className="text-xs font-bold text-slate-700 block">著作権譲渡</span>
-                      <span className="text-[10px] text-slate-400">相談または条件付きで対応可能</span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={copyrightTransferAvailable}
-                      onChange={(e) => {
-                        setCopyrightTransferAvailable(e.target.checked)
-                        setIsDirty(true)
-                      }}
-                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
-                    />
-                  </label>
-
-                  <label className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-200/80 bg-slate-50/60 cursor-pointer hover:bg-slate-100/50 transition-colors">
-                    <div>
-                      <span className="text-xs font-bold text-slate-700 block">自身の作品のAI学習</span>
-                      <span className="text-[10px] text-slate-400">無断学習・追加学習を許可するか</span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={aiLearningAllowed}
-                      onChange={(e) => {
-                        setAiLearningAllowed(e.target.checked)
-                        setIsDirty(true)
-                      }}
-                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
-                    />
-                  </label>
-
-                  <label className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-200/80 bg-slate-50/60 cursor-pointer hover:bg-slate-100/50 transition-colors">
-                    <div>
-                      <span className="text-xs font-bold text-slate-700 block">R-18（成人向け）対応</span>
-                      <span className="text-[10px] text-slate-400">センシティブコンテンツの受託</span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={r18Allowed}
-                      onChange={(e) => {
-                        setR18Allowed(e.target.checked)
-                        setIsDirty(true)
-                      }}
-                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
-                    />
-                  </label>
-                </div>
-              </div>
-
-              <div className="space-y-1.5 sm:col-span-2">
-                <label className="text-xs font-bold text-slate-700">自己紹介・PRコメント</label>
-                <textarea
-                  rows={4}
-                  placeholder="作風や得意なジャンル、実績などのアピール文を入力してください"
-                  value={statusComment}
-                  onChange={(e) => setStatusComment(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all leading-relaxed font-medium"
-                />
-              </div>
-
-              <div className="space-y-4 sm:col-span-2 border-t border-slate-100 pt-6">
-                <label className="text-xs font-bold text-slate-700 block">得意なテイスト・タグ設定</label>
-                
-                <div className="space-y-2">
-                  <p className="text-[11px] font-bold text-slate-400">よく使われるタグ（タップでオン/オフ）</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {PRESET_TASTES.map((tag) => {
-                      const isSelected = tastes.includes(tag)
-                      return (
-                        <button
-                          key={tag}
-                          type="button"
-                          onClick={() => togglePresetTaste(tag)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer active:scale-95 ${
-                            isSelected
-                              ? `${currentThemeObj.bg} border-transparent text-white shadow-xs`
-                              : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300'
-                          }`}
-                        >
-                          {isSelected ? '✓ ' : '+ '}
-                          {tag}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                <div className="space-y-2 pt-2">
-                  <p className="text-[11px] font-bold text-slate-400">オリジナルのタグを追加</p>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="例: ドット絵, 和風イラスト..."
-                      value={customTasteInput}
-                      onChange={(e) => setCustomTasteInput(e.target.value)}
-                      onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
-                        if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
-                          e.preventDefault()
-                          handleAddCustomTaste()
-                        }
-                      }}
-                      className="flex-1 px-4 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
-                    />
                     <button
                       type="button"
-                      onClick={handleAddCustomTaste}
-                      className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-all cursor-pointer shadow-xs active:scale-95"
+                      onClick={handleAddMenuItem}
+                      className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1"
                     >
-                      追加
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-2 pt-2">
-                  <p className="text-[11px] font-bold text-slate-400">現在設定中のタグ ({tastes.length}件)</p>
-                  {tastes.length === 0 ? (
-                    <p className="text-xs text-slate-300 italic">タグが選択されていません</p>
-                  ) : (
-                    <div className="flex flex-wrap gap-1.5">
-                      {tastes.map((tag) => (
-                        <span
-                          key={tag}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl ${currentThemeObj.lightBg} ${currentThemeObj.border} ${currentThemeObj.text} border text-xs font-bold`}
-                        >
-                          #{tag}
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveTaste(tag)}
-                            className="hover:text-rose-600 opacity-60 hover:opacity-100 text-xs font-bold px-0.5 cursor-pointer"
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Links & SNS Section */}
-            <div className="border-t border-slate-100 pt-6 space-y-4">
-              <div>
-                <h3 className="font-bold text-slate-900 text-xs">連絡先・SNS / 外部リンク設定</h3>
-                <p className="text-[11px] text-slate-400 mt-0.5">プロフィールに掲載するSNSや各種サービスへのリンクを自由に追加できます</p>
-              </div>
-
-              <div className="space-y-4">
-                <div className="space-y-2 p-4 rounded-2xl bg-indigo-50/40 border border-indigo-100">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-800 flex items-center gap-2">
-                      <span>オリジナル見積書フォーム</span>
-                      {externalEstimationUrl ? (
-                        <span className="px-2 py-0.5 text-[10px] bg-emerald-100 text-emerald-700 rounded-md font-extrabold">
-                          作成済み
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 text-[10px] bg-slate-200 text-slate-600 rounded-md font-extrabold">
-                          未作成
-                        </span>
-                      )}
-                    </label>
-                    <Link
-                      href="/dashboard/form-builder"
-                      className={`text-xs font-bold ${currentThemeObj.text} hover:underline flex items-center gap-1`}
-                    >
-                      <span>見積書を作成・編集する</span>
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </Link>
-                  </div>
-
-                  <input
-                    type="url"
-                    placeholder="https://...（見積書作成ページで自動生成されたURLまたは外部フォームURL）"
-                    value={externalEstimationUrl}
-                    onChange={(e) => {
-                      setExternalEstimationUrl(e.target.value)
-                      setIsDirty(true)
-                    }}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono text-[11px]"
-                  />
-                </div>
-
-                <div className="space-y-3 pt-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-700 block">SNS / 外部サービスリンク ({snsLinks.length}件)</label>
-                    <button
-                      type="button"
-                      onClick={handleAddSnsLink}
-                      className={`px-3 py-1.5 ${currentThemeObj.lightBg} ${currentThemeObj.text} font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1`}
-                    >
-                      ＋ リンクを追加
+                      ＋ メニューを追加
                     </button>
                   </div>
 
-                  <div className="space-y-2.5">
-                    {snsLinks.map((item) => (
-                      <div key={item.id} className="flex items-center gap-2">
-                        <select
-                          value={item.platform}
-                          onChange={(e) => handleSnsLinkChange(item.id, 'platform', e.target.value)}
-                          className="w-36 px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
-                        >
-                          {SNS_PLATFORMS.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.label}
-                            </option>
-                          ))}
-                        </select>
-
+                  <div className="space-y-2">
+                    {menuItems.map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
                         <input
-                          type="url"
-                          placeholder="https://..."
-                          value={item.url}
-                          onChange={(e) => handleSnsLinkChange(item.id, 'url', e.target.value)}
-                          className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-mono text-[11px]"
+                          type="text"
+                          placeholder="例: アイコン制作"
+                          value={item.title}
+                          onChange={(e) => handleMenuItemChange(idx, 'title', e.target.value)}
+                          className="flex-2 px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium"
                         />
-
+                        <div className="relative flex-1">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-semibold">¥</span>
+                          <input
+                            type="number"
+                            step="500"
+                            placeholder="5000"
+                            value={item.price}
+                            onChange={(e) => handleMenuItemChange(idx, 'price', e.target.value)}
+                            className={`w-full pl-7 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-bold ${currentThemeObj.text}`}
+                          />
+                        </div>
                         <button
                           type="button"
-                          onClick={() => handleRemoveSnsLink(item.id)}
+                          onClick={() => handleRemoveMenuItem(idx)}
                           className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer text-xs font-bold"
                         >
                           ✕
                         </button>
                       </div>
                     ))}
-
-                    {snsLinks.length === 0 && (
-                      <p className="text-xs text-slate-300 italic py-1">SNSリンクが追加されていません</p>
+                    {menuItems.length === 0 && (
+                      <p className="text-xs text-slate-300 italic py-1">メニューが設定されていません</p>
                     )}
                   </div>
                 </div>
+
+                <div className="space-y-4 border-t border-slate-100 pt-6">
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-900">制作条件・受託範囲の設定</h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">依頼者とのミスマッチを防ぐための詳細条件です</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div className="space-y-1.5 sm:col-span-2 bg-slate-50/60 p-3.5 rounded-2xl border border-slate-200/80">
+                      <label className="text-xs font-bold text-slate-700 block">生成AIの使用方針</label>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <label className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
+                          aiUsage === 'none' ? `${currentThemeObj.lightBg} ${currentThemeObj.border} ${currentThemeObj.text}` : 'bg-white border-slate-200 text-slate-600'
+                        }`}>
+                          <input
+                            type="radio"
+                            name="aiUsage"
+                            value="none"
+                            checked={aiUsage === 'none'}
+                            onChange={() => {
+                              setAiUsage('none')
+                              setIsDirty(true)
+                            }}
+                            className="sr-only"
+                          />
+                          <span>完全手描き (AI不使用)</span>
+                        </label>
+
+                        <label className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
+                          aiUsage === 'partial' ? `${currentThemeObj.lightBg} ${currentThemeObj.border} ${currentThemeObj.text}` : 'bg-white border-slate-200 text-slate-600'
+                        }`}>
+                          <input
+                            type="radio"
+                            name="aiUsage"
+                            value="partial"
+                            checked={aiUsage === 'partial'}
+                            onChange={() => {
+                              setAiUsage('partial')
+                              setIsDirty(true)
+                            }}
+                            className="sr-only"
+                          />
+                          <span>一部AI補助あり (背景等)</span>
+                        </label>
+
+                        <label className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
+                          aiUsage === 'full' ? `${currentThemeObj.lightBg} ${currentThemeObj.border} ${currentThemeObj.text}` : 'bg-white border-slate-200 text-slate-600'
+                        }`}>
+                          <input
+                            type="radio"
+                            name="aiUsage"
+                            value="full"
+                            checked={aiUsage === 'full'}
+                            onChange={() => {
+                              setAiUsage('full')
+                              setIsDirty(true)
+                            }}
+                            className="sr-only"
+                          />
+                          <span>AI生成・加筆メイン</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5 bg-slate-50/60 p-3.5 rounded-2xl border border-slate-200/80 flex flex-col justify-between">
+                      <label className="text-xs font-bold text-slate-700">無料リテイク（修正）回数</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min="0"
+                          max="10"
+                          placeholder="2"
+                          value={freeRevisionCount}
+                          onChange={(e) => setFreeRevisionCount(e.target.value)}
+                          className="w-24 px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                        />
+                        <span className="text-xs font-bold text-slate-500">回まで無料対応</span>
+                      </div>
+                    </div>
+
+                    <label className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-200/80 bg-slate-50/60 cursor-pointer hover:bg-slate-100/50 transition-colors">
+                      <div>
+                        <span className="text-xs font-bold text-slate-700 block">急ぎ・特急対応</span>
+                        <span className="text-[10px] text-slate-400">短納期での相談（要相談/追加料金）</span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={expressOptionAvailable}
+                        onChange={(e) => {
+                          setExpressOptionAvailable(e.target.checked)
+                          setIsDirty(true)
+                        }}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                      />
+                    </label>
+
+                    <label className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-200/80 bg-slate-50/60 cursor-pointer hover:bg-slate-100/50 transition-colors">
+                      <div>
+                        <span className="text-xs font-bold text-slate-700 block">著作権譲渡</span>
+                        <span className="text-[10px] text-slate-400">相談または条件付きで対応可能</span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={copyrightTransferAvailable}
+                        onChange={(e) => {
+                          setCopyrightTransferAvailable(e.target.checked)
+                          setIsDirty(true)
+                        }}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                      />
+                    </label>
+
+                    <label className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-200/80 bg-slate-50/60 cursor-pointer hover:bg-slate-100/50 transition-colors">
+                      <div>
+                        <span className="text-xs font-bold text-slate-700 block">自身の作品のAI学習</span>
+                        <span className="text-[10px] text-slate-400">無断学習・追加学習を許可するか</span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={aiLearningAllowed}
+                        onChange={(e) => {
+                          setAiLearningAllowed(e.target.checked)
+                          setIsDirty(true)
+                        }}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                      />
+                    </label>
+
+                    <label className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-200/80 bg-slate-50/60 cursor-pointer hover:bg-slate-100/50 transition-colors">
+                      <div>
+                        <span className="text-xs font-bold text-slate-700 block">R-18（成人向け）対応</span>
+                        <span className="text-[10px] text-slate-400">センシティブコンテンツの受託</span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={r18Allowed}
+                        onChange={(e) => {
+                          setR18Allowed(e.target.checked)
+                          setIsDirty(true)
+                        }}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                      />
+                    </label>
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
+
+            {activeTab === 'contact' && (
+              <div className="space-y-8">
+                <div className="border-b border-slate-100 pb-4">
+                  <h2 className="font-extrabold text-slate-900 text-base">タグ・SNS・連絡先の設定</h2>
+                  <p className="text-xs text-slate-400 mt-1">検索でのマッチ度と、依頼者からの連絡経路に関わる設定です</p>
+                </div>
+
+                <div className="space-y-4">
+                  <label className="text-xs font-bold text-slate-700 block">得意なテイスト・タグ設定</label>
+
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-bold text-slate-400">よく使われるタグ（タップでオン/オフ）</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {PRESET_TASTES.map((tag) => {
+                        const isSelected = tastes.includes(tag)
+                        return (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={() => togglePresetTaste(tag)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer active:scale-95 ${
+                              isSelected
+                                ? `${currentThemeObj.bg} border-transparent text-white shadow-xs`
+                                : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300'
+                            }`}
+                          >
+                            {isSelected ? '✓ ' : '+ '}
+                            {tag}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 pt-2">
+                    <p className="text-[11px] font-bold text-slate-400">オリジナルのタグを追加</p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="例: ドット絵, 和風イラスト..."
+                        value={customTasteInput}
+                        onChange={(e) => setCustomTasteInput(e.target.value)}
+                        onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+                          if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                            e.preventDefault()
+                            handleAddCustomTaste()
+                          }
+                        }}
+                        className="flex-1 px-4 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddCustomTaste}
+                        className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-all cursor-pointer shadow-xs active:scale-95"
+                      >
+                        追加
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 pt-2">
+                    <p className="text-[11px] font-bold text-slate-400">現在設定中のタグ ({tastes.length}件)</p>
+                    {tastes.length === 0 ? (
+                      <p className="text-xs text-slate-300 italic">タグが選択されていません</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {tastes.map((tag) => (
+                          <span
+                            key={tag}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl ${currentThemeObj.lightBg} ${currentThemeObj.border} ${currentThemeObj.text} border text-xs font-bold`}
+                          >
+                            #{tag}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveTaste(tag)}
+                              className="hover:text-rose-600 opacity-60 hover:opacity-100 text-xs font-bold px-0.5 cursor-pointer"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Links & SNS Section */}
+                <div className="border-t border-slate-100 pt-6 space-y-4">
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-xs">連絡先・SNS / 外部リンク設定</h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">プロフィールに掲載するSNSや各種サービスへのリンクを自由に追加できます</p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="space-y-2 p-4 rounded-2xl bg-indigo-50/40 border border-indigo-100">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-800 flex items-center gap-2">
+                          <span>オリジナル見積書フォーム</span>
+                          {externalEstimationUrl ? (
+                            <span className="px-2 py-0.5 text-[10px] bg-emerald-100 text-emerald-700 rounded-md font-extrabold">
+                              作成済み
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 text-[10px] bg-slate-200 text-slate-600 rounded-md font-extrabold">
+                              未作成
+                            </span>
+                          )}
+                        </label>
+                        <Link
+                          href="/dashboard/form-builder"
+                          className={`text-xs font-bold ${currentThemeObj.text} hover:underline flex items-center gap-1`}
+                        >
+                          <span>見積書を作成・編集する</span>
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                          </svg>
+                        </Link>
+                      </div>
+
+                      <input
+                        type="url"
+                        placeholder="https://...（見積書作成ページで自動生成されたURLまたは外部フォームURL）"
+                        value={externalEstimationUrl}
+                        onChange={(e) => {
+                          setExternalEstimationUrl(e.target.value)
+                          setIsDirty(true)
+                        }}
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono text-[11px]"
+                      />
+                    </div>
+
+                    <div className="space-y-3 pt-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-700 block">SNS / 外部サービスリンク ({snsLinks.length}件)</label>
+                        <button
+                          type="button"
+                          onClick={handleAddSnsLink}
+                          className={`px-3 py-1.5 ${currentThemeObj.lightBg} ${currentThemeObj.text} font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1`}
+                        >
+                          ＋ リンクを追加
+                        </button>
+                      </div>
+
+                      <div className="space-y-2.5">
+                        {snsLinks.map((item) => (
+                          <div key={item.id} className="flex items-center gap-2">
+                            <select
+                              value={item.platform}
+                              onChange={(e) => handleSnsLinkChange(item.id, 'platform', e.target.value)}
+                              className="w-36 px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+                            >
+                              {SNS_PLATFORMS.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.label}
+                                </option>
+                              ))}
+                            </select>
+
+                            <input
+                              type="url"
+                              placeholder="https://..."
+                              value={item.url}
+                              onChange={(e) => handleSnsLinkChange(item.id, 'url', e.target.value)}
+                              className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-mono text-[11px]"
+                            />
+
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveSnsLink(item.id)}
+                              className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer text-xs font-bold"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+
+                        {snsLinks.length === 0 && (
+                          <p className="text-xs text-slate-300 italic py-1">SNSリンクが追加されていません</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <button
               type="submit"
