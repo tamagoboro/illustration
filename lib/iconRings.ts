@@ -1,23 +1,73 @@
-// アイコンリングのカタログ（CSSのグラデーションだけで表現するため画像素材は不要）。
-// 価格を変える場合は supabase/add_points_and_rings.sql の purchase_ring 関数内の
-// 金額も必ず同じ値に揃えること（購入時の金額はDB側の値が優先されるため、
-// ここだけ変えても実際の消費ポイントは変わらない）。
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
+
+// アイコンリングのカタログはDB(icon_rings テーブル)で管理し、
+// 管理画面（/admin/rings）からイラストレーター制作の画像を追加・入れ替えできる。
+// 購入時の消費ポイントもDB側の値が優先される（supabase/add_icon_rings_admin.sql の purchase_ring 関数を参照）。
 export type IconRing = {
   id: string
   name: string
   cost: number
-  background: string
+  image: string
 }
 
-export const ICON_RINGS: IconRing[] = [
-  { id: 'sky', name: 'スカイブルー', cost: 50, background: 'linear-gradient(135deg, #38bdf8, #67e8f9)' },
-  { id: 'forest', name: 'フォレスト', cost: 80, background: 'linear-gradient(135deg, #22c55e, #0ea5e9)' },
-  { id: 'sunset', name: 'サンセット', cost: 80, background: 'linear-gradient(135deg, #f97316, #ec4899)' },
-  { id: 'gold', name: 'ゴールド', cost: 200, background: 'linear-gradient(135deg, #fde68a, #f59e0b, #fde68a)' },
-  { id: 'rainbow', name: 'レインボー', cost: 300, background: 'conic-gradient(from 0deg, #f43f5e, #f59e0b, #22c55e, #38bdf8, #8b5cf6, #f43f5e)' },
-]
+let cache: IconRing[] | null = null
+let inflight: Promise<IconRing[]> | null = null
 
-export function getIconRing(ringId: string | null | undefined): IconRing | null {
+const mapRow = (row: any): IconRing => ({
+  id: row.id,
+  name: row.name,
+  cost: row.cost,
+  image: row.image_url,
+})
+
+async function loadIconRings(): Promise<IconRing[]> {
+  if (cache) return cache
+  if (inflight) return inflight
+
+  inflight = supabase
+    .from('icon_rings')
+    .select('*')
+    .order('sort_order', { ascending: true })
+    .then(({ data, error }) => {
+      inflight = null
+      if (error || !data) {
+        console.error('アイコンリング一覧の取得に失敗しました:', error)
+        return []
+      }
+      cache = data.map(mapRow)
+      return cache
+    })
+
+  return inflight
+}
+
+// 管理画面での追加・編集・削除後に呼び、次回参照時にDBから取り直させる
+export function invalidateIconRingsCache() {
+  cache = null
+  inflight = null
+}
+
+// カタログ一覧を取得するフック（/rewards のショップ表示や管理画面で使用）
+export function useIconRings() {
+  const [rings, setRings] = useState<IconRing[]>(cache || [])
+
+  useEffect(() => {
+    let mounted = true
+    loadIconRings().then((r) => {
+      if (mounted) setRings(r)
+    })
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  return rings
+}
+
+// 特定のリングIDから情報を引くフック（AvatarRing など、装着中リングの画像表示に使用）
+export function useIconRing(ringId: string | null | undefined): IconRing | null {
+  const rings = useIconRings()
   if (!ringId) return null
-  return ICON_RINGS.find((r) => r.id === ringId) || null
+  return rings.find((r) => r.id === ringId) || null
 }

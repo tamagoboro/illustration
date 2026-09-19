@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { convertToWebp } from '@/lib/imageUtils'
+import AvatarRing from '@/components/AvatarRing'
 
 type Comment = {
   id: string
@@ -36,6 +37,7 @@ export default function FeedPage() {
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [posts, setPosts] = useState<PostWithAuthor[]>([])
   const [loading, setLoading] = useState(true)
+  const [ringMap, setRingMap] = useState<Record<string, string | null>>({})
 
   // 新規投稿ステート
   const [content, setContent] = useState('')
@@ -89,6 +91,24 @@ export default function FeedPage() {
           : false,
       }))
       setPosts(formatted)
+
+      // 投稿者・コメント投稿者の装着中アイコンリングをまとめて取得
+      const userIds = new Set<string>()
+      formatted.forEach((post: any) => {
+        userIds.add(post.user_id)
+        post.post_comments?.forEach((c: any) => userIds.add(c.user_id))
+      })
+      if (userIds.size > 0) {
+        const { data: ringsData } = await supabase
+          .from('public_equipped_rings')
+          .select('user_id, equipped_ring_id')
+          .in('user_id', Array.from(userIds))
+        const map: Record<string, string | null> = {}
+        ;(ringsData || []).forEach((r: any) => {
+          map[r.user_id] = r.equipped_ring_id
+        })
+        setRingMap(map)
+      }
     }
     setLoading(false)
   }
@@ -390,18 +410,18 @@ export default function FeedPage() {
                   {/* ヘッダー（アイコン・名前・編集/削除ボタン） */}
                   <div className="flex items-center justify-between">
                     <Link href={`/creator/${post.user_id}`} className="flex items-center gap-3 group">
-                      <div className="w-10 h-10 rounded-full bg-slate-100 overflow-hidden border border-slate-200/60 shrink-0 group-hover:scale-105 transition-transform">
-                        {post.profiles?.avatar_url ? (
-                          <img
-                            src={post.profiles.avatar_url}
-                            alt={post.profiles.display_name}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-slate-300 font-bold text-xs">
-                            ?
-                          </div>
-                        )}
+                      <div className="shrink-0 group-hover:scale-105 transition-transform">
+                        <AvatarRing
+                          src={post.profiles?.avatar_url}
+                          alt={post.profiles?.display_name || ''}
+                          size={40}
+                          ringId={ringMap[post.user_id]}
+                          fallback={
+                            <div className="w-full h-full rounded-full bg-slate-100 border border-slate-200/60 flex items-center justify-center text-slate-300 font-bold text-xs">
+                              ?
+                            </div>
+                          }
+                        />
                       </div>
                       <div>
                         <h2 className="text-xs font-black text-slate-800 group-hover:text-pink-600 transition-colors">
@@ -528,11 +548,13 @@ export default function FeedPage() {
                           {post.post_comments.map((comment) => (
                             <div key={comment.id} className="bg-slate-50 p-2.5 rounded-2xl flex gap-2.5">
                               <Link href={`/creator/${comment.user_id}`} className="shrink-0">
-                                <div className="w-6 h-6 rounded-full bg-slate-200 overflow-hidden">
-                                  {comment.profiles?.avatar_url && (
-                                    <img src={comment.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
-                                  )}
-                                </div>
+                                <AvatarRing
+                                  src={comment.profiles?.avatar_url}
+                                  alt=""
+                                  size={24}
+                                  ringId={ringMap[comment.user_id]}
+                                  fallback={<div className="w-full h-full rounded-full bg-slate-200" />}
+                                />
                               </Link>
                               <div className="space-y-0.5">
                                 <div className="flex items-center gap-2">

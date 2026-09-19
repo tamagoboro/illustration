@@ -785,13 +785,12 @@ const themeColor = useMemo(() => {
             <div className="flex-1 space-y-4">
               <div className="flex items-start gap-4 sm:gap-5">
                 {profile.avatar_url && (
-                  <div className="relative shrink-0 ring-4 ring-white/80 shadow-md rounded-2xl">
+                  <div className="relative shrink-0 ring-4 ring-white/80 shadow-md rounded-full">
                     <AvatarRing
                       src={profile.avatar_url}
                       alt={profile.display_name || 'アバター画像'}
                       size={88}
                       ringId={creatorRingId}
-                      rounded="2xl"
                     />
                   </div>
                 )}

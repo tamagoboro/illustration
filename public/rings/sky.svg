@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <linearGradient id="skyBand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#67e8f9"/>
+    </linearGradient>
+  </defs>
+
+  <circle cx="100" cy="100" r="80" fill="none" stroke="url(#skyBand)" stroke-width="10"/>
+  <circle cx="100" cy="100" r="88" fill="none" stroke="#ffffff" stroke-width="1.4" stroke-opacity="0.75"/>
+  <circle cx="100" cy="100" r="72" fill="none" stroke="#ffffff" stroke-width="1" stroke-opacity="0.5"/>
+
+  <g>
+    <g transform="translate(100,16)"><circle r="5.2" fill="#ffffff"/><circle r="5.2" fill="none" stroke="#38bdf8" stroke-width="1.2"/><circle cx="-1.6" cy="-1.6" r="1.5" fill="#e0f7ff"/></g>
+    <g transform="translate(159.40,40.60)"><circle r="5.2" fill="#ffffff"/><circle r="5.2" fill="none" stroke="#38bdf8" stroke-width="1.2"/><circle cx="-1.6" cy="-1.6" r="1.5" fill="#e0f7ff"/></g>
+    <g transform="translate(184,100)"><circle r="5.2" fill="#ffffff"/><circle r="5.2" fill="none" stroke="#38bdf8" stroke-width="1.2"/><circle cx="-1.6" cy="-1.6" r="1.5" fill="#e0f7ff"/></g>
+    <g transform="translate(159.40,159.40)"><circle r="5.2" fill="#ffffff"/><circle r="5.2" fill="none" stroke="#38bdf8" stroke-width="1.2"/><circle cx="-1.6" cy="-1.6" r="1.5" fill="#e0f7ff"/></g>
+    <g transform="translate(100,184)"><circle r="5.2" fill="#ffffff"/><circle r="5.2" fill="none" stroke="#38bdf8" stroke-width="1.2"/><circle cx="-1.6" cy="-1.6" r="1.5" fill="#e0f7ff"/></g>
+    <g transform="translate(40.60,159.40)"><circle r="5.2" fill="#ffffff"/><circle r="5.2" fill="none" stroke="#38bdf8" stroke-width="1.2"/><circle cx="-1.6" cy="-1.6" r="1.5" fill="#e0f7ff"/></g>
+    <g transform="translate(16,100)"><circle r="5.2" fill="#ffffff"/><circle r="5.2" fill="none" stroke="#38bdf8" stroke-width="1.2"/><circle cx="-1.6" cy="-1.6" r="1.5" fill="#e0f7ff"/></g>
+    <g transform="translate(40.60,40.60)"><circle r="5.2" fill="#ffffff"/><circle r="5.2" fill="none" stroke="#38bdf8" stroke-width="1.2"/><circle cx="-1.6" cy="-1.6" r="1.5" fill="#e0f7ff"/></g>
+  </g>
+</svg>

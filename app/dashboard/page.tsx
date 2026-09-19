@@ -929,7 +929,7 @@ export default function Dashboard() {
                     <p className="text-xs text-slate-400 mt-1">公開プロフィールに反映される基本情報です</p>
                   </div>
                   {avatarUrl && (
-                    <div className="w-12 h-12 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shadow-xs shrink-0">
+                    <div className="w-12 h-12 rounded-full overflow-hidden border border-slate-200 bg-slate-100 shadow-xs shrink-0">
                       <img src={avatarUrl} alt="アバタープレビュー" className="w-full h-full object-cover" />
                     </div>
                   )}

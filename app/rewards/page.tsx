@@ -3,10 +3,11 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { ICON_RINGS } from '@/lib/iconRings'
+import { useIconRings } from '@/lib/iconRings'
 import AvatarRing from '@/components/AvatarRing'
 
 export default function RewardsPage() {
+  const iconRings = useIconRings()
   const [loading, setLoading] = useState(true)
   const [userId, setUserId] = useState<string | null>(null)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
@@ -16,6 +17,7 @@ export default function RewardsPage() {
   const [busyRingId, setBusyRingId] = useState<string | null>(null)
   const [referralCount, setReferralCount] = useState(0)
   const [linkCopied, setLinkCopied] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   const refreshWallet = async (uid: string) => {
     const { data: wallet } = await supabase
@@ -45,10 +47,11 @@ export default function RewardsPage() {
         // 自分のアバター（クリエイターならプロフィール画像。無ければ未設定のまま）
         const { data: profile } = await supabase
           .from('profiles')
-          .select('avatar_url')
+          .select('avatar_url, is_admin')
           .eq('user_id', uid)
           .maybeSingle()
         setAvatarUrl(profile?.avatar_url || null)
+        setIsAdmin(!!profile?.is_admin)
 
         // 初回アクセス時のウェルカムボーナス（DB側で1人1回だけになるよう制御済み）
         const { error: bonusError } = await supabase.rpc('grant_starter_bonus')
@@ -145,6 +148,16 @@ export default function RewardsPage() {
             <span>←</span> サイトトップへ
           </Link>
           <h1 className="text-sm font-bold text-slate-900">マイページ・ポイント</h1>
+          {isAdmin ? (
+            <Link
+              href="/admin/rings"
+              className="text-[11px] font-bold text-slate-400 hover:text-sky-600 transition-colors"
+            >
+              リング管理
+            </Link>
+          ) : (
+            <span className="w-[3.5rem]" />
+          )}
         </div>
       </header>
 
@@ -209,7 +222,7 @@ export default function RewardsPage() {
         <div className="space-y-3">
           <h2 className="text-xs font-black text-slate-900 uppercase tracking-widest">アイコンリング ショップ</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {ICON_RINGS.map((ring) => {
+            {iconRings.map((ring) => {
               const owned = ownedRingIds.includes(ring.id)
               const equipped = equippedRingId === ring.id
               const canAfford = balance >= ring.cost

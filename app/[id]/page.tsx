@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { supabase, Profile, PortfolioItem } from '@/lib/supabase'
+import AvatarRing from '@/components/AvatarRing'
 
 type Option = {
   label: string
@@ -69,6 +70,7 @@ function CreatorClient({
 }) {
   const [profile, setProfile] = useState<ExtendedProfile | null>(initialProfile || null)
   const [works, setWorks] = useState<PortfolioItem[]>(initialWorks)
+  const [ringId, setRingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [isFavorite, setIsFavorite] = useState(false)
 
@@ -114,6 +116,13 @@ function CreatorClient({
         if (profileData && profileData.is_public !== false) {
           setProfile(profileData as ExtendedProfile)
         }
+
+        const { data: ringData } = await supabase
+          .from('public_equipped_rings')
+          .select('equipped_ring_id')
+          .eq('user_id', id)
+          .maybeSingle()
+        setRingId(ringData?.equipped_ring_id || null)
 
         const { data: worksData, error: worksError } = await supabase
           .from('portfolio_items')
@@ -371,10 +380,11 @@ function CreatorClient({
               <div className="flex items-start gap-4 sm:gap-5">
                 {profile.avatar_url && (
                   <div className="relative shrink-0">
-                    <img
+                    <AvatarRing
                       src={profile.avatar_url}
                       alt={profile.display_name || ''}
-                      className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover ring-4 ring-white/80 shadow-md"
+                      size={96}
+                      ringId={ringId}
                     />
                   </div>
                 )}

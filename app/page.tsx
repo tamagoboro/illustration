@@ -6,6 +6,7 @@ import { supabase, Profile } from '@/lib/supabase'
 import { useCompareStore } from '@/store/useCompareStore'
 import { loadFavorites, toggleFavoriteRecord } from '@/lib/favorites'
 import { SlidersHorizontal, RotateCcw, Search, Wallet, Clock, Tag } from 'lucide-react'
+import AvatarRing from '@/components/AvatarRing'
 
 // メニュー項目の型定義
 type MenuItem = {
@@ -63,6 +64,7 @@ export default function Home() {
 
   // お気に入りステート
   const [favorites, setFavorites] = useState<string[]>([])
+  const [ringMap, setRingMap] = useState<Record<string, string | null>>({})
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false)
   const [isCompareOpen, setIsCompareOpen] = useState(false)
 
@@ -141,6 +143,15 @@ export default function Home() {
           }
 
           setProfiles(randomized)
+
+          const { data: ringsData } = await supabase
+            .from('public_equipped_rings')
+            .select('user_id, equipped_ring_id')
+          const map: Record<string, string | null> = {}
+          ;(ringsData || []).forEach((r: any) => {
+            map[r.user_id] = r.equipped_ring_id
+          })
+          setRingMap(map)
         }
       } catch (error) {
         console.error('データの取得に失敗しました:', error)
@@ -856,9 +867,18 @@ export default function Home() {
                       <div className="p-3.5 space-y-2.5 flex-1 flex flex-col justify-between">
                         <div className="space-y-2">
                           <div className="space-y-0.5">
-                            <h3 className="font-bold text-xs text-slate-800 line-clamp-1">
-                              {profile.display_name}
-                            </h3>
+                            <div className="flex items-center gap-1.5">
+                              <AvatarRing
+                                src={profile.avatar_url}
+                                alt=""
+                                size={22}
+                                ringId={ringMap[profile.user_id]}
+                                fallback={<div className="w-full h-full rounded-full bg-sky-100" />}
+                              />
+                              <h3 className="font-bold text-xs text-slate-800 line-clamp-1">
+                                {profile.display_name}
+                              </h3>
+                            </div>
                             <p className="text-[10px] text-slate-500 font-medium line-clamp-2 leading-relaxed">
                               {profile.status_comment || 'プロフィール文は設定されていません。'}
                             </p>

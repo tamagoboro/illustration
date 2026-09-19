@@ -5,6 +5,7 @@ import { supabase, Profile } from '@/lib/supabase'
 import { useCompareStore } from '@/store/useCompareStore'
 import Link from 'next/link'
 import { ArrowLeft, Check, X, ExternalLink, Trash2, Sparkles } from 'lucide-react'
+import AvatarRing from '@/components/AvatarRing'
 
 // Profile型に追加項目を拡張
 type ExtendedProfile = Profile & {
@@ -19,6 +20,7 @@ type ExtendedProfile = Profile & {
 
 export default function ComparePage() {
   const [profiles, setProfiles] = useState<ExtendedProfile[]>([])
+  const [ringMap, setRingMap] = useState<Record<string, string | null>>({})
   const [loading, setLoading] = useState(true)
   const { selectedIds, toggleIllustrator, clear } = useCompareStore()
 
@@ -39,6 +41,17 @@ export default function ComparePage() {
       if (data) {
         setProfiles(data as ExtendedProfile[])
       }
+
+      const { data: ringsData } = await supabase
+        .from('public_equipped_rings')
+        .select('user_id, equipped_ring_id')
+        .in('user_id', selectedIds)
+      const map: Record<string, string | null> = {}
+      ;(ringsData || []).forEach((r: any) => {
+        map[r.user_id] = r.equipped_ring_id
+      })
+      setRingMap(map)
+
       setLoading(false)
     }
 
@@ -111,11 +124,15 @@ export default function ComparePage() {
                 >
                   <X size={18} />
                 </button>
-                <img
-                  src={p.avatar_url || 'https://via.placeholder.com/150'}
-                  alt={p.display_name}
-                  className="w-20 h-20 rounded-full object-cover mb-3 border-2 border-slate-100"
-                />
+                <div className="mb-3">
+                  <AvatarRing
+                    src={p.avatar_url}
+                    alt={p.display_name}
+                    size={80}
+                    ringId={ringMap[p.user_id]}
+                    fallback={<div className="w-full h-full rounded-full bg-slate-100 border-2 border-slate-100" />}
+                  />
+                </div>
                 <h3 className="font-bold text-slate-800 text-lg mb-1.5">{p.display_name}</h3>
                 
                 {/* クリエイター名直下の条件付きバッジ */}
