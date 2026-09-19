@@ -8,7 +8,7 @@ type Props = {
 }
 
 const SITE_NAME = 'Drawker（ドローカー）'
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://drawker.app'
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://drawker.com'
 
 // Supabase Storageの画像パスを完全なPublic URLに変換するヘルパー
 const getFullImageUrl = (url: string | null | undefined, fallbackUrl: string): string => {
@@ -58,9 +58,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const leadTimeText = profile.lead_time_days ? `最短${profile.lead_time_days}日でお届け` : '納期要相談'
   const description = `イラストレーター【${profile.display_name}】への直接依頼・見積もりページ。${leadTimeText} / ${commercialText}。SNSアイコン、キャラデザイン、立ち絵、ヘッダー等の制作実績・料金表を公開中！`
 
-  // アバターまたは最初のポートフォリオ画像を、正規化した完全URLで使用
+  // 最初のポートフォリオ画像（なければアバター）を、正規化した完全URLで使用
   const fallbackOgUrl = `${BASE_URL}/OGP-img.png`
-  const rawOgImage = profile.avatar_url || firstPortfolio?.image_url
+  const rawOgImage = firstPortfolio?.image_url || profile.avatar_url
   const ogImage = getFullImageUrl(rawOgImage, fallbackOgUrl)
   const canonicalUrl = `${BASE_URL}/creator/${id}`
 
