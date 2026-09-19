@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { supabase, Profile } from '@/lib/supabase'
 import { useCompareStore } from '@/store/useCompareStore'
+import { loadFavorites, toggleFavoriteRecord } from '@/lib/favorites'
 import { SlidersHorizontal, RotateCcw, Search, Wallet, Clock, Tag } from 'lucide-react'
 
 // メニュー項目の型定義
@@ -43,6 +44,7 @@ export default function Home() {
   const [profiles, setProfiles] = useState<ProfileWithImage[]>([])
   const [loading, setLoading] = useState(true)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
   // 検索・フィルター・ソート用ステート
   const [searchTerm, setSearchTerm] = useState('')
@@ -71,15 +73,23 @@ export default function Home() {
     [profiles, compareIds]
   )
 
-  // 初回描画時に localStorage から復元
+  // ログイン状態を確認しつつお気に入り一覧を読み込む
+  // （ログイン中はアカウントに保存された一覧、未ログインはブラウザ保存分を使う）
   useEffect(() => {
-    const storedFavs = localStorage.getItem('favorite_creators')
-    if (storedFavs) {
-      try {
-        setFavorites(JSON.parse(storedFavs))
-      } catch (e) {
-        console.error('Failed to load favorites from localStorage', e)
-      }
+    let isMounted = true
+    const initFavorites = async () => {
+      const { data } = await supabase.auth.getUser()
+      const uid = data?.user?.id || null
+      if (!isMounted) return
+      setCurrentUserId(uid)
+      if (uid) setIsLoggedIn(true)
+
+      const favs = await loadFavorites(uid)
+      if (isMounted) setFavorites(favs)
+    }
+    initFavorites()
+    return () => {
+      isMounted = false
     }
   }, [])
 
@@ -158,7 +168,7 @@ export default function Home() {
     }
   }, [isCompareOpen])
 
-  // お気に入りの追加 / 解除
+  // お気に入りの追加 / 解除（ログイン中はアカウントに、未ログインはブラウザに保存）
   const toggleFavorite = async (userId: string) => {
     const isFav = favorites.includes(userId)
     const targetProfile = profiles.find((p) => p.user_id === userId)
@@ -167,14 +177,11 @@ export default function Home() {
     const currentLikes = targetProfile.likes_count ?? 0
     const newLikes = isFav ? Math.max(0, currentLikes - 1) : currentLikes + 1
 
-    setFavorites((prev) => {
-      const nextFavorites = isFav
-        ? prev.filter((id) => id !== userId)
-        : [...prev, userId]
+    const nowFavorite = await toggleFavoriteRecord(currentUserId, userId, isFav)
 
-      localStorage.setItem('favorite_creators', JSON.stringify(nextFavorites))
-      return nextFavorites
-    })
+    setFavorites((prev) =>
+      nowFavorite ? [...prev, userId] : prev.filter((fid) => fid !== userId)
+    )
 
     setProfiles((prevProfiles) =>
       prevProfiles.map((p) =>
@@ -370,6 +377,17 @@ export default function Home() {
                 </span>
               )}
             </button>
+
+            {/* マイページ（ポイント・アイコンリング）ボタン：ログイン中のみ表示 */}
+            {isLoggedIn && (
+              <Link
+                href="/rewards"
+                className="px-3.5 py-2 text-xs font-bold rounded-2xl border border-sky-100 bg-white/90 hover:bg-white text-slate-600 hover:text-sky-600 shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+              >
+                <span>🎁</span>
+                <span className="hidden sm:inline">マイページ</span>
+              </Link>
+            )}
 
             {/* ログイン / ダッシュボードボタン */}
             <Link

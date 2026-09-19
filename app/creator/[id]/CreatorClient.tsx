@@ -1,9 +1,12 @@
 'use client'
 
-import { useState, useEffect, useMemo, CSSProperties } from 'react'
+import { useState, useEffect, useMemo, CSSProperties, ChangeEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase, Profile, PortfolioItem } from '@/lib/supabase'
+import { loadFavorites, toggleFavoriteRecord } from '@/lib/favorites'
+import { convertToWebp } from '@/lib/imageUtils'
+import AvatarRing from '@/components/AvatarRing'
 
 type Option = {
   label: string
@@ -51,6 +54,21 @@ type SnsLinkItem = {
   id: string
   platform: string
   url: string
+}
+
+// reviewer_id は auth.users のみを参照しており profiles を持たない一般ユーザーも
+// 投稿できるため、表示名・アイコンはサーバー側で別途合成して渡してもらう
+type ReviewRow = {
+  id: string
+  creator_id: string
+  reviewer_id: string
+  rating: number
+  comment: string | null
+  image_urls: string[] | null
+  created_at: string
+  reviewer_display_name: string | null
+  reviewer_avatar_url: string | null
+  reviewer_ring_id: string | null
 }
 
 const SNS_PLATFORM_LABELS: Record<string, string> = {
@@ -128,25 +146,43 @@ export default function CreatorClient({
   initialProfile,
   initialWorks = [],
   initialForms = [],
+  initialReviews = [],
+  creatorRingId = null,
 }: {
   id: string
   initialProfile?: ExtendedProfile | null
   initialWorks?: PortfolioItem[]
   initialForms?: EstimateFormRow[]
+  initialReviews?: ReviewRow[]
+  creatorRingId?: string | null
 }) {
   const router = useRouter()
   const [profile, setProfile] = useState<ExtendedProfile | null>(initialProfile || null)
   const [works, setWorks] = useState<PortfolioItem[]>(initialWorks)
   const [forms, setForms] = useState<EstimateFormRow[]>(initialForms)
+  const [reviews, setReviews] = useState<ReviewRow[]>(initialReviews)
   const [loading, setLoading] = useState(!initialProfile)
   const [isFavorite, setIsFavorite] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
   // モーダル管理
   const [isEstimateOpen, setIsEstimateOpen] = useState(false)
   const [isContactOpen, setIsContactOpen] = useState(false)
   const [isFormPickerOpen, setIsFormPickerOpen] = useState(false)
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false)
   const [selectedFormId, setSelectedFormId] = useState<string | null>(null)
   const [selectedWork, setSelectedWork] = useState<PortfolioItem | null>(null)
+
+  // レビュー投稿フォーム
+  const [reviewRating, setReviewRating] = useState(0)
+  const [reviewComment, setReviewComment] = useState('')
+  const [submittingReview, setSubmittingReview] = useState(false)
+  const [reviewExistingImageUrls, setReviewExistingImageUrls] = useState<string[]>([])
+  const [reviewNewFiles, setReviewNewFiles] = useState<File[]>([])
+  const [reviewNewPreviews, setReviewNewPreviews] = useState<string[]>([])
+  const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null)
+
+  const REVIEW_MAX_IMAGES = 3
 
   // フォーム選択状態管理
   const [formAnswers, setFormAnswers] = useState<Record<string, any>>({})
@@ -161,7 +197,7 @@ export default function CreatorClient({
 
   // モーダル表示時の背景スクロール抑制
   useEffect(() => {
-    if (isEstimateOpen || isContactOpen || isFormPickerOpen || selectedWork) {
+    if (isEstimateOpen || isContactOpen || isFormPickerOpen || isReviewModalOpen || lightboxImageUrl || selectedWork) {
       document.body.style.overflow = 'hidden'
     } else {
       document.body.style.overflow = 'unset'
@@ -169,7 +205,7 @@ export default function CreatorClient({
     return () => {
       document.body.style.overflow = 'unset'
     }
-  }, [isEstimateOpen, isContactOpen, isFormPickerOpen, selectedWork])
+  }, [isEstimateOpen, isContactOpen, isFormPickerOpen, isReviewModalOpen, lightboxImageUrl, selectedWork])
 
   // 開いているフォームが切り替わったら、前のフォームの回答・生成済み仕様書を引き継がない
   useEffect(() => {
@@ -177,17 +213,66 @@ export default function CreatorClient({
     setGeneratedSpec(null)
   }, [selectedFormId])
 
+  // ログイン状態を確認しつつ、このクリエイターがお気に入り済みか判定する
+  // （ログイン中はアカウントに保存された一覧、未ログインはブラウザ保存分を使う）
   useEffect(() => {
-    const storedFavs = localStorage.getItem('favorite_creators')
-    if (storedFavs) {
-      try {
-        const favArray: string[] = JSON.parse(storedFavs)
-        setIsFavorite(favArray.includes(id))
-      } catch (e) {
-        console.error('Failed to parse favorites', e)
-      }
+    let isMounted = true
+    const initFavorite = async () => {
+      const { data } = await supabase.auth.getUser()
+      const uid = data?.user?.id || null
+      if (!isMounted) return
+      setCurrentUserId(uid)
+
+      const favs = await loadFavorites(uid)
+      if (isMounted) setIsFavorite(favs.includes(id))
+    }
+    initFavorite()
+    return () => {
+      isMounted = false
     }
   }, [id])
+
+  // レビュー一覧の取得。reviewer_id は profiles を持たない場合があるため、
+  // 表示名・アイコンは別クエリで取得してから手動で合成する
+  const refreshReviews = async () => {
+    const { data: reviewRows } = await supabase
+      .from('reviews')
+      .select('*')
+      .eq('creator_id', id)
+      .order('created_at', { ascending: false })
+
+    if (!reviewRows) return
+
+    const reviewerIds = Array.from(new Set(reviewRows.map((r) => r.reviewer_id)))
+    let profileMap: Record<string, { display_name: string | null; avatar_url: string | null }> = {}
+    let ringMap: Record<string, string> = {}
+    if (reviewerIds.length > 0) {
+      const { data: reviewerProfiles } = await supabase
+        .from('profiles')
+        .select('user_id, display_name, avatar_url')
+        .in('user_id', reviewerIds)
+      profileMap = Object.fromEntries(
+        (reviewerProfiles || []).map((p) => [p.user_id, { display_name: p.display_name, avatar_url: p.avatar_url }])
+      )
+
+      const { data: reviewerRings } = await supabase
+        .from('public_equipped_rings')
+        .select('user_id, equipped_ring_id')
+        .in('user_id', reviewerIds)
+      ringMap = Object.fromEntries(
+        (reviewerRings || []).map((r) => [r.user_id, r.equipped_ring_id as string])
+      )
+    }
+
+    setReviews(
+      reviewRows.map((r) => ({
+        ...r,
+        reviewer_display_name: profileMap[r.reviewer_id]?.display_name || null,
+        reviewer_avatar_url: profileMap[r.reviewer_id]?.avatar_url || null,
+        reviewer_ring_id: ringMap[r.reviewer_id] || null,
+      }))
+    )
+  }
 
 useEffect(() => {
   const fetchCreatorData = async () => {
@@ -223,6 +308,10 @@ useEffect(() => {
         .order('sort_order', { ascending: true })
 
       if (formsData) setForms(formsData as EstimateFormRow[])
+    }
+
+    if (reviews.length === 0) {
+      await refreshReviews()
     }
 
     try {
@@ -449,16 +538,14 @@ const themeColor = useMemo(() => {
   }
 
   const handleToggleFavorite = async () => {
-    const storedFavs = localStorage.getItem('favorite_creators')
-    let favArray: string[] = storedFavs ? JSON.parse(storedFavs) : []
+    const wasFavorite = isFavorite
+    const currentLikes = profile?.likes_count ?? 0
+    const newLikes = wasFavorite ? Math.max(0, currentLikes - 1) : currentLikes + 1
 
-    if (favArray.includes(id)) {
-      favArray = favArray.filter((favId) => favId !== id)
-      setIsFavorite(false)
-    } else {
-      favArray.push(id)
-      setIsFavorite(true)
+    const nowFavorite = await toggleFavoriteRecord(currentUserId, id, wasFavorite)
+    setIsFavorite(nowFavorite)
 
+    if (nowFavorite && !wasFavorite) {
       try {
         await supabase.from('analytics_logs').insert({
           creator_id: id,
@@ -469,11 +556,144 @@ const themeColor = useMemo(() => {
       }
     }
 
-    localStorage.setItem('favorite_creators', JSON.stringify(favArray))
+    // ホームページのいいねボタンと同じくDB側のカウントも更新する
+    // （今まではここが抜けていて、このページの「いいね数」表示が実際には更新されなかった）
+    setProfile((prev) => (prev ? { ...prev, likes_count: newLikes } : prev))
+
+    const { error } = await supabase.rpc('increment_likes', {
+      target_user_id: id,
+      increment_val: wasFavorite ? -1 : 1,
+    })
+
+    if (error) {
+      console.error('いいね数の更新に失敗しました:', error)
+    }
   }
 
   const handleTagClick = (tag: string) => {
     router.push(`/?tag=${encodeURIComponent(tag)}`)
+  }
+
+  // レビュー・評価
+  const myReview = useMemo(
+    () => (currentUserId ? reviews.find((r) => r.reviewer_id === currentUserId) || null : null),
+    [reviews, currentUserId]
+  )
+
+  const avgRating = useMemo(() => {
+    if (reviews.length === 0) return 0
+    return reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+  }, [reviews])
+
+  const openNewReview = () => {
+    setReviewRating(0)
+    setReviewComment('')
+    setReviewExistingImageUrls([])
+    setReviewNewFiles([])
+    setReviewNewPreviews([])
+    setIsReviewModalOpen(true)
+  }
+
+  const openEditReview = () => {
+    if (!myReview) return
+    setReviewRating(myReview.rating)
+    setReviewComment(myReview.comment || '')
+    setReviewExistingImageUrls(myReview.image_urls || [])
+    setReviewNewFiles([])
+    setReviewNewPreviews([])
+    setIsReviewModalOpen(true)
+  }
+
+  const reviewImageCount = reviewExistingImageUrls.length + reviewNewFiles.length
+
+  const handleReviewFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return
+    const files = Array.from(e.target.files)
+    const room = REVIEW_MAX_IMAGES - reviewImageCount
+    if (room <= 0) {
+      alert(`画像は最大${REVIEW_MAX_IMAGES}枚までです`)
+      return
+    }
+    const accepted = files.slice(0, room)
+    setReviewNewFiles((prev) => [...prev, ...accepted])
+    setReviewNewPreviews((prev) => [...prev, ...accepted.map((f) => URL.createObjectURL(f))])
+  }
+
+  const removeExistingReviewImage = (url: string) => {
+    setReviewExistingImageUrls((prev) => prev.filter((u) => u !== url))
+  }
+
+  const removeNewReviewImage = (index: number) => {
+    setReviewNewFiles((prev) => prev.filter((_, i) => i !== index))
+    setReviewNewPreviews((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const handleSubmitReview = async () => {
+    if (!currentUserId || reviewRating < 1) return
+    setSubmittingReview(true)
+
+    try {
+      const uploadedUrls: string[] = []
+      for (const file of reviewNewFiles) {
+        const webpBlob = await convertToWebp(file)
+        const fileName = `reviews/${currentUserId}/${Date.now()}_${Math.random().toString(36).slice(2, 7)}.webp`
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('portfolios')
+          .upload(fileName, webpBlob, { contentType: 'image/webp' })
+
+        if (uploadError) throw uploadError
+
+        const { data: publicUrlData } = supabase.storage
+          .from('portfolios')
+          .getPublicUrl(uploadData.path)
+
+        uploadedUrls.push(publicUrlData.publicUrl)
+      }
+
+      const finalImageUrls = [...reviewExistingImageUrls, ...uploadedUrls]
+
+      const { error } = await supabase.from('reviews').upsert(
+        {
+          creator_id: id,
+          reviewer_id: currentUserId,
+          rating: reviewRating,
+          comment: reviewComment.trim() || null,
+          image_urls: finalImageUrls,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'creator_id,reviewer_id' }
+      )
+
+      if (error) throw error
+
+      setIsReviewModalOpen(false)
+      await refreshReviews()
+    } catch (error: any) {
+      console.error('レビュー投稿エラー:', error)
+      alert('レビューの投稿に失敗しました。通信環境をご確認のうえ、もう一度お試しください。')
+    } finally {
+      setSubmittingReview(false)
+    }
+  }
+
+  const handleDeleteReview = async () => {
+    if (!currentUserId || !myReview) return
+    if (!confirm('投稿したレビューを削除します。よろしいですか？')) return
+
+    const { error } = await supabase
+      .from('reviews')
+      .delete()
+      .eq('creator_id', id)
+      .eq('reviewer_id', currentUserId)
+
+    if (error) {
+      console.error('レビュー削除エラー:', error)
+      alert('レビューの削除に失敗しました。通信環境をご確認のうえ、もう一度お試しください。')
+      return
+    }
+
+    await refreshReviews()
   }
 
   const sharePageUrl = typeof window !== 'undefined' ? window.location.href : ''
@@ -565,11 +785,13 @@ const themeColor = useMemo(() => {
             <div className="flex-1 space-y-4">
               <div className="flex items-start gap-4 sm:gap-5">
                 {profile.avatar_url && (
-                  <div className="relative shrink-0">
-                    <img
+                  <div className="relative shrink-0 ring-4 ring-white/80 shadow-md rounded-2xl">
+                    <AvatarRing
                       src={profile.avatar_url}
                       alt={profile.display_name || 'アバター画像'}
-                      className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover ring-4 ring-white/80 shadow-md"
+                      size={88}
+                      ringId={creatorRingId}
+                      rounded="2xl"
                     />
                   </div>
                 )}
@@ -978,6 +1200,103 @@ const themeColor = useMemo(() => {
             </div>
           )}
         </section>
+
+        {/* レビュー・評価 */}
+        <section className="bg-white/75 backdrop-blur-xl p-6 sm:p-7 rounded-3xl shadow-xl border border-white/80 space-y-5">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h2 className="text-xs font-black text-sky-900 uppercase tracking-widest flex items-center gap-2">
+              <span className="p-1.5 bg-white rounded-lg text-xs shadow-2xs">⭐</span> クリエイター評価・レビュー
+            </h2>
+            {reviews.length > 0 && (
+              <span className="text-xs font-extrabold text-sky-700 bg-sky-50 px-3 py-1 rounded-full border border-sky-200">
+                ★ {avgRating.toFixed(1)}（{reviews.length}件）
+              </span>
+            )}
+          </div>
+
+          {currentUserId && currentUserId !== id ? (
+            myReview ? (
+              <div className="p-4 rounded-2xl border border-sky-200 bg-sky-50/60 flex items-center justify-between gap-3 flex-wrap">
+                <span className="text-xs font-bold text-sky-600">あなたはこのクリエイターにレビューを投稿済みです</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={openEditReview}
+                    className="text-xs font-bold px-3 py-1.5 rounded-xl bg-white border border-sky-200 text-sky-700 hover:bg-sky-50 transition cursor-pointer"
+                  >
+                    編集する
+                  </button>
+                  <button
+                    onClick={handleDeleteReview}
+                    className="text-xs font-bold px-3 py-1.5 rounded-xl bg-white border border-rose-200 text-rose-500 hover:bg-rose-50 transition cursor-pointer"
+                  >
+                    削除する
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={openNewReview}
+                style={{ backgroundColor: themeColor }}
+                className="w-full sm:w-auto py-3 px-6 text-white font-extrabold rounded-xl text-xs transition shadow-md hover:opacity-90 active:scale-[0.98] cursor-pointer"
+              >
+                ✍️ レビューを投稿する
+              </button>
+            )
+          ) : !currentUserId ? (
+            <div className="p-4 rounded-2xl border border-dashed border-sky-200 text-center text-xs font-bold text-sky-400">
+              <Link href="/login" className="underline text-sky-600">ログイン</Link>するとレビューを投稿できます
+            </div>
+          ) : null}
+
+          {reviews.length === 0 ? (
+            <p className="text-xs font-bold text-sky-300 text-center py-6">まだレビューがありません</p>
+          ) : (
+            <div className="space-y-3">
+              {reviews.map((r) => (
+                <div key={r.id} className="p-4 bg-white/60 rounded-2xl border border-white/80 space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="shrink-0">
+                        <AvatarRing
+                          src={r.reviewer_avatar_url}
+                          alt=""
+                          size={24}
+                          ringId={r.reviewer_ring_id}
+                          fallback={<div className="w-full h-full rounded-full bg-sky-100 flex items-center justify-center text-[10px]">👤</div>}
+                        />
+                      </div>
+                      <span className="text-xs font-bold text-sky-800 truncate">{r.reviewer_display_name || '依頼者'}</span>
+                    </div>
+                    <span className="text-amber-500 text-xs shrink-0">
+                      {'★'.repeat(r.rating)}
+                      <span className="text-slate-200">{'★'.repeat(5 - r.rating)}</span>
+                    </span>
+                  </div>
+                  {r.comment && (
+                    <p className="text-xs text-sky-600 leading-relaxed whitespace-pre-wrap">{r.comment}</p>
+                  )}
+                  {r.image_urls && r.image_urls.length > 0 && (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {r.image_urls.map((url) => (
+                        <button
+                          key={url}
+                          type="button"
+                          onClick={() => setLightboxImageUrl(url)}
+                          className="w-16 h-16 rounded-xl overflow-hidden border border-white/80 cursor-pointer"
+                        >
+                          <img src={url} alt="レビュー画像" className="w-full h-full object-cover" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <span className="text-[10px] text-sky-300 block">
+                    {new Date(r.created_at).toLocaleDateString('ja-JP')}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       </main>
 
       {/* 作品詳細 モーダル */}
@@ -1351,6 +1670,142 @@ const themeColor = useMemo(() => {
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* レビュー投稿・編集 モーダル */}
+      {isReviewModalOpen && (
+        <div className="fixed inset-0 bg-sky-950/70 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl border border-sky-100 relative">
+            <button
+              onClick={() => setIsReviewModalOpen(false)}
+              aria-label="閉じる"
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-sky-100 hover:bg-sky-200 text-sky-600 flex items-center justify-center text-xs font-black transition cursor-pointer"
+            >
+              ✕
+            </button>
+
+            <div className="space-y-1 text-center">
+              <h3 className="text-base font-black text-sky-900">
+                {myReview ? 'レビューを編集' : 'レビューを投稿'}
+              </h3>
+              <p className="text-xs text-sky-400">
+                実際にやり取りした感想や満足度を、他の依頼者の参考のために教えてください
+              </p>
+            </div>
+
+            <div className="flex items-center justify-center gap-1.5 text-3xl">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setReviewRating(n)}
+                  className={`transition cursor-pointer ${n <= reviewRating ? 'text-amber-500' : 'text-slate-200 hover:text-slate-300'}`}
+                  aria-label={`${n}点`}
+                >
+                  ★
+                </button>
+              ))}
+            </div>
+
+            <textarea
+              value={reviewComment}
+              onChange={(e) => setReviewComment(e.target.value)}
+              rows={4}
+              placeholder="やり取りの丁寧さ、仕上がりの満足度など（任意）"
+              className="w-full text-xs p-3 rounded-xl border border-sky-200 bg-sky-50/50 font-medium focus:outline-none focus:ring-2 transition-all leading-relaxed"
+            />
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold text-sky-500">
+                  画像を添付（任意・{REVIEW_MAX_IMAGES}枚まで）
+                </label>
+                <span className="text-[10px] text-sky-300">{reviewImageCount} / {REVIEW_MAX_IMAGES}</span>
+              </div>
+
+              {(reviewExistingImageUrls.length > 0 || reviewNewPreviews.length > 0) && (
+                <div className="flex flex-wrap gap-2">
+                  {reviewExistingImageUrls.map((url) => (
+                    <div key={url} className="relative w-16 h-16 rounded-xl overflow-hidden border border-sky-200 group">
+                      <img src={url} alt="" className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => removeExistingReviewImage(url)}
+                        className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-sky-950/70 text-white text-[10px] flex items-center justify-center cursor-pointer"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                  {reviewNewPreviews.map((url, i) => (
+                    <div key={url} className="relative w-16 h-16 rounded-xl overflow-hidden border border-sky-200">
+                      <img src={url} alt="" className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => removeNewReviewImage(i)}
+                        className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-sky-950/70 text-white text-[10px] flex items-center justify-center cursor-pointer"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {reviewImageCount < REVIEW_MAX_IMAGES && (
+                <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-sky-600 bg-sky-50 hover:bg-sky-100 border border-sky-200 px-3 py-1.5 rounded-xl cursor-pointer transition">
+                  <span>🖼️ 画像を選択</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handleReviewFileChange}
+                    className="hidden"
+                  />
+                </label>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setIsReviewModalOpen(false)}
+                className="px-4 py-2.5 bg-sky-100 hover:bg-sky-200 text-sky-700 font-bold text-xs rounded-xl transition cursor-pointer"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleSubmitReview}
+                disabled={reviewRating < 1 || submittingReview}
+                style={{ backgroundColor: themeColor }}
+                className="flex-1 py-2.5 text-white font-extrabold text-xs rounded-xl shadow-md hover:opacity-90 active:scale-[0.98] transition cursor-pointer disabled:opacity-50"
+              >
+                {submittingReview ? '送信中...' : myReview ? '更新する' : '投稿する'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* レビュー画像 拡大表示 */}
+      {lightboxImageUrl && (
+        <div
+          className="fixed inset-0 bg-sky-950/85 backdrop-blur-md flex items-center justify-center p-4 z-[60] animate-in fade-in duration-200 cursor-zoom-out"
+          onClick={() => setLightboxImageUrl(null)}
+        >
+          <button
+            onClick={() => setLightboxImageUrl(null)}
+            aria-label="閉じる"
+            className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center text-sm font-black transition cursor-pointer"
+          >
+            ✕
+          </button>
+          <img
+            src={lightboxImageUrl}
+            alt="レビュー画像拡大"
+            className="max-h-[85vh] max-w-full object-contain rounded-2xl shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
 

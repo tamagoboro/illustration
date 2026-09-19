@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
@@ -18,6 +18,18 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
   const [infoMsg, setInfoMsg] = useState('')
+  const [referrerId, setReferrerId] = useState<string | null>(null)
+
+  // 招待リンク（/login?ref=紹介者のuser_id）経由で来た場合、紹介者IDを覚えておく。
+  // useSearchParams はSuspense境界が必要になるため、素朴にlocationから読む。
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const ref = params.get('ref')
+    if (ref) {
+      setReferrerId(ref)
+      setIsSignUp(true)
+    }
+  }, [])
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -32,16 +44,21 @@ export default function LoginPage() {
     setInfoMsg('')
 
     if (isSignUp) {
-      // 新規会員登録
+      // 新規会員登録（招待リンク経由なら紹介者IDを引き継ぎ、両者へのポイント付与はDB側のトリガーで行う）
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: referrerId ? { data: { referred_by: referrerId } } : undefined,
       })
 
       if (error) {
         setErrorMsg('登録に失敗しました: ' + error.message)
       } else {
-        setInfoMsg('アカウントを作成しました！ログインしてください。')
+        setInfoMsg(
+          referrerId
+            ? 'アカウントを作成しました！紹介ポイントも付与されます。ログインしてください。'
+            : 'アカウントを作成しました！ログインしてください。'
+        )
         setIsSignUp(false)
       }
     } else {
@@ -98,6 +115,12 @@ export default function LoginPage() {
             {isSignUp ? 'お気に入り保存やマイページ機能を利用できます' : 'マイページにアクセスします'}
           </p>
         </div>
+
+        {referrerId && isSignUp && (
+          <div className="p-3 bg-sky-50 border border-sky-200 text-sky-700 rounded-2xl text-xs font-bold text-center">
+            🎁 友達の招待リンクから登録すると、あなたも紹介した人もポイントがもらえます！
+          </div>
+        )}
 
         {infoMsg && (
           <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-2xl text-xs font-bold">
