@@ -130,6 +130,7 @@ export default function Dashboard() {
   ])
 
   const [portfolioUrls, setPortfolioUrls] = useState<string[]>(['', '', '', ''])
+  const [portfolioTitles, setPortfolioTitles] = useState<string[]>(['', '', '', ''])
   
   const [menuItems, setMenuItems] = useState<MenuItem[]>([
     { title: 'アイコン制作', price: 5000 },
@@ -246,7 +247,7 @@ export default function Dashboard() {
 
         const { data: portfolioData, error: portfolioError } = await supabase
           .from('portfolio_items')
-          .select('image_url, sort_order')
+          .select('image_url, sort_order, title')
           .eq('user_id', user.id)
           .order('sort_order', { ascending: true })
 
@@ -256,12 +257,15 @@ export default function Dashboard() {
 
         if (portfolioData && portfolioData.length > 0) {
           const urls = ['', '', '', '']
+          const titles = ['', '', '', '']
           portfolioData.forEach((item) => {
             if (item.sort_order < 4) {
               urls[item.sort_order] = normalizeStorageUrl(item.image_url || '')
+              titles[item.sort_order] = item.title || ''
             }
           })
           setPortfolioUrls(urls)
+          setPortfolioTitles(titles)
         }
 
         setIsDirty(false)
@@ -381,7 +385,13 @@ export default function Dashboard() {
     newUrls[index] = newUrls[targetIndex]
     newUrls[targetIndex] = temp
 
+    const newTitles = [...portfolioTitles]
+    const tempTitle = newTitles[index]
+    newTitles[index] = newTitles[targetIndex]
+    newTitles[targetIndex] = tempTitle
+
     setPortfolioUrls(newUrls)
+    setPortfolioTitles(newTitles)
     setIsDirty(true)
   }
 
@@ -648,6 +658,7 @@ export default function Dashboard() {
           user_id: user.id,
           image_url: normalizeStorageUrl(url),
           sort_order: idx,
+          title: portfolioTitles[idx]?.trim() || null,
         }))
         .filter((item) => item.image_url.length > 0)
 
@@ -1596,6 +1607,9 @@ export default function Dashboard() {
                             const next = [...portfolioUrls]
                             next[idx] = ''
                             setPortfolioUrls(next)
+                            const nextTitles = [...portfolioTitles]
+                            nextTitles[idx] = ''
+                            setPortfolioTitles(nextTitles)
                             setIsDirty(true)
                           }}
                           className="text-[11px] text-rose-500 font-bold hover:underline cursor-pointer ml-1"
@@ -1663,6 +1677,20 @@ export default function Dashboard() {
                         setIsDirty(true)
                       }}
                       className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-300 font-mono text-[11px]"
+                    />
+
+                    <input
+                      type="text"
+                      placeholder="作品タイトル（任意）"
+                      value={portfolioTitles[idx] || ''}
+                      onChange={(e) => {
+                        const next = [...portfolioTitles]
+                        next[idx] = e.target.value
+                        setPortfolioTitles(next)
+                        setIsDirty(true)
+                      }}
+                      maxLength={50}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-300 font-medium"
                     />
                   </div>
                 </div>
