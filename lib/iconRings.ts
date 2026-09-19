@@ -25,19 +25,20 @@ async function loadIconRings(): Promise<IconRing[]> {
   if (cache) return cache
   if (inflight) return inflight
 
-  inflight = supabase
-    .from('icon_rings')
-    .select('*')
-    .order('sort_order', { ascending: true })
-    .then(({ data, error }) => {
-      inflight = null
-      if (error || !data) {
-        console.error('アイコンリング一覧の取得に失敗しました:', error)
-        return []
-      }
-      cache = data.map(mapRow)
-      return cache
-    })
+  inflight = (async () => {
+    const { data, error } = await supabase
+      .from('icon_rings')
+      .select('*')
+      .order('sort_order', { ascending: true })
+
+    inflight = null
+    if (error || !data) {
+      console.error('アイコンリング一覧の取得に失敗しました:', error)
+      return []
+    }
+    cache = data.map(mapRow)
+    return cache
+  })()
 
   return inflight
 }

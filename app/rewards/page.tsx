@@ -47,11 +47,17 @@ export default function RewardsPage() {
         // 自分のアバター（クリエイターならプロフィール画像。無ければ未設定のまま）
         const { data: profile } = await supabase
           .from('profiles')
-          .select('avatar_url, is_admin')
+          .select('avatar_url')
           .eq('user_id', uid)
           .maybeSingle()
         setAvatarUrl(profile?.avatar_url || null)
-        setIsAdmin(!!profile?.is_admin)
+
+        const { data: adminRow } = await supabase
+          .from('admins')
+          .select('user_id')
+          .eq('user_id', uid)
+          .maybeSingle()
+        setIsAdmin(!!adminRow)
 
         // 初回アクセス時のウェルカムボーナス（DB側で1人1回だけになるよう制御済み）
         const { error: bonusError } = await supabase.rpc('grant_starter_bonus')

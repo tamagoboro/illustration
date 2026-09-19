@@ -50,12 +50,12 @@ export default function AdminRingsPage() {
       setLoggedIn(!!uid)
 
       if (uid) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('is_admin')
+        const { data: adminRow } = await supabase
+          .from('admins')
+          .select('user_id')
           .eq('user_id', uid)
           .maybeSingle()
-        setIsAdmin(!!profile?.is_admin)
+        setIsAdmin(!!adminRow)
       }
       setChecking(false)
     }
