@@ -7,7 +7,7 @@ import { supabase, Profile, PortfolioItem } from '@/lib/supabase'
 import { loadFavorites, toggleFavoriteRecord } from '@/lib/favorites'
 import { convertToWebp } from '@/lib/imageUtils'
 import AvatarRing from '@/components/AvatarRing'
-import { ItemDiscountConfig, Campaign, isCampaignActive, resolveDiscount, applyDiscount, formatDiscountBadge } from '@/lib/discount'
+import { ItemDiscountConfig, Campaign, isCampaignActive, resolveDiscount, applyDiscount, formatDiscountBadge, formatSavingsBadge } from '@/lib/discount'
 
 type Option = {
   label: string
@@ -528,7 +528,7 @@ const themeColor = useMemo(() => {
 
     specLines.push(`-----------------------------------`)
     if (originalTotalPrice > totalPrice) {
-      const badge = formatDiscountBadge(resolveDiscount(campaign, undefined))
+      const badge = formatSavingsBadge(originalTotalPrice, totalPrice)
       specLines.push(`■ 通常価格: ¥${originalTotalPrice.toLocaleString()}`)
       specLines.push(`■ 割引後合計: ¥${totalPrice.toLocaleString()} (税込)${badge ? ` [${badge}]` : ''}`)
     } else {
@@ -1025,23 +1025,52 @@ const themeColor = useMemo(() => {
               )}
 
               <div className="space-y-2.5 text-xs text-sky-600 pb-1">
-                {profile.price_min != null && (
-                  <div
-                    className="flex justify-between items-baseline p-3 rounded-xl border"
-                    style={{
-                      backgroundColor: hexToRgba(themeColor, 0.05),
-                      borderColor: hexToRgba(themeColor, 0.2),
-                    }}
-                  >
-                    <span className="font-bold text-sky-500">最低参考価格</span>
-                    <span
-                      className="font-black text-lg"
-                      style={{ color: themeColor }}
+                {profile.price_min != null && (() => {
+                  const priceMinCampaignActive = isCampaignActive(campaign)
+                  const discountedPriceMin = priceMinCampaignActive
+                    ? applyDiscount(profile.price_min as number, {
+                        type: campaign.discountType as 'percent' | 'fixed',
+                        value: campaign.discountValue as number,
+                      })
+                    : null
+                  const priceMinBadge = priceMinCampaignActive
+                    ? formatDiscountBadge({
+                        type: campaign.discountType as 'percent' | 'fixed',
+                        value: campaign.discountValue as number,
+                      })
+                    : null
+                  return (
+                    <div
+                      className="flex justify-between items-baseline p-3 rounded-xl border"
+                      style={{
+                        backgroundColor: hexToRgba(themeColor, 0.05),
+                        borderColor: hexToRgba(themeColor, 0.2),
+                      }}
                     >
-                      ¥{profile.price_min.toLocaleString()}〜
-                    </span>
-                  </div>
-                )}
+                      <span className="font-bold text-sky-500">最低参考価格</span>
+                      {priceMinCampaignActive && discountedPriceMin !== null ? (
+                        <span className="flex items-center gap-1.5 flex-wrap justify-end">
+                          <span className="text-slate-400 text-xs line-through decoration-rose-400">
+                            ¥{(profile.price_min as number).toLocaleString()}
+                          </span>
+                          <span className="font-black text-lg" style={{ color: themeColor }}>
+                            ¥{discountedPriceMin.toLocaleString()}〜
+                          </span>
+                          <span className="text-[9px] font-black bg-rose-500 text-white px-1.5 py-0.5 rounded shadow-2xs">
+                            {priceMinBadge}
+                          </span>
+                        </span>
+                      ) : (
+                        <span
+                          className="font-black text-lg"
+                          style={{ color: themeColor }}
+                        >
+                          ¥{profile.price_min.toLocaleString()}〜
+                        </span>
+                      )}
+                    </div>
+                  )
+                })()}
                 <div className="flex justify-between items-center px-1">
                   <span>目安納期</span>
                   <span className="font-extrabold text-sky-900">
@@ -1663,7 +1692,7 @@ const themeColor = useMemo(() => {
                           <span className="text-xs font-normal text-sky-500">(税込)</span>
                         </span>
                         <span className="text-[9px] font-black bg-rose-500 text-white px-1.5 py-0.5 rounded">
-                          {formatDiscountBadge(resolveDiscount(campaign, undefined))}
+                          {formatSavingsBadge(originalTotalPrice, totalPrice)}
                         </span>
                       </div>
                     ) : (

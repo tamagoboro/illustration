@@ -66,6 +66,15 @@ export function formatDiscountBadge(discount: ResolvedDiscount | null | undefine
   return discount.type === 'percent' ? `${discount.value}%OFF` : `${discount.value.toLocaleString()}円OFF`
 }
 
+// 立ち絵は固定額引き・ヘッダーは％引きのように項目ごとに割引の種類が異なる場合、
+// 合計金額に対して単一の「◯%OFF」「◯円OFF」バッジを付けると実態と合わなくなる。
+// そのため合計金額のバッジは常に「実際に引かれた金額」を表示する（種類が混在していても必ず正しい）。
+export function formatSavingsBadge(originalTotal: number, discountedTotal: number): string | null {
+  const diff = Math.round(originalTotal - discountedTotal)
+  if (diff <= 0) return null
+  return `¥${diff.toLocaleString()}OFF`
+}
+
 // 日付(YYYY-MM-DD)入力用フォーマット変換
 export const toDateInputValue = (iso: string | null | undefined): string => {
   if (!iso) return ''

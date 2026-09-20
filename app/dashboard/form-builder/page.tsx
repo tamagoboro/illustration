@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { ItemDiscountConfig, Campaign, resolveDiscount, applyDiscount } from '@/lib/discount'
+import { ItemDiscountConfig, Campaign, resolveDiscount, applyDiscount, formatSavingsBadge } from '@/lib/discount'
 
 type Option = {
   label: string
@@ -474,25 +474,34 @@ export default function FormBuilderPage() {
   }
 
   // プレビューの概算合計金額（保存中の内容をその場で試算するだけで、実データには影響しない）
-  const previewTotal = useMemo(() => {
+  const { previewTotal, previewOriginalTotal } = useMemo(() => {
     let baseSum = 0
+    let baseSumOriginal = 0
     config.fields.forEach((field) => {
       if (field.price && field.type !== 'note' && field.type !== 'faq') {
         const discount = resolveDiscount(campaign, field.discount)
         baseSum += applyDiscount(field.price, discount)
+        baseSumOriginal += field.price
       }
     })
 
     let fixedAdditions = 0
+    let fixedAdditionsOriginal = 0
     let percentAdditions = 0
+    let percentAdditionsOriginal = 0
     config.fields.forEach((field) => {
       const answer = previewAnswers[field.id]
       if (!answer || !field.options) return
       const addOption = (opt: Option) => {
         const discount = resolveDiscount(campaign, opt.discount)
         const effectivePrice = applyDiscount(opt.price, discount)
-        if (opt.priceType === 'percent') percentAdditions += effectivePrice
-        else fixedAdditions += effectivePrice
+        if (opt.priceType === 'percent') {
+          percentAdditions += effectivePrice
+          percentAdditionsOriginal += opt.price
+        } else {
+          fixedAdditions += effectivePrice
+          fixedAdditionsOriginal += opt.price
+        }
       }
       if (field.type === 'radio') {
         const opt = field.options.find((o) => o.label === answer)
@@ -505,7 +514,11 @@ export default function FormBuilderPage() {
       }
     })
 
-    return baseSum + fixedAdditions + Math.round(baseSum * (percentAdditions / 100))
+    return {
+      previewTotal: baseSum + fixedAdditions + Math.round(baseSum * (percentAdditions / 100)),
+      previewOriginalTotal:
+        baseSumOriginal + fixedAdditionsOriginal + Math.round(baseSumOriginal * (percentAdditionsOriginal / 100)),
+    }
   }, [config, previewAnswers, campaign])
 
   const handlePreviewSelect = (fieldId: string, value: any, isCheckbox = false) => {
@@ -1048,9 +1061,23 @@ export default function FormBuilderPage() {
                   {config.fields.length > 0 && (
                     <div className="p-5 border-t border-slate-100 flex items-center justify-between">
                       <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">概算合計金額（試算）</span>
-                      <span className="text-lg font-black" style={{ color: config.theme_color }}>
-                        ¥{previewTotal.toLocaleString()}
-                      </span>
+                      {previewOriginalTotal > previewTotal ? (
+                        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                          <span className="text-xs text-slate-300 line-through decoration-rose-400">
+                            ¥{previewOriginalTotal.toLocaleString()}
+                          </span>
+                          <span className="text-lg font-black" style={{ color: config.theme_color }}>
+                            ¥{previewTotal.toLocaleString()}
+                          </span>
+                          <span className="text-[9px] font-black bg-rose-500 text-white px-1.5 py-0.5 rounded">
+                            {formatSavingsBadge(previewOriginalTotal, previewTotal)}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-lg font-black" style={{ color: config.theme_color }}>
+                          ¥{previewTotal.toLocaleString()}
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
