@@ -6,6 +6,7 @@ import { useCompareStore } from '@/store/useCompareStore'
 import Link from 'next/link'
 import { ArrowLeft, Check, X, ExternalLink, Trash2, Sparkles } from 'lucide-react'
 import AvatarRing from '@/components/AvatarRing'
+import ProtectedImage from '@/components/ProtectedImage'
 
 // Profile型に追加項目を拡張
 type ExtendedProfile = Profile & {
@@ -313,7 +314,7 @@ export default function ComparePage() {
               <div key={p.user_id} className="p-4 grid grid-cols-2 gap-2">
                 {p.portfolio_items && p.portfolio_items.length > 0 ? (
                   p.portfolio_items.slice(0, 4).map((item) => (
-                    <img
+                    <ProtectedImage
                       key={item.id}
                       src={item.image_url}
                       alt={item.title || '作品'}

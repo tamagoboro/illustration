@@ -7,6 +7,7 @@ import { useCompareStore } from '@/store/useCompareStore'
 import { loadFavorites, toggleFavoriteRecord } from '@/lib/favorites'
 import { SlidersHorizontal, RotateCcw, Search, Wallet, Clock, Tag } from 'lucide-react'
 import AvatarRing from '@/components/AvatarRing'
+import ProtectedImage from '@/components/ProtectedImage'
 import { isCampaignActive, applyDiscount, formatDiscountBadge, Campaign } from '@/lib/discount'
 
 // メニュー項目の型定義
@@ -833,7 +834,7 @@ export default function Home() {
                       {/* イラスト画像エリア */}
                       <div className="relative w-full aspect-square bg-sky-50/50 overflow-hidden">
                         {profile.thumbnail_url ? (
-                          <img
+                          <ProtectedImage
                             src={profile.thumbnail_url}
                             alt={profile.display_name}
                             loading="lazy"
@@ -1074,7 +1075,7 @@ export default function Home() {
                   <div className="space-y-3">
                     <div className="relative w-full aspect-video bg-sky-100/50 rounded-xl overflow-hidden">
                       {item.thumbnail_url ? (
-                        <img
+                        <ProtectedImage
                           src={item.thumbnail_url}
                           alt={item.display_name}
                           className="w-full h-full object-cover"

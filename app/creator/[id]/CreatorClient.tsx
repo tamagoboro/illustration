@@ -7,6 +7,7 @@ import { supabase, Profile, PortfolioItem } from '@/lib/supabase'
 import { loadFavorites, toggleFavoriteRecord } from '@/lib/favorites'
 import { convertToWebp } from '@/lib/imageUtils'
 import AvatarRing from '@/components/AvatarRing'
+import ProtectedImage from '@/components/ProtectedImage'
 import { ItemDiscountConfig, Campaign, isCampaignActive, resolveDiscount, applyDiscount, formatDiscountBadge, formatSavingsBadge } from '@/lib/discount'
 
 type Option = {
@@ -1284,7 +1285,7 @@ const themeColor = useMemo(() => {
                   onClick={() => setSelectedWork(work)}
                   className="group relative aspect-square bg-white/40 rounded-2xl overflow-hidden shadow-lg border border-white/80 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl cursor-pointer"
                 >
-                  <img
+                  <ProtectedImage
                     src={work.image_url}
                     alt={work.title || `${profile.display_name}の作品`}
                     loading="lazy"
@@ -1413,7 +1414,7 @@ const themeColor = useMemo(() => {
 
             <div className="overflow-y-auto flex-1 p-5 sm:p-6 space-y-5">
               <div className="rounded-2xl overflow-hidden bg-sky-950 flex items-center justify-center max-h-[60vh]">
-                <img
+                <ProtectedImage
                   src={selectedWork.image_url}
                   alt={selectedWork.title || '作品詳細'}
                   className="max-h-[60vh] w-auto object-contain"

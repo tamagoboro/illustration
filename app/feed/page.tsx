@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { convertToWebp } from '@/lib/imageUtils'
 import AvatarRing from '@/components/AvatarRing'
+import ProtectedImage from '@/components/ProtectedImage'
 
 type Comment = {
   id: string
@@ -526,7 +527,7 @@ export default function FeedPage() {
                           key={i}
                           className="aspect-video rounded-2xl overflow-hidden bg-slate-100 border border-slate-200/50 group/img"
                         >
-                          <img
+                          <ProtectedImage
                             src={url}
                             alt=""
                             loading="lazy"

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { supabase, Profile } from '@/lib/supabase'
+import ProtectedImage from '@/components/ProtectedImage'
 
 type Props = {
   params: Promise<{ tag: string }>
@@ -136,7 +137,7 @@ export default async function TagPage({ params }: Props) {
               >
                 <div className="relative w-full aspect-square bg-slate-50 overflow-hidden">
                   {thumbMap[profile.user_id] ? (
-                    <img
+                    <ProtectedImage
                       src={thumbMap[profile.user_id]}
                       alt={profile.display_name}
                       loading="lazy"
