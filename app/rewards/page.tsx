@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { useIconRings } from '@/lib/iconRings'
+import { useIconRings, isRingAvailableNow } from '@/lib/iconRings'
 import AvatarRing from '@/components/AvatarRing'
 
 export default function RewardsPage() {
@@ -228,7 +228,9 @@ export default function RewardsPage() {
         <div className="space-y-3">
           <h2 className="text-xs font-black text-slate-900 uppercase tracking-widest">アイコンリング ショップ</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {iconRings.map((ring) => {
+            {iconRings
+              .filter((ring) => ownedRingIds.includes(ring.id) || isRingAvailableNow(ring))
+              .map((ring) => {
               const owned = ownedRingIds.includes(ring.id)
               const equipped = equippedRingId === ring.id
               const canAfford = balance >= ring.cost

@@ -9,6 +9,8 @@ export type IconRing = {
   name: string
   cost: number
   image: string
+  availableFrom: string | null
+  availableUntil: string | null
 }
 
 let cache: IconRing[] | null = null
@@ -19,7 +21,18 @@ const mapRow = (row: any): IconRing => ({
   name: row.name,
   cost: row.cost,
   image: row.image_url,
+  availableFrom: row.available_from ?? null,
+  availableUntil: row.available_until ?? null,
 })
+
+// 販売期間内かどうか（from/untilがnullなら無期限）。
+// 既に所持しているリングの装着可否には使わない（所有権があれば期間を過ぎても使える）。
+export function isRingAvailableNow(ring: Pick<IconRing, 'availableFrom' | 'availableUntil'>): boolean {
+  const now = Date.now()
+  if (ring.availableFrom && now < new Date(ring.availableFrom).getTime()) return false
+  if (ring.availableUntil && now > new Date(ring.availableUntil).getTime()) return false
+  return true
+}
 
 async function loadIconRings(): Promise<IconRing[]> {
   if (cache) return cache

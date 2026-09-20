@@ -33,10 +33,15 @@ type PostWithAuthor = {
   post_comments?: Comment[]
 }
 
+const FEED_PAGE_SIZE = 30
+
 export default function FeedPage() {
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [posts, setPosts] = useState<PostWithAuthor[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [page, setPage] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
   const [ringMap, setRingMap] = useState<Record<string, string | null>>({})
 
   // 新規投稿ステート
@@ -61,10 +66,15 @@ export default function FeedPage() {
     fetchPosts()
   }, [])
 
-  const fetchPosts = async () => {
-    setLoading(true)
+  const fetchPosts = async (pageToLoad = 0, append = false) => {
+    if (append) setLoadingMore(true)
+    else setLoading(true)
+
     const { data: userResp } = await supabase.auth.getUser()
     const activeUserId = userResp.user?.id
+
+    const from = pageToLoad * FEED_PAGE_SIZE
+    const to = from + FEED_PAGE_SIZE - 1
 
     const { data, error } = await supabase
       .from('posts')
@@ -81,6 +91,7 @@ export default function FeedPage() {
         )
       `)
       .order('created_at', { ascending: false })
+      .range(from, to)
 
     if (!error && data) {
       const formatted = data.map((post: any) => ({
@@ -90,7 +101,10 @@ export default function FeedPage() {
           ? post.post_likes?.some((l: any) => l.user_id === activeUserId)
           : false,
       }))
-      setPosts(formatted)
+
+      setPosts((prev) => (append ? [...prev, ...formatted] : formatted))
+      setPage(pageToLoad)
+      setHasMore(data.length === FEED_PAGE_SIZE)
 
       // 投稿者・コメント投稿者の装着中アイコンリングをまとめて取得
       const userIds = new Set<string>()
@@ -103,14 +117,23 @@ export default function FeedPage() {
           .from('public_equipped_rings')
           .select('user_id, equipped_ring_id')
           .in('user_id', Array.from(userIds))
-        const map: Record<string, string | null> = {}
-        ;(ringsData || []).forEach((r: any) => {
-          map[r.user_id] = r.equipped_ring_id
+        setRingMap((prev) => {
+          const merged = append ? { ...prev } : {}
+          ;(ringsData || []).forEach((r: any) => {
+            merged[r.user_id] = r.equipped_ring_id
+          })
+          return merged
         })
-        setRingMap(map)
       }
     }
-    setLoading(false)
+
+    if (append) setLoadingMore(false)
+    else setLoading(false)
+  }
+
+  const handleLoadMore = () => {
+    if (loadingMore || !hasMore) return
+    fetchPosts(page + 1, true)
   }
 
   // 画像選択処理
@@ -506,6 +529,8 @@ export default function FeedPage() {
                           <img
                             src={url}
                             alt=""
+                            loading="lazy"
+                            decoding="async"
                             className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-300"
                           />
                         </div>
@@ -599,6 +624,19 @@ export default function FeedPage() {
                 </article>
               )
             })}
+          </div>
+        )}
+
+        {/* もっと見るボタン（タグ検索中は表示しない） */}
+        {!loading && !searchTag && hasMore && posts.length > 0 && (
+          <div className="text-center pt-2">
+            <button
+              onClick={handleLoadMore}
+              disabled={loadingMore}
+              className="px-6 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 font-bold text-xs rounded-xl transition cursor-pointer disabled:opacity-50 shadow-xs"
+            >
+              {loadingMore ? '読み込み中...' : 'もっと見る'}
+            </button>
           </div>
         )}
       </div>

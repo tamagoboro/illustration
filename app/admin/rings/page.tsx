@@ -12,6 +12,29 @@ type RingRow = {
   cost: number
   image_url: string
   sort_order: number
+  available_from: string | null
+  available_until: string | null
+}
+
+// datetime-local入力用のフォーマット変換（タイムゾーンはブラウザのローカル時刻として扱う）
+const toDatetimeLocalValue = (iso: string | null): string => {
+  if (!iso) return ''
+  const d = new Date(iso)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+const fromDatetimeLocalValue = (value: string): string | null => {
+  if (!value) return null
+  return new Date(value).toISOString()
+}
+
+const formatWindowLabel = (from: string | null, until: string | null): string => {
+  if (!from && !until) return '無期限'
+  const fmt = (iso: string) => new Date(iso).toLocaleString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  if (from && until) return `${fmt(from)} 〜 ${fmt(until)}`
+  if (from) return `${fmt(from)} 〜`
+  return `〜 ${fmt(until as string)}`
 }
 
 // 透過部分が見えるようにチェッカー柄の背景を敷くためのスタイル
@@ -34,6 +57,8 @@ export default function AdminRingsPage() {
   const [newName, setNewName] = useState('')
   const [newCost, setNewCost] = useState('100')
   const [newFile, setNewFile] = useState<File | null>(null)
+  const [newAvailableFrom, setNewAvailableFrom] = useState('')
+  const [newAvailableUntil, setNewAvailableUntil] = useState('')
   const [creating, setCreating] = useState(false)
   const [formError, setFormError] = useState('')
 
@@ -41,6 +66,8 @@ export default function AdminRingsPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [editCost, setEditCost] = useState('')
+  const [editAvailableFrom, setEditAvailableFrom] = useState('')
+  const [editAvailableUntil, setEditAvailableUntil] = useState('')
   const [busyId, setBusyId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -116,6 +143,8 @@ export default function AdminRingsPage() {
         cost,
         image_url: imageUrl,
         sort_order: rings.length,
+        available_from: fromDatetimeLocalValue(newAvailableFrom),
+        available_until: fromDatetimeLocalValue(newAvailableUntil),
       })
       if (insertError) throw insertError
 
@@ -123,6 +152,8 @@ export default function AdminRingsPage() {
       setNewName('')
       setNewCost('100')
       setNewFile(null)
+      setNewAvailableFrom('')
+      setNewAvailableUntil('')
       await refreshRings()
     } catch (e: any) {
       console.error('リング追加エラー:', e)
@@ -136,12 +167,16 @@ export default function AdminRingsPage() {
     setEditingId(ring.id)
     setEditName(ring.name)
     setEditCost(String(ring.cost))
+    setEditAvailableFrom(toDatetimeLocalValue(ring.available_from))
+    setEditAvailableUntil(toDatetimeLocalValue(ring.available_until))
   }
 
   const cancelEdit = () => {
     setEditingId(null)
     setEditName('')
     setEditCost('')
+    setEditAvailableFrom('')
+    setEditAvailableUntil('')
   }
 
   const saveEdit = async (id: string) => {
@@ -151,7 +186,12 @@ export default function AdminRingsPage() {
     setBusyId(id)
     const { error } = await supabase
       .from('icon_rings')
-      .update({ name: editName.trim(), cost })
+      .update({
+        name: editName.trim(),
+        cost,
+        available_from: fromDatetimeLocalValue(editAvailableFrom),
+        available_until: fromDatetimeLocalValue(editAvailableUntil),
+      })
       .eq('id', id)
     setBusyId(null)
 
@@ -235,6 +275,9 @@ export default function AdminRingsPage() {
             <span>←</span> マイページへ
           </Link>
           <h1 className="text-sm font-bold text-slate-900">アイコンリング管理</h1>
+          <Link href="/admin/users" className="text-[11px] font-bold text-slate-400 hover:text-sky-600 transition-colors">
+            ユーザー管理
+          </Link>
         </div>
       </header>
 
@@ -284,6 +327,30 @@ export default function AdminRingsPage() {
             />
           </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 mb-1">公開・購入開始（空欄=無期限）</label>
+              <input
+                type="datetime-local"
+                value={newAvailableFrom}
+                onChange={(e) => setNewAvailableFrom(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 mb-1">購入終了（空欄=無期限）</label>
+              <input
+                type="datetime-local"
+                value={newAvailableUntil}
+                onChange={(e) => setNewAvailableUntil(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
+              />
+            </div>
+          </div>
+          <p className="text-[10px] text-slate-400 -mt-1">
+            期間外は未所持ユーザーのショップに表示されなくなります。すでに購入・装着済みの場合は期間を過ぎても使い続けられます。
+          </p>
+
           {formError && (
             <p className="text-[11px] font-bold text-rose-500">{formError}</p>
           )}
@@ -322,25 +389,50 @@ export default function AdminRingsPage() {
 
                     <div className="flex-1 min-w-0">
                       {isEditing ? (
-                        <div className="flex flex-col sm:flex-row gap-2">
-                          <input
-                            type="text"
-                            value={editName}
-                            onChange={(e) => setEditName(e.target.value)}
-                            className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm"
-                          />
-                          <input
-                            type="number"
-                            min={0}
-                            value={editCost}
-                            onChange={(e) => setEditCost(e.target.value)}
-                            className="w-24 px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm"
-                          />
+                        <div className="space-y-2">
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <input
+                              type="text"
+                              value={editName}
+                              onChange={(e) => setEditName(e.target.value)}
+                              className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm"
+                            />
+                            <input
+                              type="number"
+                              min={0}
+                              value={editCost}
+                              onChange={(e) => setEditCost(e.target.value)}
+                              className="w-24 px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm"
+                            />
+                          </div>
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <div className="flex-1">
+                              <label className="block text-[10px] font-bold text-slate-500 mb-0.5">開始（空欄=無期限）</label>
+                              <input
+                                type="datetime-local"
+                                value={editAvailableFrom}
+                                onChange={(e) => setEditAvailableFrom(e.target.value)}
+                                className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs"
+                              />
+                            </div>
+                            <div className="flex-1">
+                              <label className="block text-[10px] font-bold text-slate-500 mb-0.5">終了（空欄=無期限）</label>
+                              <input
+                                type="datetime-local"
+                                value={editAvailableUntil}
+                                onChange={(e) => setEditAvailableUntil(e.target.value)}
+                                className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs"
+                              />
+                            </div>
+                          </div>
                         </div>
                       ) : (
                         <>
                           <span className="text-xs font-black text-slate-800 block truncate">{ring.name}</span>
                           <span className="text-[11px] text-slate-400">{ring.cost.toLocaleString()} pt</span>
+                          <span className="text-[10px] text-slate-400 block">
+                            販売期間: {formatWindowLabel(ring.available_from, ring.available_until)}
+                          </span>
                         </>
                       )}
 

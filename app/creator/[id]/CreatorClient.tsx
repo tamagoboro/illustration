@@ -630,6 +630,7 @@ const themeColor = useMemo(() => {
 
   const handleSubmitReview = async () => {
     if (!currentUserId || reviewRating < 1) return
+    const isFirstReview = !myReview
     setSubmittingReview(true)
 
     try {
@@ -669,6 +670,9 @@ const themeColor = useMemo(() => {
 
       setIsReviewModalOpen(false)
       await refreshReviews()
+      if (isFirstReview) {
+        alert('レビューを投稿しました！50ptを獲得しました🎉')
+      }
     } catch (error: any) {
       console.error('レビュー投稿エラー:', error)
       alert('レビューの投稿に失敗しました。通信環境をご確認のうえ、もう一度お試しください。')

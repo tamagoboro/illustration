@@ -61,6 +61,7 @@ export default function Home() {
   const [copyrightTransferOnly, setCopyrightTransferOnly] = useState(false)
   const [freeRevisionOnly, setFreeRevisionOnly] = useState(false)
   const [sortOption, setSortOption] = useState<'random' | 'price_asc' | 'price_desc' | 'likes_desc' | 'likes_asc'>('random')
+  const [visibleCount, setVisibleCount] = useState(10)
 
   // お気に入りステート
   const [favorites, setFavorites] = useState<string[]>([])
@@ -115,17 +116,20 @@ export default function Home() {
         if (profileError) throw profileError
 
         if (profileData && isMounted) {
+          const userIds = profileData.map((p) => p.user_id)
+
+          // クリエイターごとの先頭1枚だけをDB側(first_portfolio_thumbnails)で絞り込んで取得。
+          // 以前は全クリエイターの全作品を取得してからJS側で絞っていたため、
+          // 作品数が増えるほどホームページが重くなっていた。
           const { data: portfolioData } = await supabase
-            .from('portfolio_items')
-            .select('user_id, image_url, sort_order')
-            .order('sort_order', { ascending: true })
+            .from('first_portfolio_thumbnails')
+            .select('user_id, image_url')
+            .in('user_id', userIds)
 
           const imageMap: Record<string, string> = {}
           if (portfolioData) {
             portfolioData.forEach((item) => {
-              if (!imageMap[item.user_id] && item.image_url) {
-                imageMap[item.user_id] = item.image_url
-              }
+              if (item.image_url) imageMap[item.user_id] = item.image_url
             })
           }
 
@@ -147,6 +151,7 @@ export default function Home() {
           const { data: ringsData } = await supabase
             .from('public_equipped_rings')
             .select('user_id, equipped_ring_id')
+            .in('user_id', userIds)
           const map: Record<string, string | null> = {}
           ;(ringsData || []).forEach((r: any) => {
             map[r.user_id] = r.equipped_ring_id
@@ -316,6 +321,16 @@ export default function Home() {
       return 0
     })
   }, [profiles, searchTerm, selectedTastes, statusFilter, maxLeadTime, maxPrice, commercialOnly, expressOnly, r18Only, handDrawnOnly, copyrightTransferOnly, freeRevisionOnly, showFavoritesOnly, favorites, sortOption])
+
+  // 検索条件・並び順を変えたら表示件数を最初の10件に戻す
+  useEffect(() => {
+    setVisibleCount(10)
+  }, [searchTerm, selectedTastes, statusFilter, maxLeadTime, maxPrice, commercialOnly, expressOnly, r18Only, handDrawnOnly, copyrightTransferOnly, freeRevisionOnly, showFavoritesOnly, sortOption])
+
+  const visibleProfiles = useMemo(
+    () => filteredProfiles.slice(0, visibleCount),
+    [filteredProfiles, visibleCount]
+  )
 
   const displayedTastes = useMemo(() => {
     return Array.from(new Set(profiles.flatMap((p) => p.tastes || [])))
@@ -768,7 +783,7 @@ export default function Home() {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {filteredProfiles.map((profile) => {
+                {visibleProfiles.map((profile) => {
                   const isFav = favorites.includes(profile.user_id)
                   const isCompared = compareIds.includes(profile.user_id)
                   const isNew = isRecentlyUpdated(profile.updated_at)
@@ -788,6 +803,8 @@ export default function Home() {
                           <img
                             src={profile.thumbnail_url}
                             alt={profile.display_name}
+                            loading="lazy"
+                            decoding="async"
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                           />
                         ) : (
@@ -954,6 +971,18 @@ export default function Home() {
                     </div>
                   )
                 })}
+              </div>
+            )}
+
+            {/* もっと見る */}
+            {filteredProfiles.length > visibleCount && (
+              <div className="text-center pt-6">
+                <button
+                  onClick={() => setVisibleCount((c) => c + 10)}
+                  className="px-6 py-2.5 bg-white hover:bg-sky-50 border border-sky-100 text-sky-700 font-bold text-xs rounded-xl transition cursor-pointer shadow-xs"
+                >
+                  もっと見る（残り{filteredProfiles.length - visibleCount}人）
+                </button>
               </div>
             )}
           </section>
