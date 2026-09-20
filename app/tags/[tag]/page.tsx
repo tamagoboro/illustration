@@ -140,6 +140,7 @@ export default async function TagPage({ params }: Props) {
                     <ProtectedImage
                       src={thumbMap[profile.user_id]}
                       alt={profile.display_name}
+                      watermarkText={profile.display_name}
                       loading="lazy"
                       decoding="async"
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"

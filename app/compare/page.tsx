@@ -318,6 +318,7 @@ export default function ComparePage() {
                       key={item.id}
                       src={item.image_url}
                       alt={item.title || '作品'}
+                      watermarkText={p.display_name}
                       className="w-full h-20 object-cover rounded-lg border border-slate-100"
                     />
                   ))

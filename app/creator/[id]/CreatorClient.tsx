@@ -1288,6 +1288,7 @@ const themeColor = useMemo(() => {
                   <ProtectedImage
                     src={work.image_url}
                     alt={work.title || `${profile.display_name}の作品`}
+                    watermarkText={profile.display_name}
                     loading="lazy"
                     decoding="async"
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
@@ -1417,6 +1418,7 @@ const themeColor = useMemo(() => {
                 <ProtectedImage
                   src={selectedWork.image_url}
                   alt={selectedWork.title || '作品詳細'}
+                  watermarkText={profile.display_name}
                   className="max-h-[60vh] w-auto object-contain"
                   wrapperClassName="relative inline-block max-h-[60vh]"
                 />

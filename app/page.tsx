@@ -346,7 +346,7 @@ export default function Home() {
   const displayedTastes = useMemo(() => {
     return Array.from(new Set(profiles.flatMap((p) => p.tastes || [])))
       .filter((taste: string) => !HIDDEN_TASTES.has(taste))
-      .filter((taste) =>
+      .filter((taste: string) =>
         taste.toLowerCase().includes(tasteSearch.toLowerCase())
       )
       .slice(0, 20)
@@ -837,6 +837,7 @@ export default function Home() {
                           <ProtectedImage
                             src={profile.thumbnail_url}
                             alt={profile.display_name}
+                            watermarkText={profile.display_name}
                             loading="lazy"
                             decoding="async"
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
@@ -1078,6 +1079,7 @@ export default function Home() {
                         <ProtectedImage
                           src={item.thumbnail_url}
                           alt={item.display_name}
+                          watermarkText={item.display_name}
                           className="w-full h-full object-cover"
                         />
                       ) : (

@@ -530,6 +530,7 @@ export default function FeedPage() {
                           <ProtectedImage
                             src={url}
                             alt=""
+                            watermarkText={post.profiles?.display_name || 'drawker.com'}
                             loading="lazy"
                             decoding="async"
                             className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-300"
