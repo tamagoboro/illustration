@@ -20,9 +20,10 @@ export default function AdminUsersPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [loggedIn, setLoggedIn] = useState(false)
 
-  const [email, setEmail] = useState('')
+  const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState('')
+  const [results, setResults] = useState<FoundUser[]>([])
   const [found, setFound] = useState<FoundUser | null>(null)
 
   const [pointAmount, setPointAmount] = useState('50')
@@ -56,11 +57,12 @@ export default function AdminUsersPage() {
   const handleSearch = async () => {
     setSearchError('')
     setMessage('')
-    if (!email.trim()) return
+    if (!query.trim()) return
 
     setSearching(true)
     setFound(null)
-    const { data, error } = await supabase.rpc('admin_find_user_by_email', { p_email: email.trim() })
+    setResults([])
+    const { data, error } = await supabase.rpc('admin_search_users', { p_query: query.trim() })
     setSearching(false)
 
     if (error) {
@@ -72,13 +74,17 @@ export default function AdminUsersPage() {
       setSearchError('該当するユーザーが見つかりませんでした。')
       return
     }
-    setFound(data[0])
+    if (data.length === 1) {
+      setFound(data[0])
+    } else {
+      setResults(data)
+    }
   }
 
   const refreshFound = async () => {
     if (!found) return
-    const { data } = await supabase.rpc('admin_find_user_by_email', { p_email: found.email })
-    if (data && data.length > 0) setFound(data[0])
+    const { data } = await supabase.rpc('admin_search_users', { p_query: found.user_id })
+    if (data && data.length > 0) setFound(data.find((u: FoundUser) => u.user_id === found.user_id) || data[0])
   }
 
   const handleApplyPoints = async () => {
@@ -176,14 +182,14 @@ export default function AdminUsersPage() {
       <div className="max-w-3xl mx-auto p-4 sm:p-6 space-y-6">
         {/* 検索 */}
         <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm space-y-3">
-          <h2 className="text-xs font-black text-slate-900 uppercase tracking-widest">メールアドレスでユーザーを検索</h2>
+          <h2 className="text-xs font-black text-slate-900 uppercase tracking-widest">名前またはユーザーIDでユーザーを検索</h2>
           <div className="flex flex-col sm:flex-row gap-2">
             <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              placeholder="user@example.com"
+              placeholder="表示名の一部、またはユーザーID"
               className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
             />
             <button
@@ -196,6 +202,34 @@ export default function AdminUsersPage() {
           </div>
           {searchError && <p className="text-[11px] font-bold text-rose-500">{searchError}</p>}
         </div>
+
+        {/* 複数件ヒットしたときの候補一覧 */}
+        {results.length > 0 && !found && (
+          <div className="bg-white rounded-3xl p-3 border border-slate-100 shadow-sm space-y-1">
+            <p className="text-[11px] font-bold text-slate-400 px-2 pt-1">{results.length}件見つかりました。選んでください。</p>
+            {results.map((u) => (
+              <button
+                key={u.user_id}
+                onClick={() => {
+                  setFound(u)
+                  setResults([])
+                }}
+                className="w-full flex items-center gap-3 p-2.5 rounded-2xl hover:bg-slate-50 transition cursor-pointer text-left"
+              >
+                <AvatarRing
+                  src={u.avatar_url}
+                  alt=""
+                  size={36}
+                  fallback={<div className="w-full h-full rounded-full bg-sky-100 flex items-center justify-center text-sm">👤</div>}
+                />
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs font-bold text-slate-800 block truncate">{u.display_name || '（表示名未設定）'}</span>
+                  <span className="text-[10px] text-slate-400 block truncate">{u.user_id}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
 
         {found && (
           <>
@@ -214,6 +248,16 @@ export default function AdminUsersPage() {
                 <span className="text-[11px] text-slate-400 block truncate">{found.email}</span>
                 <span className="text-[11px] font-bold text-sky-600">{found.balance.toLocaleString()} pt</span>
               </div>
+              <button
+                onClick={() => {
+                  setFound(null)
+                  setResults([])
+                  setMessage('')
+                }}
+                className="text-[11px] font-bold text-slate-400 hover:text-slate-600 shrink-0 cursor-pointer"
+              >
+                別のユーザーを検索
+              </button>
             </div>
 
             {message && (

@@ -169,7 +169,7 @@ export default function FeedPage() {
       const uploadedImageUrls: string[] = []
 
       for (const file of selectedFiles) {
-        const webpBlob = await convertToWebp(file)
+        const webpBlob = await convertToWebp(file, 0.85, 1600)
         const fileName = `${currentUser.id}/${Date.now()}_${Math.random().toString(36).substring(7)}.webp`
 
         const { data: uploadData, error: uploadError } = await supabase.storage

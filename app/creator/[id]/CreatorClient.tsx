@@ -636,7 +636,7 @@ const themeColor = useMemo(() => {
     try {
       const uploadedUrls: string[] = []
       for (const file of reviewNewFiles) {
-        const webpBlob = await convertToWebp(file)
+        const webpBlob = await convertToWebp(file, 0.85, 1600)
         const fileName = `reviews/${currentUserId}/${Date.now()}_${Math.random().toString(36).slice(2, 7)}.webp`
 
         const { data: uploadData, error: uploadError } = await supabase.storage
@@ -712,7 +712,7 @@ const themeColor = useMemo(() => {
   if (loading) {
     return (
       <div
-        className="min-h-screen bg-cover bg-center bg-fixed flex flex-col items-center justify-center space-y-3"
+        className="min-h-screen bg-cover bg-center flex flex-col items-center justify-center space-y-3"
         style={{ backgroundImage: `linear-gradient(180deg, rgba(56,189,248,0.35) 0%, rgba(224,242,254,0.25) 45%, rgba(255,255,255,0.1) 100%), url(${BACKGROUND_IMAGE_URL})` }}
       >
         <div className="p-8 bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-2xl flex flex-col items-center space-y-3">
@@ -728,7 +728,7 @@ const themeColor = useMemo(() => {
   if (!profile) {
     return (
       <div
-        className="min-h-screen bg-cover bg-center bg-fixed flex flex-col items-center justify-center p-4"
+        className="min-h-screen bg-cover bg-center flex flex-col items-center justify-center p-4"
         style={{ backgroundImage: `linear-gradient(180deg, rgba(56,189,248,0.35) 0%, rgba(224,242,254,0.25) 45%, rgba(255,255,255,0.1) 100%), url(${BACKGROUND_IMAGE_URL})` }}
       >
         <div className="p-8 bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-white/60 text-center space-y-3 max-w-sm w-full">
@@ -762,7 +762,7 @@ const themeColor = useMemo(() => {
 
   return (
     <div
-      className="min-h-screen bg-cover bg-center bg-fixed text-sky-800 pb-28 relative font-sans"
+      className="min-h-screen bg-cover bg-center text-sky-800 pb-28 relative font-sans"
       style={{ backgroundImage: `linear-gradient(180deg, rgba(56,189,248,0.35) 0%, rgba(224,242,254,0.25) 45%, rgba(255,255,255,0.1) 100%), url(${BACKGROUND_IMAGE_URL})` }}
     >
       <div className="absolute inset-0 bg-sky-900/10 backdrop-brightness-95 pointer-events-none" />
@@ -1192,6 +1192,8 @@ const themeColor = useMemo(() => {
                   <img
                     src={work.image_url}
                     alt={work.title || `${profile.display_name}の作品`}
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-sky-950/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-3 flex flex-col justify-end">
@@ -1287,7 +1289,7 @@ const themeColor = useMemo(() => {
                           onClick={() => setLightboxImageUrl(url)}
                           className="w-16 h-16 rounded-xl overflow-hidden border border-white/80 cursor-pointer"
                         >
-                          <img src={url} alt="レビュー画像" className="w-full h-full object-cover" />
+                          <img src={url} alt="レビュー画像" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                         </button>
                       ))}
                     </div>
@@ -1390,12 +1392,6 @@ const themeColor = useMemo(() => {
                         : activeFormConfig.title || '簡単見積もり・仕様書作成'}
                     </h3>
                   </div>
-                  {!generatedSpec && (
-                    <p className="text-xs font-medium text-sky-500 whitespace-pre-wrap pl-7">
-                      {activeFormConfig.description ||
-                        'ご希望の内容を選んでいただくだけで、その場で概算金額と依頼内容のまとめが作成されます。まずは気軽に選んでみてください。'}
-                    </p>
-                  )}
                   {referenceWorkTitle && !generatedSpec && (
                     <div className="pl-7 pt-1">
                       <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-sky-100 text-sky-700 border border-sky-200 inline-flex items-center gap-1">
@@ -1418,6 +1414,11 @@ const themeColor = useMemo(() => {
             <div className="overflow-y-auto p-5 sm:p-6 space-y-6 flex-1">
               {!generatedSpec ? (
                 <>
+                  <p className="text-xs font-medium text-sky-500 whitespace-pre-wrap leading-relaxed bg-white/60 p-4 rounded-2xl border border-sky-100">
+                    {activeFormConfig.description ||
+                      'ご希望の内容を選んでいただくだけで、その場で概算金額と依頼内容のまとめが作成されます。まずは気軽に選んでみてください。'}
+                  </p>
+
                   <div className="bg-white p-4 sm:p-5 rounded-2xl border border-sky-200/80 shadow-xs space-y-2">
                     <label className="text-xs font-black text-sky-800 flex items-center gap-1.5">
                       <span>👤</span>

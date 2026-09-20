@@ -143,37 +143,31 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function Page({ params }: Props) {
   const { id } = await params
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('user_id', id)
-    .single()
+  // 互いに依存しないクエリはPromise.allでまとめて並行実行し、サーバー応答を高速化する
+  // （直列だと1件ずつ待つ分だけページの初期表示が遅くなっていた）
+  const [profileRes, worksRes, formsRes, reviewRowsRes, creatorRingRes] = await Promise.all([
+    supabase.from('profiles').select('*').eq('user_id', id).single(),
+    supabase.from('portfolio_items').select('*').eq('user_id', id).order('sort_order', { ascending: true }),
+    // 複数の見積もりフォームに対応。新形式（estimate_forms）が無ければ
+    // 旧形式（profiles.form_config）を1件だけのフォームとして扱う（後方互換）
+    supabase.from('estimate_forms').select('*').eq('user_id', id).order('sort_order', { ascending: true }),
+    // レビュー・評価。reviewer_id は auth.users のみ参照しており profiles を
+    // 持たない一般ユーザーも投稿できるため、表示名・アイコンは別クエリで取得して手動で合成する
+    supabase.from('reviews').select('*').eq('creator_id', id).order('created_at', { ascending: false }),
+    // クリエイター本人の装着中アイコンリング
+    supabase.from('public_equipped_rings').select('equipped_ring_id').eq('user_id', id).maybeSingle(),
+  ])
+
+  const profile = profileRes.data
 
   if (!profile || profile.is_public === false) {
     notFound()
   }
 
-  const { data: initialWorks } = await supabase
-    .from('portfolio_items')
-    .select('*')
-    .eq('user_id', id)
-    .order('sort_order', { ascending: true })
-
-  // 複数の見積もりフォームに対応。新形式（estimate_forms）が無ければ
-  // 旧形式（profiles.form_config）を1件だけのフォームとして扱う（後方互換）
-  const { data: estimateForms } = await supabase
-    .from('estimate_forms')
-    .select('*')
-    .eq('user_id', id)
-    .order('sort_order', { ascending: true })
-
-  // レビュー・評価。reviewer_id は auth.users のみ参照しており profiles を
-  // 持たない一般ユーザーも投稿できるため、表示名・アイコンは別クエリで取得して手動で合成する
-  const { data: reviewRows } = await supabase
-    .from('reviews')
-    .select('*')
-    .eq('creator_id', id)
-    .order('created_at', { ascending: false })
+  const initialWorks = worksRes.data
+  const estimateForms = formsRes.data
+  const reviewRows = reviewRowsRes.data
+  const creatorRingRow = creatorRingRes.data
 
   let reviewerProfileMap: Record<string, { display_name: string | null; avatar_url: string | null }> = {}
   let reviewerRingMap: Record<string, string> = {}
@@ -205,13 +199,6 @@ export default async function Page({ params }: Props) {
     reviewer_avatar_url: reviewerProfileMap[r.reviewer_id]?.avatar_url || null,
     reviewer_ring_id: reviewerRingMap[r.reviewer_id] || null,
   }))
-
-  // クリエイター本人の装着中アイコンリング
-  const { data: creatorRingRow } = await supabase
-    .from('public_equipped_rings')
-    .select('equipped_ring_id')
-    .eq('user_id', id)
-    .maybeSingle()
 
   const creatorRingId = creatorRingRow?.equipped_ring_id || null
 

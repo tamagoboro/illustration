@@ -80,7 +80,7 @@ export default function LoginPage() {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center p-6 font-sans antialiased relative bg-fixed bg-cover bg-center"
+      className="min-h-screen flex items-center justify-center p-6 font-sans antialiased relative bg-cover bg-center"
       style={{ backgroundImage: `url(${BACKGROUND_IMAGE_URL})` }}
     >
       {/* トップページと同じ、雲・青空の透明感を出す軽やかなオーバーレイ */}

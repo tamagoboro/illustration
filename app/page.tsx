@@ -342,7 +342,7 @@ export default function Home() {
 
   return (
     <div
-      className="min-h-screen text-slate-800 pb-32 font-sans antialiased relative bg-fixed bg-cover bg-center"
+      className="min-h-screen text-slate-800 pb-32 font-sans antialiased relative bg-cover bg-center"
       style={{ backgroundImage: `url(${BACKGROUND_IMAGE_URL})` }}
     >
       {/* 雲・青空の透明感を出す軽やかなオーバーレイ */}

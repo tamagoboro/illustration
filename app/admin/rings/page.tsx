@@ -104,7 +104,7 @@ export default function AdminRingsPage() {
   }, [isAdmin])
 
   const uploadRingImage = async (id: string, file: File) => {
-    const webpBlob = await convertToWebp(file)
+    const webpBlob = await convertToWebp(file, 0.9, 800)
     const path = `rings/${id}.webp`
     const { error: uploadError } = await supabase.storage
       .from('portfolios')

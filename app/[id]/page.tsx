@@ -317,7 +317,7 @@ function CreatorClient({
   if (loading) {
     return (
       <div
-        className="min-h-screen bg-cover bg-center bg-fixed flex flex-col items-center justify-center space-y-3"
+        className="min-h-screen bg-cover bg-center flex flex-col items-center justify-center space-y-3"
         style={{ backgroundImage: `url(${BACKGROUND_IMAGE_URL})` }}
       >
         <div className="p-8 bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-2xl flex flex-col items-center space-y-3">
@@ -331,7 +331,7 @@ function CreatorClient({
   if (!profile) {
     return (
       <div
-        className="min-h-screen bg-cover bg-center bg-fixed flex flex-col items-center justify-center p-4"
+        className="min-h-screen bg-cover bg-center flex flex-col items-center justify-center p-4"
         style={{ backgroundImage: `url(${BACKGROUND_IMAGE_URL})` }}
       >
         <div className="p-8 bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-white/60 text-center space-y-3 max-w-sm w-full">
@@ -354,7 +354,7 @@ function CreatorClient({
 
   return (
     <div
-      className="min-h-screen bg-cover bg-center bg-fixed text-slate-800 pb-28 relative font-sans"
+      className="min-h-screen bg-cover bg-center text-slate-800 pb-28 relative font-sans"
       style={{ backgroundImage: `url(${BACKGROUND_IMAGE_URL})` }}
     >
       <div className="absolute inset-0 bg-slate-900/10 backdrop-brightness-95 pointer-events-none" />
@@ -638,9 +638,6 @@ function CreatorClient({
                 <h3 className="text-base sm:text-lg font-black text-slate-900">
                   {activeFormConfig.title || '見積もり・仕様書作成'}
                 </h3>
-                <p className="text-xs text-slate-500">
-                  {activeFormConfig.description || '項目を選択して簡単見積もりを作成します'}
-                </p>
               </div>
               <button
                 onClick={() => setIsEstimateOpen(false)}
@@ -651,6 +648,10 @@ function CreatorClient({
             </div>
 
             <div className="overflow-y-auto py-5 space-y-6 flex-1 pr-1">
+              <p className="text-xs text-slate-500 whitespace-pre-wrap leading-relaxed bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                {activeFormConfig.description || '項目を選択して簡単見積もりを作成します'}
+              </p>
+
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700">お名前（またはアカウント名）</label>
                 <input
