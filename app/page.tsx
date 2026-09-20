@@ -15,6 +15,9 @@ type MenuItem = {
   price: number | ''
 }
 
+// 該当クリエイターがいない・不要になったタグは「ジャンルから探す」の候補から除外する
+const HIDDEN_TASTES = new Set(['IRIAMライバー向け'])
+
 // 拡張型定義（追加された制作条件フィールドを反映）
 type ProfileWithImage = Profile & {
   thumbnail_url?: string | null
@@ -341,6 +344,7 @@ export default function Home() {
 
   const displayedTastes = useMemo(() => {
     return Array.from(new Set(profiles.flatMap((p) => p.tastes || [])))
+      .filter((taste: string) => !HIDDEN_TASTES.has(taste))
       .filter((taste) =>
         taste.toLowerCase().includes(tasteSearch.toLowerCase())
       )

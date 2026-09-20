@@ -18,7 +18,6 @@ const PRESET_TASTES = [
   '一枚絵',
   'ロゴ',
   'VTuber向け',
-  'IRIAMライバー向け',
   'パーツ分け可',
   'モデリング',
   '3D背景',
@@ -93,6 +92,15 @@ export default function Dashboard() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [activeTab, setActiveTab] = useState<'basic' | 'pricing' | 'contact' | 'portfolio'>('basic')
   const [user, setUser] = useState<User | null>(null)
+
+  // アクセス解析（PV・見積もり問い合わせ・お気に入り）
+  const [analytics, setAnalytics] = useState<{
+    pvThisWeek: number
+    pvPrevWeek: number
+    pvDaily: { date: string; count: number }[]
+    inquiryThisMonth: number
+    newFavoritesThisWeek: number
+  } | null>(null)
 
   // 未保存変更の管理フラグ
   const [isDirty, setIsDirty] = useState(false)
@@ -302,6 +310,60 @@ export default function Dashboard() {
 
     checkUserAndFetchData()
   }, [router])
+
+  // アクセス解析の集計（analytics_logsには元々PV・見積もり利用・お気に入りの
+  // イベントが記録されているが、これまでダッシュボードのどこにも表示していなかった）
+  useEffect(() => {
+    if (!user) return
+
+    const loadAnalytics = async () => {
+      const DAY = 24 * 60 * 60 * 1000
+      const since = new Date(Date.now() - 30 * DAY)
+
+      const { data, error } = await supabase
+        .from('analytics_logs')
+        .select('event_type, created_at')
+        .eq('creator_id', user.id)
+        .gte('created_at', since.toISOString())
+
+      if (error || !data) {
+        console.error('アクセス解析の取得エラー:', error)
+        return
+      }
+
+      const now = Date.now()
+      const dailyPvMap: Record<string, number> = {}
+      let pvThisWeek = 0
+      let pvPrevWeek = 0
+      let inquiryThisMonth = 0
+      let newFavoritesThisWeek = 0
+
+      data.forEach((row: { event_type: string; created_at: string }) => {
+        const daysAgo = (now - new Date(row.created_at).getTime()) / DAY
+
+        if (row.event_type === 'pv') {
+          const dateKey = row.created_at.slice(0, 10)
+          dailyPvMap[dateKey] = (dailyPvMap[dateKey] || 0) + 1
+          if (daysAgo <= 7) pvThisWeek++
+          else if (daysAgo <= 14) pvPrevWeek++
+        } else if (row.event_type === 'estimate_calc') {
+          if (daysAgo <= 30) inquiryThisMonth++
+        } else if (row.event_type === 'favorite') {
+          if (daysAgo <= 7) newFavoritesThisWeek++
+        }
+      })
+
+      const pvDaily: { date: string; count: number }[] = []
+      for (let i = 13; i >= 0; i--) {
+        const key = new Date(now - i * DAY).toISOString().slice(0, 10)
+        pvDaily.push({ date: key, count: dailyPvMap[key] || 0 })
+      }
+
+      setAnalytics({ pvThisWeek, pvPrevWeek, pvDaily, inquiryThisMonth, newFavoritesThisWeek })
+    }
+
+    loadAnalytics()
+  }, [user])
 
   const handleAddSnsLink = () => {
     setIsDirty(true)
@@ -899,6 +961,67 @@ export default function Dashboard() {
             </button>
           </div>
         </div>
+
+        {/* アクセス解析（PV・問い合わせ・お気に入り） */}
+        {analytics && (
+          <div className="bg-white rounded-3xl border border-slate-200/80 p-4 sm:p-5 shadow-xs space-y-4">
+            <div>
+              <h2 className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
+                📊 アクセス解析
+              </h2>
+              <p className="text-[11px] text-slate-400">直近のプロフィール閲覧・見積もり問い合わせ・お気に入りの動きです</p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100">
+                <span className="text-[10px] font-bold text-slate-400 block">今週の閲覧数（PV）</span>
+                <div className="flex items-baseline gap-1.5 mt-0.5">
+                  <span className="text-xl font-black text-slate-900">{analytics.pvThisWeek}</span>
+                  {analytics.pvPrevWeek > 0 && (
+                    <span
+                      className={`text-[10px] font-bold ${
+                        analytics.pvThisWeek >= analytics.pvPrevWeek ? 'text-emerald-600' : 'text-rose-500'
+                      }`}
+                    >
+                      {analytics.pvThisWeek >= analytics.pvPrevWeek ? '▲' : '▼'}
+                      {Math.abs(Math.round(((analytics.pvThisWeek - analytics.pvPrevWeek) / analytics.pvPrevWeek) * 100))}
+                      %（先週比）
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-end gap-0.5 h-8 mt-2">
+                  {analytics.pvDaily.map((d) => {
+                    const max = Math.max(1, ...analytics.pvDaily.map((x) => x.count))
+                    return (
+                      <div
+                        key={d.date}
+                        title={`${d.date}: ${d.count}件`}
+                        className="flex-1 bg-indigo-200 rounded-sm"
+                        style={{ height: `${Math.max(6, (d.count / max) * 100)}%` }}
+                      />
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100">
+                <span className="text-[10px] font-bold text-slate-400 block">今月の見積もり問い合わせ数</span>
+                <span className="text-xl font-black text-slate-900 block mt-0.5">{analytics.inquiryThisMonth}</span>
+                <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
+                  見積もりフォームで金額を確認し、依頼内容をコピーして送った回数です
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100">
+                <span className="text-[10px] font-bold text-slate-400 block">今週の新規お気に入り</span>
+                <span className="text-xl font-black text-slate-900 block mt-0.5">+{analytics.newFavoritesThisWeek}</span>
+                <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
+                  累計のお気に入り数はプロフィールカードのハートマークをご確認ください
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* タブナビゲーション */}
         <div className="flex p-1 bg-slate-200/60 rounded-2xl max-w-2xl mx-auto overflow-x-auto">
