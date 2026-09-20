@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, ChangeEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
@@ -25,6 +25,62 @@ const buildAvatarDataUrl = (colors: [string, string], emoji: string) => {
   return `data:image/svg+xml,${encodeURIComponent(svg)}`
 }
 
+// アップロードされた画像をアイコン用に軽量化（600px・webp）してからStorageへ保存する
+const compressAvatarImage = (file: File, maxWidth = 600, quality = 0.85): Promise<Blob> => {
+  return new Promise((resolve, reject) => {
+    if (file.size > 10 * 1024 * 1024) {
+      reject(new Error('ファイルサイズが大きすぎます（10MB以下の画像を選択してください）'))
+      return
+    }
+    if (!file.type.startsWith('image/')) {
+      reject(new Error('画像ファイルを選択してください'))
+      return
+    }
+
+    const img = new Image()
+    const objectUrl = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl)
+      let { width, height } = img
+      if (width > maxWidth) {
+        height = Math.round((height * maxWidth) / width)
+        width = maxWidth
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        reject(new Error('画像の処理に失敗しました'))
+        return
+      }
+      ctx.drawImage(img, 0, 0, width, height)
+      canvas.toBlob(
+        (blob) => (blob ? resolve(blob) : reject(new Error('画像の圧縮に失敗しました'))),
+        'image/webp',
+        quality
+      )
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl)
+      reject(new Error('画像の読み込みに失敗しました。別の画像でお試しください。'))
+    }
+    img.src = objectUrl
+  })
+}
+
+const uploadCustomAvatar = async (userId: string, file: File): Promise<string> => {
+  const blob = await compressAvatarImage(file)
+  const fileName = `${userId}/avatar_${Date.now()}.webp`
+  const { error: uploadError } = await supabase.storage
+    .from('portfolios')
+    .upload(fileName, blob, { contentType: 'image/webp', upsert: true })
+  if (uploadError) throw uploadError
+
+  const { data } = supabase.storage.from('portfolios').getPublicUrl(fileName)
+  return data.publicUrl
+}
+
 export default function LoginPage() {
   const router = useRouter()
   const [isSignUp, setIsSignUp] = useState(false)
@@ -32,6 +88,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [selectedAvatarId, setSelectedAvatarId] = useState(AVATAR_PRESETS[0].id)
+  const [customAvatarFile, setCustomAvatarFile] = useState<File | null>(null)
+  const [customAvatarPreview, setCustomAvatarPreview] = useState('')
   const [agreedTerms, setAgreedTerms] = useState(false) // 利用規約同意ステート
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
@@ -48,6 +106,28 @@ export default function LoginPage() {
       setIsSignUp(true)
     }
   }, [])
+
+  const handleCustomAvatarChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setErrorMsg('画像ファイルを選択してください。')
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setErrorMsg('ファイルサイズが大きすぎます（10MB以下の画像を選択してください）。')
+      return
+    }
+    setErrorMsg('')
+    setCustomAvatarFile(file)
+    setCustomAvatarPreview(URL.createObjectURL(file))
+  }
+
+  const handleSelectPreset = (id: string) => {
+    setSelectedAvatarId(id)
+    setCustomAvatarFile(null)
+    setCustomAvatarPreview('')
+  }
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -67,8 +147,11 @@ export default function LoginPage() {
     setInfoMsg('')
 
     if (isSignUp) {
+      // アップロード画像を選んでいる場合、それをアップロードできるのはセッションが
+      // 発行された後（＝auth.uid()が使えるようになった後）なので、signUp時点のmetadataには
+      // プリセットの場合だけ入れておく。アップロード画像はsignUp成功後に処理する。
       const selectedAvatar = AVATAR_PRESETS.find((a) => a.id === selectedAvatarId) || AVATAR_PRESETS[0]
-      const avatarDataUrl = buildAvatarDataUrl(selectedAvatar.colors, selectedAvatar.emoji)
+      const avatarDataUrl = customAvatarFile ? undefined : buildAvatarDataUrl(selectedAvatar.colors, selectedAvatar.emoji)
 
       // 新規会員登録（招待リンク経由なら紹介者IDを引き継ぎ、両者へのポイント付与はDB側のトリガーで行う）。
       // 表示名・アイコンはuser_metadataに保存しておき、ensureProfileFromSignupMetadataで
@@ -88,14 +171,29 @@ export default function LoginPage() {
       if (error) {
         setErrorMsg('登録に失敗しました: ' + error.message)
       } else {
+        let avatarPending = false
         if (data.user && data.session) {
-          await ensureProfileFromSignupMetadata(data.user)
+          if (customAvatarFile) {
+            try {
+              const uploadedUrl = await uploadCustomAvatar(data.user.id, customAvatarFile)
+              const { data: updated } = await supabase.auth.updateUser({ data: { avatar_url: uploadedUrl } })
+              await ensureProfileFromSignupMetadata(updated.user || data.user)
+            } catch (uploadError) {
+              console.error('アイコンアップロードエラー:', uploadError)
+              await ensureProfileFromSignupMetadata(data.user)
+            }
+          } else {
+            await ensureProfileFromSignupMetadata(data.user)
+          }
+        } else if (customAvatarFile) {
+          // メール確認が必要な設定の場合、この場ではアップロードできない
+          avatarPending = true
         }
-        setInfoMsg(
-          referrerId
-            ? 'アカウントを作成しました！紹介ポイントも付与されます。ログインしてください。'
-            : 'アカウントを作成しました！ログインしてください。'
-        )
+
+        const baseMsg = referrerId
+          ? 'アカウントを作成しました！紹介ポイントも付与されます。ログインしてください。'
+          : 'アカウントを作成しました！ログインしてください。'
+        setInfoMsg(avatarPending ? `${baseMsg}（画像アイコンはログイン後にダッシュボードから設定してください）` : baseMsg)
         setIsSignUp(false)
       }
     } else {
@@ -221,32 +319,39 @@ export default function LoginPage() {
                 </label>
                 <div className="flex flex-wrap gap-2">
                   {AVATAR_PRESETS.map((preset) => (
-                    <div key={preset.id} className="relative">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedAvatarId(preset.id)}
-                        className={`w-11 h-11 rounded-full flex items-center justify-center text-lg cursor-pointer transition-all ${
-                          selectedAvatarId === preset.id
-                            ? 'ring-2 ring-offset-2 ring-sky-400 scale-105'
-                            : 'opacity-70 hover:opacity-100'
-                        }`}
-                        style={{
-                          background: `linear-gradient(135deg, ${preset.colors[0]}, ${preset.colors[1]})`,
-                        }}
-                      >
-                        {preset.emoji}
-                      </button>
-                      <a
-                        href={buildAvatarDataUrl(preset.colors, preset.emoji)}
-                        download={`drawker-icon-${preset.id}.svg`}
-                        onClick={(e) => e.stopPropagation()}
-                        title="このアイコンをダウンロード"
-                        className="absolute -bottom-1 -right-1 w-[18px] h-[18px] rounded-full bg-white border border-slate-200 shadow-xs flex items-center justify-center text-[9px] text-slate-500 hover:text-sky-600 hover:border-sky-300 transition-colors"
-                      >
-                        ⬇
-                      </a>
-                    </div>
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => handleSelectPreset(preset.id)}
+                      className={`w-11 h-11 rounded-full flex items-center justify-center text-lg cursor-pointer transition-all ${
+                        !customAvatarFile && selectedAvatarId === preset.id
+                          ? 'ring-2 ring-offset-2 ring-sky-400 scale-105'
+                          : 'opacity-70 hover:opacity-100'
+                      }`}
+                      style={{
+                        background: `linear-gradient(135deg, ${preset.colors[0]}, ${preset.colors[1]})`,
+                      }}
+                    >
+                      {preset.emoji}
+                    </button>
                   ))}
+
+                  {/* 自分の画像をアップロードして使う */}
+                  <label
+                    className={`w-11 h-11 rounded-full flex items-center justify-center text-sm cursor-pointer transition-all overflow-hidden bg-slate-100 ${
+                      customAvatarFile
+                        ? 'ring-2 ring-offset-2 ring-sky-400 scale-105'
+                        : 'border-2 border-dashed border-slate-300 opacity-70 hover:opacity-100'
+                    }`}
+                    title="画像をアップロード"
+                  >
+                    {customAvatarPreview ? (
+                      <img src={customAvatarPreview} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-slate-400 text-lg leading-none">＋</span>
+                    )}
+                    <input type="file" accept="image/*" className="hidden" onChange={handleCustomAvatarChange} />
+                  </label>
                 </div>
               </div>
             </>
