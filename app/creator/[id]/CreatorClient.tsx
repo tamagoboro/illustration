@@ -1418,6 +1418,7 @@ const themeColor = useMemo(() => {
                   src={selectedWork.image_url}
                   alt={selectedWork.title || '作品詳細'}
                   className="max-h-[60vh] w-auto object-contain"
+                  wrapperClassName="relative inline-block max-h-[60vh]"
                 />
               </div>
 
