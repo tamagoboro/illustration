@@ -715,7 +715,9 @@ const themeColor = useMemo(() => {
       }
     } catch (error: any) {
       console.error('レビュー投稿エラー:', error)
-      alert('レビューの投稿に失敗しました。通信環境をご確認のうえ、もう一度お試しください。')
+      alert(
+        'レビューの投稿に失敗しました。時間をおいて再度お試しください。改善しない場合は、ブラウザの開発者ツール（F12）のConsoleタブに表示されるエラー内容を運営にお知らせください。'
+      )
     } finally {
       setSubmittingReview(false)
     }

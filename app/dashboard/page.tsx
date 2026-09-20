@@ -592,7 +592,9 @@ export default function Dashboard() {
       setIsDirty(true)
     } catch (error: any) {
       console.error('アイコンアップロードエラー:', error)
-      alert('アイコンのアップロードに失敗しました。通信環境をご確認のうえ、もう一度お試しください。')
+      alert(
+        'アイコンのアップロードに失敗しました。時間をおいて再度お試しください。改善しない場合は、ブラウザの開発者ツール（F12）のConsoleタブに表示されるエラー内容を運営にお知らせください。'
+      )
     } finally {
       setUploadingAvatar(false)
     }
@@ -634,7 +636,9 @@ export default function Dashboard() {
       setIsDirty(true)
     } catch (error: any) {
       console.error('作品画像アップロードエラー:', error)
-      alert('画像のアップロードに失敗しました。通信環境をご確認のうえ、もう一度お試しください。')
+      alert(
+        '画像のアップロードに失敗しました。時間をおいて再度お試しください。改善しない場合は、ブラウザの開発者ツール（F12）のConsoleタブに表示されるエラー内容を運営にお知らせください。'
+      )
     } finally {
       setUploadingIndex(null)
     }
@@ -784,7 +788,9 @@ export default function Dashboard() {
       setIsDirty(false)
     } catch (error: any) {
       console.error('ポートフォリオ保存エラー:', error)
-      alert('作品情報の更新に失敗しました。通信環境をご確認のうえ、もう一度お試しください。お手数をおかけしますが、画像を選び直してから再度お試しいただくと解決することもあります。')
+      alert(
+        '作品情報の更新に失敗しました。時間をおいて再度お試しください。改善しない場合は、ブラウザの開発者ツール（F12）のConsoleタブに表示されるエラー内容を運営にお知らせください。'
+      )
     } finally {
       setSaving(false)
     }
