@@ -179,6 +179,9 @@ export default function AdminUsersPage() {
             <Link href="/admin/rings" className="text-[11px] font-bold text-slate-400 hover:text-sky-600 transition-colors">
               リング管理
             </Link>
+            <Link href="/admin/reports" className="text-[11px] font-bold text-slate-400 hover:text-sky-600 transition-colors">
+              通報管理
+            </Link>
           </div>
         </div>
       </header>

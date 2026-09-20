@@ -175,6 +175,7 @@ export default function CreatorClient({
   const [loading, setLoading] = useState(!initialProfile)
   const [isFavorite, setIsFavorite] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [badges, setBadges] = useState<{ isTrending: boolean; isPopularInquiries: boolean } | null>(null)
 
   // モーダル管理
   const [isEstimateOpen, setIsEstimateOpen] = useState(false)
@@ -183,6 +184,54 @@ export default function CreatorClient({
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false)
   const [selectedFormId, setSelectedFormId] = useState<string | null>(null)
   const [selectedWork, setSelectedWork] = useState<PortfolioItem | null>(null)
+
+  // 通報フォーム
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false)
+  const [reportTargetType, setReportTargetType] = useState<'profile' | 'portfolio_item'>('profile')
+  const [reportTargetId, setReportTargetId] = useState('')
+  const [reportReason, setReportReason] = useState('無断転載・著作権侵害の疑い')
+  const [reportComment, setReportComment] = useState('')
+  const [submittingReport, setSubmittingReport] = useState(false)
+  const [reportSubmitted, setReportSubmitted] = useState(false)
+
+  const REPORT_REASONS = [
+    '無断転載・著作権侵害の疑い',
+    'なりすまし・詐欺の疑い',
+    '不適切な内容',
+    'その他',
+  ]
+
+  const openReportModal = (targetType: 'profile' | 'portfolio_item', targetId: string) => {
+    setReportTargetType(targetType)
+    setReportTargetId(targetId)
+    setReportReason(REPORT_REASONS[0])
+    setReportComment('')
+    setReportSubmitted(false)
+    setIsReportModalOpen(true)
+  }
+
+  const handleSubmitReport = async () => {
+    if (!reportReason) return
+    setSubmittingReport(true)
+    try {
+      const { data: { user: reporter } } = await supabase.auth.getUser()
+      const { error } = await supabase.from('reports').insert({
+        reporter_id: reporter?.id || null,
+        target_type: reportTargetType,
+        target_id: reportTargetId,
+        creator_id: id,
+        reason: reportReason,
+        comment: reportComment.trim() || null,
+      })
+      if (error) throw error
+      setReportSubmitted(true)
+    } catch (error: any) {
+      console.error('通報エラー:', error)
+      alert('通報の送信に失敗しました。時間をおいて再度お試しください。')
+    } finally {
+      setSubmittingReport(false)
+    }
+  }
 
   // レビュー投稿フォーム
   const [reviewRating, setReviewRating] = useState(0)
@@ -323,6 +372,18 @@ useEffect(() => {
 
     if (reviews.length === 0) {
       await refreshReviews()
+    }
+
+    try {
+      const { data: badgeData } = await supabase.rpc('get_public_creator_badges', { p_user_id: id })
+      if (badgeData && badgeData[0]) {
+        setBadges({
+          isTrending: !!badgeData[0].is_trending,
+          isPopularInquiries: !!badgeData[0].is_popular_inquiries,
+        })
+      }
+    } catch (e) {
+      console.error('実績バッジ取得エラー:', e)
     }
 
     try {
@@ -870,6 +931,16 @@ const themeColor = useMemo(() => {
                   </div>
 
                   <div className="flex flex-wrap gap-1.5">
+                    {badges?.isTrending && (
+                      <span className="text-[11px] bg-orange-500/10 text-orange-800 font-extrabold px-3 py-0.5 rounded-full border border-orange-300 shadow-2xs">
+                        📈 閲覧数急上昇中
+                      </span>
+                    )}
+                    {badges?.isPopularInquiries && (
+                      <span className="text-[11px] bg-violet-500/10 text-violet-800 font-extrabold px-3 py-0.5 rounded-full border border-violet-300 shadow-2xs">
+                        🔥 問い合わせ多数
+                      </span>
+                    )}
                     {profile.ai_usage === 'none' && (
                       <span className="text-[11px] bg-sky-900/10 text-sky-900 font-extrabold px-3 py-0.5 rounded-full border border-sky-300 shadow-2xs">
                         ✦ 完全手描き
@@ -1131,6 +1202,13 @@ const themeColor = useMemo(() => {
                     {isFavorite ? 'お気に入り登録済み' : 'お気に入りに追加'}
                     {profile.likes_count != null && profile.likes_count > 0 && ` (${profile.likes_count})`}
                   </span>
+                </button>
+
+                <button
+                  onClick={() => openReportModal('profile', id)}
+                  className="w-full py-1.5 text-[10px] font-bold text-slate-300 hover:text-rose-500 transition-colors cursor-pointer"
+                >
+                  🚩 無断転載・不審な点を通報する
                 </button>
               </div>
             </div>
@@ -1427,9 +1505,17 @@ const themeColor = useMemo(() => {
               </div>
 
               <div className="space-y-3">
-                <h3 className="text-xl font-black text-sky-900">
-                  {selectedWork.title || '作品タイトルなし'}
-                </h3>
+                <div className="flex items-start justify-between gap-3">
+                  <h3 className="text-xl font-black text-sky-900">
+                    {selectedWork.title || '作品タイトルなし'}
+                  </h3>
+                  <button
+                    onClick={() => openReportModal('portfolio_item', selectedWork.id)}
+                    className="shrink-0 text-[10px] font-bold text-slate-300 hover:text-rose-500 transition-colors cursor-pointer whitespace-nowrap"
+                  >
+                    🚩 この作品を通報
+                  </button>
+                </div>
 
                 {selectedWork.description && (
                   <p className="text-xs text-sky-600 leading-relaxed whitespace-pre-wrap bg-sky-50 p-4 rounded-xl border border-sky-100">
@@ -1926,6 +2012,78 @@ const themeColor = useMemo(() => {
             className="max-h-[85vh] max-w-full object-contain rounded-2xl shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           />
+        </div>
+      )}
+
+      {/* 通報モーダル */}
+      {isReportModalOpen && (
+        <div className="fixed inset-0 bg-sky-950/70 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl border border-sky-100 relative">
+            <button
+              onClick={() => setIsReportModalOpen(false)}
+              aria-label="閉じる"
+              className="absolute top-4 right-4 text-slate-300 hover:text-slate-600 text-sm font-black cursor-pointer"
+            >
+              ✕
+            </button>
+
+            {reportSubmitted ? (
+              <div className="text-center py-6 space-y-2">
+                <p className="text-2xl">✅</p>
+                <p className="text-sm font-bold text-slate-700">通報を受け付けました</p>
+                <p className="text-xs text-slate-400">運営が内容を確認します。ご協力ありがとうございます。</p>
+                <button
+                  onClick={() => setIsReportModalOpen(false)}
+                  className="mt-2 px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+                >
+                  閉じる
+                </button>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">
+                    {reportTargetType === 'profile' ? 'このプロフィールを通報' : 'この作品を通報'}
+                  </h3>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    無断転載や規約違反の疑いがある場合にお知らせください。内容は運営のみが確認します。
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-700">通報理由</label>
+                  <select
+                    value={reportReason}
+                    onChange={(e) => setReportReason(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white"
+                  >
+                    {REPORT_REASONS.map((r) => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-700">詳細（任意）</label>
+                  <textarea
+                    rows={3}
+                    value={reportComment}
+                    onChange={(e) => setReportComment(e.target.value)}
+                    placeholder="具体的な状況（元の作品のURLなど）が分かると助かります"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white resize-none"
+                  />
+                </div>
+
+                <button
+                  onClick={handleSubmitReport}
+                  disabled={submittingReport}
+                  className="w-full py-3 bg-rose-500 hover:bg-rose-600 text-white font-extrabold rounded-xl text-xs transition disabled:opacity-50 cursor-pointer"
+                >
+                  {submittingReport ? '送信中...' : '通報を送信する'}
+                </button>
+              </>
+            )}
+          </div>
         </div>
       )}
 

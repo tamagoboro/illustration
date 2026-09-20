@@ -77,6 +77,7 @@ export default function Home() {
   // お気に入りステート
   const [favorites, setFavorites] = useState<string[]>([])
   const [ringMap, setRingMap] = useState<Record<string, string | null>>({})
+  const [badgeMap, setBadgeMap] = useState<Record<string, { isTrending: boolean; isPopularInquiries: boolean }>>({})
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false)
   const [isCompareOpen, setIsCompareOpen] = useState(false)
 
@@ -168,6 +169,14 @@ export default function Home() {
             map[r.user_id] = r.equipped_ring_id
           })
           setRingMap(map)
+
+          // 行動データ（PV・問い合わせ数）に基づく実績バッジ。手動申請なしで自動計算される
+          const { data: badgeData } = await supabase.rpc('get_public_creator_badges')
+          const bMap: Record<string, { isTrending: boolean; isPopularInquiries: boolean }> = {}
+          ;(badgeData || []).forEach((b: any) => {
+            bMap[b.user_id] = { isTrending: !!b.is_trending, isPopularInquiries: !!b.is_popular_inquiries }
+          })
+          setBadgeMap(bMap)
         }
       } catch (error) {
         console.error('データの取得に失敗しました:', error)
@@ -804,6 +813,9 @@ export default function Home() {
                   const isPureHandDrawn = profile.ai_usage === 'none'
                   const isR18Allowed = profile.r18_allowed === true
 
+                  // 行動データに基づく実績バッジ（PV急上昇・問い合わせ多数）
+                  const badges = badgeMap[profile.user_id]
+
                   // キャンペーン割引（最低価格は常にキャンペーンの一律割引に従う）
                   const campaign: Campaign = {
                     enabled: profile.campaign_enabled,
@@ -853,6 +865,18 @@ export default function Home() {
                           {isNew && (
                             <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-pink-500 text-white shadow-xs">
                               NEW
+                            </span>
+                          )}
+
+                          {/* 行動データに基づく実績バッジ（手動申請なしで自動計算） */}
+                          {badges?.isTrending && (
+                            <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-orange-500 text-white shadow-xs">
+                              📈 閲覧数急上昇中
+                            </span>
+                          )}
+                          {badges?.isPopularInquiries && (
+                            <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-violet-500 text-white shadow-xs">
+                              🔥 問い合わせ多数
                             </span>
                           )}
 
