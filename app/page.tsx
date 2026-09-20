@@ -7,6 +7,7 @@ import { useCompareStore } from '@/store/useCompareStore'
 import { loadFavorites, toggleFavoriteRecord } from '@/lib/favorites'
 import { SlidersHorizontal, RotateCcw, Search, Wallet, Clock, Tag } from 'lucide-react'
 import AvatarRing from '@/components/AvatarRing'
+import { isCampaignActive, applyDiscount, formatDiscountBadge, Campaign } from '@/lib/discount'
 
 // メニュー項目の型定義
 type MenuItem = {
@@ -25,6 +26,12 @@ type ProfileWithImage = Profile & {
   copyright_transfer_available?: boolean | null
   ai_learning_allowed?: boolean | null
   r18_allowed?: boolean | null
+  campaign_enabled?: boolean | null
+  campaign_label?: string | null
+  campaign_discount_type?: 'percent' | 'fixed' | null
+  campaign_discount_value?: number | null
+  campaign_start_at?: string | null
+  campaign_end_at?: string | null
 }
 
 // 指定の背景画像URL
@@ -208,7 +215,7 @@ export default function Home() {
 
     const { error } = await supabase.rpc('increment_likes', {
       target_user_id: userId,
-      increment_val: isFav ? -1 : 1,
+      is_liking: !isFav,
     })
 
     if (error) {
@@ -792,6 +799,28 @@ export default function Home() {
                   const isPureHandDrawn = profile.ai_usage === 'none'
                   const isR18Allowed = profile.r18_allowed === true
 
+                  // キャンペーン割引（最低価格は常にキャンペーンの一律割引に従う）
+                  const campaign: Campaign = {
+                    enabled: profile.campaign_enabled,
+                    discountType: profile.campaign_discount_type,
+                    discountValue: profile.campaign_discount_value,
+                    startAt: profile.campaign_start_at,
+                    endAt: profile.campaign_end_at,
+                  }
+                  const campaignActive = isCampaignActive(campaign) && !!profile.price_min
+                  const discountedPriceMin = campaignActive
+                    ? applyDiscount(profile.price_min as number, {
+                        type: campaign.discountType as 'percent' | 'fixed',
+                        value: campaign.discountValue as number,
+                      })
+                    : null
+                  const priceBadge = campaignActive
+                    ? formatDiscountBadge({
+                        type: campaign.discountType as 'percent' | 'fixed',
+                        value: campaign.discountValue as number,
+                      })
+                    : null
+
                   return (
                     <div
                       key={profile.user_id}
@@ -868,9 +897,23 @@ export default function Home() {
                         <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-slate-900/80 via-slate-900/30 to-transparent p-3 pt-6 flex justify-between items-end">
                           <div>
                             <span className="text-[9px] text-sky-100 font-extrabold block">最安目安</span>
-                            <span className="text-white font-black text-sm tracking-tight drop-shadow-xs">
-                              {profile.price_min ? `¥${profile.price_min.toLocaleString()}〜` : '応相談'}
-                            </span>
+                            {campaignActive && discountedPriceMin !== null ? (
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-slate-300 text-[10px] line-through decoration-rose-400">
+                                  ¥{(profile.price_min as number).toLocaleString()}
+                                </span>
+                                <span className="text-white font-black text-sm tracking-tight drop-shadow-xs">
+                                  ¥{discountedPriceMin.toLocaleString()}〜
+                                </span>
+                                <span className="text-[9px] font-black bg-rose-500 text-white px-1.5 py-0.5 rounded shadow-2xs">
+                                  {priceBadge}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-white font-black text-sm tracking-tight drop-shadow-xs">
+                                {profile.price_min ? `¥${profile.price_min.toLocaleString()}〜` : '応相談'}
+                              </span>
+                            )}
                           </div>
                           {profile.commercial_use_allowed && (
                             <span className="text-[9px] font-black bg-cyan-500 text-white px-1.5 py-0.5 rounded shadow-2xs">
@@ -987,6 +1030,26 @@ export default function Home() {
             )}
           </section>
         </div>
+
+        {/* 人気のジャンルから探す（タグ別ページへの導線） */}
+        {displayedTastes.length > 0 && (
+          <div className="mt-10 pt-6 border-t border-sky-100">
+            <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">
+              ジャンルから探す
+            </h2>
+            <div className="flex flex-wrap gap-2">
+              {displayedTastes.map((taste) => (
+                <Link
+                  key={taste}
+                  href={`/tags/${encodeURIComponent(taste)}`}
+                  className="text-[11px] font-bold px-3 py-1.5 rounded-full bg-white border border-sky-100 text-sky-700 hover:bg-sky-50 hover:border-sky-200 transition-colors"
+                >
+                  {taste}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
       </main>
 
       {/* 比較固定バー */}

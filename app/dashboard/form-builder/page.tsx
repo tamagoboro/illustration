@@ -4,11 +4,13 @@ import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { ItemDiscountConfig, Campaign, resolveDiscount, applyDiscount } from '@/lib/discount'
 
 type Option = {
   label: string
   price: number
   priceType?: 'fixed' | 'percent'
+  discount?: ItemDiscountConfig
 }
 
 type Field = {
@@ -20,6 +22,7 @@ type Field = {
   noteText?: string
   faqAnswer?: string
   options?: Option[]
+  discount?: ItemDiscountConfig
 }
 
 type FormConfig = {
@@ -107,6 +110,49 @@ const FORM_TEMPLATES: Record<string, FormConfig> = {
   }
 }
 
+// フィールド・選択肢ごとの割引の個別指定コンポーネント（キャンペーンの一律割引を上書き）
+function DiscountConfigEditor({
+  discount,
+  onChange,
+}: {
+  discount: ItemDiscountConfig
+  onChange: (discount: ItemDiscountConfig) => void
+}) {
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      <span className="text-[10px] font-bold text-slate-400 shrink-0">割引:</span>
+      <select
+        value={discount.mode}
+        onChange={(e) => onChange({ ...discount, mode: e.target.value as ItemDiscountConfig['mode'] })}
+        className="px-1.5 py-1 rounded-lg border border-slate-200 text-[10px] bg-white"
+      >
+        <option value="inherit">自動（キャンペーンに従う）</option>
+        <option value="custom">個別に指定</option>
+        <option value="exempt">対象外にする</option>
+      </select>
+      {discount.mode === 'custom' && (
+        <>
+          <select
+            value={discount.type || 'percent'}
+            onChange={(e) => onChange({ ...discount, type: e.target.value as 'percent' | 'fixed' })}
+            className="px-1.5 py-1 rounded-lg border border-slate-200 text-[10px] bg-white"
+          >
+            <option value="percent">％OFF</option>
+            <option value="fixed">円引き</option>
+          </select>
+          <input
+            type="number"
+            min={0}
+            value={discount.value ?? ''}
+            onChange={(e) => onChange({ ...discount, value: Number(e.target.value) || 0 })}
+            className="w-16 px-1.5 py-1 rounded-lg border border-slate-200 text-[10px] font-bold"
+          />
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function FormBuilderPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -125,6 +171,9 @@ export default function FormBuilderPage() {
   // プレビュー用の仮回答（保存はされない、見た目確認だけの状態）
   const [previewAnswers, setPreviewAnswers] = useState<Record<string, any>>({})
 
+  // キャンペーン割引（ダッシュボードの「料金・受託条件」タブで設定したもの）をプレビューに反映
+  const [campaign, setCampaign] = useState<Campaign>({ enabled: false })
+
   useEffect(() => {
     const loadUserData = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -133,6 +182,22 @@ export default function FormBuilderPage() {
         return
       }
       setUserId(user.id)
+
+      const { data: campaignProfile } = await supabase
+        .from('profiles')
+        .select('campaign_enabled, campaign_discount_type, campaign_discount_value, campaign_start_at, campaign_end_at')
+        .eq('user_id', user.id)
+        .maybeSingle()
+      if (campaignProfile) {
+        setCampaign({
+          enabled: campaignProfile.campaign_enabled,
+          discountType: campaignProfile.campaign_discount_type,
+          discountValue: campaignProfile.campaign_discount_value,
+          startAt: campaignProfile.campaign_start_at,
+          endAt: campaignProfile.campaign_end_at,
+        })
+      }
+
       await refreshForms(user.id)
       setLoading(false)
     }
@@ -413,7 +478,8 @@ export default function FormBuilderPage() {
     let baseSum = 0
     config.fields.forEach((field) => {
       if (field.price && field.type !== 'note' && field.type !== 'faq') {
-        baseSum += field.price
+        const discount = resolveDiscount(campaign, field.discount)
+        baseSum += applyDiscount(field.price, discount)
       }
     })
 
@@ -422,25 +488,25 @@ export default function FormBuilderPage() {
     config.fields.forEach((field) => {
       const answer = previewAnswers[field.id]
       if (!answer || !field.options) return
+      const addOption = (opt: Option) => {
+        const discount = resolveDiscount(campaign, opt.discount)
+        const effectivePrice = applyDiscount(opt.price, discount)
+        if (opt.priceType === 'percent') percentAdditions += effectivePrice
+        else fixedAdditions += effectivePrice
+      }
       if (field.type === 'radio') {
         const opt = field.options.find((o) => o.label === answer)
-        if (opt) {
-          if (opt.priceType === 'percent') percentAdditions += opt.price
-          else fixedAdditions += opt.price
-        }
+        if (opt) addOption(opt)
       } else if (field.type === 'checkbox' && Array.isArray(answer)) {
         answer.forEach((label: string) => {
           const opt = field.options?.find((o) => o.label === label)
-          if (opt) {
-            if (opt.priceType === 'percent') percentAdditions += opt.price
-            else fixedAdditions += opt.price
-          }
+          if (opt) addOption(opt)
         })
       }
     })
 
     return baseSum + fixedAdditions + Math.round(baseSum * (percentAdditions / 100))
-  }, [config, previewAnswers])
+  }, [config, previewAnswers, campaign])
 
   const handlePreviewSelect = (fieldId: string, value: any, isCheckbox = false) => {
     setPreviewAnswers((prev) => {
@@ -748,15 +814,21 @@ export default function FormBuilderPage() {
                     )}
 
                     {f.type !== 'note' && f.type !== 'faq' && (
-                      <div className="flex items-center gap-2">
-                        <label className="text-xs font-bold text-slate-500 whitespace-nowrap">基本金額:</label>
-                        <input
-                          type="number"
-                          value={f.price || 0}
-                          onChange={(e) => updateField(idx, 'price', Number(e.target.value))}
-                          className="w-32 px-3 py-1.5 text-xs font-bold border rounded-xl"
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs font-bold text-slate-500 whitespace-nowrap">基本金額:</label>
+                          <input
+                            type="number"
+                            value={f.price || 0}
+                            onChange={(e) => updateField(idx, 'price', Number(e.target.value))}
+                            className="w-32 px-3 py-1.5 text-xs font-bold border rounded-xl"
+                          />
+                          <span className="text-xs font-bold text-slate-400">円</span>
+                        </div>
+                        <DiscountConfigEditor
+                          discount={f.discount || { mode: 'inherit' }}
+                          onChange={(discount) => updateField(idx, 'discount', discount)}
                         />
-                        <span className="text-xs font-bold text-slate-400">円</span>
                       </div>
                     )}
 
@@ -764,38 +836,44 @@ export default function FormBuilderPage() {
                       <div className="pl-2 space-y-2 pt-2 border-t border-slate-100">
                         <label className="text-[10px] font-bold text-slate-400 block">選択肢と追加金額 (固定額 または %指定)</label>
                         {f.options?.map((opt, oIdx) => (
-                          <div key={oIdx} className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              value={opt.label}
-                              onChange={(e) => updateOption(idx, oIdx, 'label', e.target.value)}
-                              className="w-full px-3 py-1 text-xs border rounded-lg"
-                              placeholder="選択肢名"
-                            />
-                            <div className="flex bg-slate-100 p-0.5 rounded-lg border">
-                              <button
-                                type="button"
-                                onClick={() => updateOption(idx, oIdx, 'priceType', 'fixed')}
-                                className={`px-1.5 py-0.5 text-[10px] font-black rounded ${opt.priceType !== 'percent' ? 'bg-pink-500 text-white' : 'text-slate-500'}`}
-                              >
-                                円
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => updateOption(idx, oIdx, 'priceType', 'percent')}
-                                className={`px-1.5 py-0.5 text-[10px] font-black rounded ${opt.priceType === 'percent' ? 'bg-pink-500 text-white' : 'text-slate-500'}`}
-                              >
-                                %
-                              </button>
+                          <div key={oIdx} className="space-y-1 p-1.5 rounded-lg bg-slate-50/60">
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={opt.label}
+                                onChange={(e) => updateOption(idx, oIdx, 'label', e.target.value)}
+                                className="w-full px-3 py-1 text-xs border rounded-lg bg-white"
+                                placeholder="選択肢名"
+                              />
+                              <div className="flex bg-slate-100 p-0.5 rounded-lg border">
+                                <button
+                                  type="button"
+                                  onClick={() => updateOption(idx, oIdx, 'priceType', 'fixed')}
+                                  className={`px-1.5 py-0.5 text-[10px] font-black rounded ${opt.priceType !== 'percent' ? 'bg-pink-500 text-white' : 'text-slate-500'}`}
+                                >
+                                  円
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => updateOption(idx, oIdx, 'priceType', 'percent')}
+                                  className={`px-1.5 py-0.5 text-[10px] font-black rounded ${opt.priceType === 'percent' ? 'bg-pink-500 text-white' : 'text-slate-500'}`}
+                                >
+                                  %
+                                </button>
+                              </div>
+                              <input
+                                type="number"
+                                value={opt.price}
+                                onChange={(e) => updateOption(idx, oIdx, 'price', Number(e.target.value))}
+                                className="w-20 px-2 py-1 text-xs border rounded-lg bg-white"
+                              />
+                              <span className="text-xs font-bold text-slate-400 w-4">{opt.priceType === 'percent' ? '%' : '円'}</span>
+                              <button onClick={() => removeOption(idx, oIdx)} className="text-xs text-red-400 px-1 cursor-pointer">✕</button>
                             </div>
-                            <input
-                              type="number"
-                              value={opt.price}
-                              onChange={(e) => updateOption(idx, oIdx, 'price', Number(e.target.value))}
-                              className="w-20 px-2 py-1 text-xs border rounded-lg"
+                            <DiscountConfigEditor
+                              discount={opt.discount || { mode: 'inherit' }}
+                              onChange={(discount) => updateOption(idx, oIdx, 'discount', discount)}
                             />
-                            <span className="text-xs font-bold text-slate-400 w-4">{opt.priceType === 'percent' ? '%' : '円'}</span>
-                            <button onClick={() => removeOption(idx, oIdx)} className="text-xs text-red-400 px-1 cursor-pointer">✕</button>
                           </div>
                         ))}
                         <button

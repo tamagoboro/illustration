@@ -7,11 +7,13 @@ import { supabase, Profile, PortfolioItem } from '@/lib/supabase'
 import { loadFavorites, toggleFavoriteRecord } from '@/lib/favorites'
 import { convertToWebp } from '@/lib/imageUtils'
 import AvatarRing from '@/components/AvatarRing'
+import { ItemDiscountConfig, Campaign, isCampaignActive, resolveDiscount, applyDiscount, formatDiscountBadge } from '@/lib/discount'
 
 type Option = {
   label: string
   price: number
   priceType?: 'fixed' | 'percent'
+  discount?: ItemDiscountConfig
 }
 
 type Field = {
@@ -23,6 +25,7 @@ type Field = {
   noteText?: string
   faqAnswer?: string
   options?: Option[]
+  discount?: ItemDiscountConfig
 }
 
 type FormConfig = {
@@ -48,6 +51,7 @@ type EstimateFormRow = {
 type MenuItem = {
   title: string
   price: number | ''
+  discount?: ItemDiscountConfig
 }
 
 type SnsLinkItem = {
@@ -114,6 +118,12 @@ type ExtendedProfile = Profile & {
   available_from_text?: string | null
   theme_color?: string | null
   sns_links?: SnsLinkItem[] | null
+  campaign_enabled?: boolean | null
+  campaign_label?: string | null
+  campaign_discount_type?: 'percent' | 'fixed' | null
+  campaign_discount_value?: number | null
+  campaign_start_at?: string | null
+  campaign_end_at?: string | null
 }
 
 const formatExternalUrl = (url?: string | null) => {
@@ -396,6 +406,17 @@ const themeColor = useMemo(() => {
 
   const modalThemeColor = activeFormConfig?.theme_color || themeColor
 
+  const campaign: Campaign = useMemo(
+    () => ({
+      enabled: profile?.campaign_enabled,
+      discountType: profile?.campaign_discount_type,
+      discountValue: profile?.campaign_discount_value,
+      startAt: profile?.campaign_start_at,
+      endAt: profile?.campaign_end_at,
+    }),
+    [profile]
+  )
+
   // 見積もりボタン押下時の共通処理（フォームが1つならそのまま開き、複数なら選択させる）
   const openEstimateFlow = () => {
     if (availableForms.length === 1) {
@@ -420,16 +441,21 @@ const themeColor = useMemo(() => {
     })
   }
 
-  const { totalPrice } = useMemo(() => {
-    if (!activeFormConfig) return { basePriceTotal: 0, totalPrice: 0 }
+  const { totalPrice, originalTotalPrice } = useMemo(() => {
+    if (!activeFormConfig) return { basePriceTotal: 0, totalPrice: 0, originalTotalPrice: 0 }
 
     let baseSum = 0
+    let baseSumOriginal = 0
     let extraFixedPrice = 0
+    let extraFixedPriceOriginal = 0
     let percentSum = 0
+    let percentSumOriginal = 0
 
     activeFormConfig.fields.forEach((field) => {
       if (field.price && field.type !== 'note' && field.type !== 'faq') {
-        baseSum += field.price
+        const discount = resolveDiscount(campaign, field.discount)
+        baseSum += applyDiscount(field.price, discount)
+        baseSumOriginal += field.price
       }
     })
 
@@ -437,34 +463,36 @@ const themeColor = useMemo(() => {
       const answer = formAnswers[field.id]
       if (!answer || !field.options) return
 
+      const addOption = (selectedOpt: Option) => {
+        const discount = resolveDiscount(campaign, selectedOpt.discount)
+        const effectivePrice = applyDiscount(selectedOpt.price, discount)
+        if (selectedOpt.priceType === 'percent') {
+          percentSum += effectivePrice
+          percentSumOriginal += selectedOpt.price
+        } else {
+          extraFixedPrice += effectivePrice
+          extraFixedPriceOriginal += selectedOpt.price
+        }
+      }
+
       if (field.type === 'radio') {
         const selectedOpt = field.options.find((opt) => opt.label === answer)
-        if (selectedOpt) {
-          if (selectedOpt.priceType === 'percent') {
-            percentSum += selectedOpt.price
-          } else {
-            extraFixedPrice += selectedOpt.price
-          }
-        }
+        if (selectedOpt) addOption(selectedOpt)
       } else if (field.type === 'checkbox' && Array.isArray(answer)) {
         answer.forEach((selectedLabel) => {
           const selectedOpt = field.options?.find((opt) => opt.label === selectedLabel)
-          if (selectedOpt) {
-            if (selectedOpt.priceType === 'percent') {
-              percentSum += selectedOpt.price
-            } else {
-              extraFixedPrice += selectedOpt.price
-            }
-          }
+          if (selectedOpt) addOption(selectedOpt)
         })
       }
     })
 
     const calculatedTotal =
       baseSum + extraFixedPrice + Math.round(baseSum * (percentSum / 100))
+    const calculatedOriginalTotal =
+      baseSumOriginal + extraFixedPriceOriginal + Math.round(baseSumOriginal * (percentSumOriginal / 100))
 
-    return { basePriceTotal: baseSum, totalPrice: calculatedTotal }
-  }, [formAnswers, activeFormConfig])
+    return { basePriceTotal: baseSum, totalPrice: calculatedTotal, originalTotalPrice: calculatedOriginalTotal }
+  }, [formAnswers, activeFormConfig, campaign])
 
   const handleOpenEstimateWithWork = (work: PortfolioItem) => {
     setSelectedWork(null)
@@ -499,7 +527,13 @@ const themeColor = useMemo(() => {
     })
 
     specLines.push(`-----------------------------------`)
-    specLines.push(`■ 概算見積もり合計: ¥${totalPrice.toLocaleString()} (税込)`)
+    if (originalTotalPrice > totalPrice) {
+      const badge = formatDiscountBadge(resolveDiscount(campaign, undefined))
+      specLines.push(`■ 通常価格: ¥${originalTotalPrice.toLocaleString()}`)
+      specLines.push(`■ 割引後合計: ¥${totalPrice.toLocaleString()} (税込)${badge ? ` [${badge}]` : ''}`)
+    } else {
+      specLines.push(`■ 概算見積もり合計: ¥${totalPrice.toLocaleString()} (税込)`)
+    }
     specLines.push(`※上記はシミュレーションによる概算です。内容により変動する場合があります。`)
 
     setGeneratedSpec(specLines.join('\n'))
@@ -562,7 +596,7 @@ const themeColor = useMemo(() => {
 
     const { error } = await supabase.rpc('increment_likes', {
       target_user_id: id,
-      increment_val: wasFavorite ? -1 : 1,
+      is_liking: !wasFavorite,
     })
 
     if (error) {
@@ -1142,26 +1176,53 @@ const themeColor = useMemo(() => {
               <span className="p-1.5 bg-white rounded-lg text-xs shadow-2xs">🏷️</span> 料金目安・メニュー
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {profile.menu_items.map((item, index) => (
-                <div
-                  key={index}
-                  className="p-4 bg-white/60 border border-white/80 rounded-2xl flex justify-between items-center hover:bg-white transition shadow-2xs"
-                >
-                  <span className="text-xs font-bold text-sky-700">{item.title}</span>
-                  <span
-                    className="text-xs font-black px-2.5 py-1 rounded-lg border"
-                    style={{
-                      color: themeColor,
-                      backgroundColor: hexToRgba(themeColor, 0.08),
-                      borderColor: hexToRgba(themeColor, 0.2),
-                    }}
+              {profile.menu_items.map((item, index) => {
+                const itemDiscount = resolveDiscount(campaign, item.discount)
+                const hasDiscount = typeof item.price === 'number' && itemDiscount
+                const discountedPrice = hasDiscount ? applyDiscount(item.price as number, itemDiscount) : null
+
+                return (
+                  <div
+                    key={index}
+                    className="p-4 bg-white/60 border border-white/80 rounded-2xl flex justify-between items-center hover:bg-white transition shadow-2xs"
                   >
-                    {typeof item.price === 'number'
-                      ? `¥${item.price.toLocaleString()}〜`
-                      : '要相談'}
-                  </span>
-                </div>
-              ))}
+                    <span className="text-xs font-bold text-sky-700">{item.title}</span>
+                    {hasDiscount ? (
+                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                        <span className="text-[10px] text-sky-300 line-through decoration-rose-400">
+                          ¥{(item.price as number).toLocaleString()}
+                        </span>
+                        <span
+                          className="text-xs font-black px-2.5 py-1 rounded-lg border"
+                          style={{
+                            color: themeColor,
+                            backgroundColor: hexToRgba(themeColor, 0.08),
+                            borderColor: hexToRgba(themeColor, 0.2),
+                          }}
+                        >
+                          ¥{discountedPrice?.toLocaleString()}〜
+                        </span>
+                        <span className="text-[9px] font-black bg-rose-500 text-white px-1.5 py-0.5 rounded">
+                          {formatDiscountBadge(itemDiscount)}
+                        </span>
+                      </div>
+                    ) : (
+                      <span
+                        className="text-xs font-black px-2.5 py-1 rounded-lg border"
+                        style={{
+                          color: themeColor,
+                          backgroundColor: hexToRgba(themeColor, 0.08),
+                          borderColor: hexToRgba(themeColor, 0.2),
+                        }}
+                      >
+                        {typeof item.price === 'number'
+                          ? `¥${item.price.toLocaleString()}〜`
+                          : '要相談'}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           </section>
         )}
@@ -1592,10 +1653,25 @@ const themeColor = useMemo(() => {
                 <>
                   <div>
                     <span className="text-[10px] font-bold text-sky-400 block">概算合計金額</span>
-                    <span className="text-lg font-black text-sky-900">
-                      ¥{totalPrice.toLocaleString()}{' '}
-                      <span className="text-xs font-normal text-sky-500">(税込)</span>
-                    </span>
+                    {originalTotalPrice > totalPrice ? (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs text-sky-300 line-through decoration-rose-400">
+                          ¥{originalTotalPrice.toLocaleString()}
+                        </span>
+                        <span className="text-lg font-black text-sky-900">
+                          ¥{totalPrice.toLocaleString()}{' '}
+                          <span className="text-xs font-normal text-sky-500">(税込)</span>
+                        </span>
+                        <span className="text-[9px] font-black bg-rose-500 text-white px-1.5 py-0.5 rounded">
+                          {formatDiscountBadge(resolveDiscount(campaign, undefined))}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-lg font-black text-sky-900">
+                        ¥{totalPrice.toLocaleString()}{' '}
+                        <span className="text-xs font-normal text-sky-500">(税込)</span>
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <button

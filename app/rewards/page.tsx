@@ -20,21 +20,15 @@ export default function RewardsPage() {
   const [isAdmin, setIsAdmin] = useState(false)
 
   const refreshWallet = async (uid: string) => {
-    const { data: wallet } = await supabase
-      .from('user_points')
-      .select('balance, equipped_ring_id')
-      .eq('user_id', uid)
-      .maybeSingle()
+    // 互いに依存しないので並行実行（直列だと通信の往復時間が2倍かかる）
+    const [walletRes, ownedRes] = await Promise.all([
+      supabase.from('user_points').select('balance, equipped_ring_id').eq('user_id', uid).maybeSingle(),
+      supabase.from('user_icon_rings').select('ring_id').eq('user_id', uid),
+    ])
 
-    setBalance(wallet?.balance ?? 0)
-    setEquippedRingId(wallet?.equipped_ring_id ?? null)
-
-    const { data: owned } = await supabase
-      .from('user_icon_rings')
-      .select('ring_id')
-      .eq('user_id', uid)
-
-    setOwnedRingIds((owned || []).map((r) => r.ring_id))
+    setBalance(walletRes.data?.balance ?? 0)
+    setEquippedRingId(walletRes.data?.equipped_ring_id ?? null)
+    setOwnedRingIds((ownedRes.data || []).map((r) => r.ring_id))
   }
 
   useEffect(() => {
@@ -44,32 +38,22 @@ export default function RewardsPage() {
       setUserId(uid)
 
       if (uid) {
-        // 自分のアバター（クリエイターならプロフィール画像。無ければ未設定のまま）
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('avatar_url')
-          .eq('user_id', uid)
-          .maybeSingle()
-        setAvatarUrl(profile?.avatar_url || null)
+        // 残高に影響しない項目とウェルカムボーナス付与は互いに依存しないため並行実行。
+        // 残高の読み取りだけは、ボーナス付与が確実に終わってから行う必要があるので
+        // このあとの refreshWallet で改めて直列にする。
+        const [profileRes, adminRes, referralRes] = await Promise.all([
+          supabase.from('profiles').select('avatar_url').eq('user_id', uid).maybeSingle(),
+          supabase.from('admins').select('user_id').eq('user_id', uid).maybeSingle(),
+          supabase.from('referrals').select('id', { count: 'exact', head: true }).eq('referrer_id', uid),
+          // 初回アクセス時のウェルカムボーナス（DB側で1人1回だけになるよう制御済み）
+          supabase.rpc('grant_starter_bonus').then(({ error }) => {
+            if (error) console.error('ウェルカムボーナス付与エラー:', error)
+          }),
+        ])
 
-        const { data: adminRow } = await supabase
-          .from('admins')
-          .select('user_id')
-          .eq('user_id', uid)
-          .maybeSingle()
-        setIsAdmin(!!adminRow)
-
-        // 初回アクセス時のウェルカムボーナス（DB側で1人1回だけになるよう制御済み）
-        const { error: bonusError } = await supabase.rpc('grant_starter_bonus')
-        if (bonusError) {
-          console.error('ウェルカムボーナス付与エラー:', bonusError)
-        }
-
-        const { count } = await supabase
-          .from('referrals')
-          .select('id', { count: 'exact', head: true })
-          .eq('referrer_id', uid)
-        setReferralCount(count || 0)
+        setAvatarUrl(profileRes.data?.avatar_url || null)
+        setIsAdmin(!!adminRes.data)
+        setReferralCount(referralRes.count || 0)
 
         await refreshWallet(uid)
       }

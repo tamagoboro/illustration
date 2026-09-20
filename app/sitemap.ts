@@ -10,7 +10,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // 公開中の全クリエイターIDを取得
   const { data: profiles } = await supabase
     .from('profiles')
-    .select('user_id, updated_at')
+    .select('user_id, updated_at, tastes')
     .eq('is_public', true)
 
   const creatorUrls: MetadataRoute.Sitemap = (profiles || []).map((profile) => ({
@@ -18,6 +18,20 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     lastModified: new Date(profile.updated_at || Date.now()),
     changeFrequency: 'weekly',
     priority: 0.8,
+  }))
+
+  // タグ別一覧ページ（実際に使われているタグの分だけ）
+  const tagSet = new Set<string>()
+  ;(profiles || []).forEach((p: any) => {
+    ;(p.tastes || []).forEach((t: string) => {
+      if (t) tagSet.add(t)
+    })
+  })
+  const tagUrls: MetadataRoute.Sitemap = Array.from(tagSet).map((tag) => ({
+    url: `${baseUrl}/tags/${encodeURIComponent(tag)}`,
+    lastModified: new Date(),
+    changeFrequency: 'weekly',
+    priority: 0.6,
   }))
 
   return [
@@ -28,5 +42,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 1.0,
     },
     ...creatorUrls,
+    ...tagUrls,
   ]
 }

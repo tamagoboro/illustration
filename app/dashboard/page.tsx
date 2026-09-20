@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import { ItemDiscountConfig, toDateInputValue, fromDateInputValue } from '@/lib/discount'
 
 const PRESET_TASTES = [
   'アイコン',
@@ -54,6 +55,7 @@ type SnsLinkItem = {
 type MenuItem = {
   title: string
   price: number | ''
+  discount?: ItemDiscountConfig
 }
 
 const safeParseInt = (val: any): number | null => {
@@ -105,6 +107,14 @@ export default function Dashboard() {
   const [commercialUseAllowed, setCommercialUseAllowed] = useState(true)
   const [avatarUrl, setAvatarUrl] = useState('')
   const [priceMin, setPriceMin] = useState<string>('5000')
+
+  // キャンペーン割引（期間限定・一律）
+  const [campaignEnabled, setCampaignEnabled] = useState(false)
+  const [campaignLabel, setCampaignLabel] = useState('')
+  const [campaignDiscountType, setCampaignDiscountType] = useState<'percent' | 'fixed'>('percent')
+  const [campaignDiscountValue, setCampaignDiscountValue] = useState('10')
+  const [campaignStartDate, setCampaignStartDate] = useState('')
+  const [campaignEndDate, setCampaignEndDate] = useState('')
 
   const [themeColor, setThemeColor] = useState<string>('indigo')
 
@@ -203,10 +213,22 @@ export default function Dashboard() {
             setMenuItems(
               profileData.menu_items.map((item: any) => ({
                 title: item.title || '',
-                price: typeof item.price === 'number' ? item.price : (item.price === '' ? '' : safeParseInt(item.price) ?? '')
+                price: typeof item.price === 'number' ? item.price : (item.price === '' ? '' : safeParseInt(item.price) ?? ''),
+                discount: item.discount && item.discount.mode ? item.discount : { mode: 'inherit' },
               }))
             )
           }
+
+          setCampaignEnabled(profileData.campaign_enabled ?? false)
+          setCampaignLabel(profileData.campaign_label || '')
+          setCampaignDiscountType(profileData.campaign_discount_type || 'percent')
+          setCampaignDiscountValue(
+            profileData.campaign_discount_value !== null && profileData.campaign_discount_value !== undefined
+              ? String(profileData.campaign_discount_value)
+              : '10'
+          )
+          setCampaignStartDate(toDateInputValue(profileData.campaign_start_at))
+          setCampaignEndDate(toDateInputValue(profileData.campaign_end_at))
 
           if (Array.isArray(profileData.sns_links) && profileData.sns_links.length > 0) {
             setSnsLinks(profileData.sns_links)
@@ -331,12 +353,17 @@ export default function Dashboard() {
 
   const handleAddMenuItem = () => {
     setIsDirty(true)
-    setMenuItems((prev) => [...prev, { title: '', price: '' }])
+    setMenuItems((prev) => [...prev, { title: '', price: '', discount: { mode: 'inherit' } }])
   }
 
   const handleRemoveMenuItem = (index: number) => {
     setIsDirty(true)
     setMenuItems((prev) => prev.filter((_, idx) => idx !== index))
+  }
+
+  const handleMenuItemDiscountChange = (index: number, discount: ItemDiscountConfig) => {
+    setIsDirty(true)
+    setMenuItems((prev) => prev.map((item, idx) => (idx === index ? { ...item, discount } : item)))
   }
 
   const handleMenuItemChange = (index: number, key: keyof MenuItem, value: any) => {
@@ -572,8 +599,11 @@ export default function Dashboard() {
         .filter((item) => item.title.trim().length > 0)
         .map((item) => ({
           title: item.title.trim(),
-          price: typeof item.price === 'number' ? item.price : ''
+          price: typeof item.price === 'number' ? item.price : '',
+          discount: item.discount || { mode: 'inherit' },
         }))
+
+      const finalCampaignDiscountValue = cleanInteger(campaignDiscountValue)
 
       const cleanSnsLinks = snsLinks
         .filter((item) => item.url.trim().length > 0)
@@ -616,6 +646,12 @@ export default function Dashboard() {
         available_from_text: availableFromText,
         active_projects_count: activeProjectsCount,
         max_projects_capacity: maxProjectsCapacity,
+        campaign_enabled: Boolean(campaignEnabled),
+        campaign_label: campaignLabel.trim() || null,
+        campaign_discount_type: campaignDiscountType,
+        campaign_discount_value: finalCampaignDiscountValue,
+        campaign_start_at: fromDateInputValue(campaignStartDate, false),
+        campaign_end_at: fromDateInputValue(campaignEndDate, true),
         updated_at: new Date().toISOString(),
       }
 
@@ -1182,6 +1218,78 @@ export default function Dashboard() {
                   </div>
                 </div>
 
+                <div className="space-y-3 p-4 rounded-2xl border border-amber-200 bg-amber-50/40">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={campaignEnabled}
+                      onChange={(e) => {
+                        setCampaignEnabled(e.target.checked)
+                        setIsDirty(true)
+                      }}
+                      className="rounded border-slate-300 text-amber-600 focus:ring-amber-500 w-4 h-4 cursor-pointer"
+                    />
+                    <span className="text-xs font-bold text-slate-800">🎉 期間限定キャンペーン割引を設定する</span>
+                  </label>
+                  <p className="text-[11px] text-slate-400 pl-7 -mt-2">
+                    最低価格・料金メニュー・見積もりフォームに一律で適用されます（メニュー側で個別に上書き・対象外にすることも可能）
+                  </p>
+
+                  {campaignEnabled && (
+                    <div className="pl-7 space-y-3">
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-bold text-slate-600">キャンペーン名（任意・表示用）</label>
+                        <input
+                          type="text"
+                          placeholder="例: 秋の感謝祭"
+                          value={campaignLabel}
+                          onChange={(e) => { setCampaignLabel(e.target.value); setIsDirty(true) }}
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+                        />
+                      </div>
+
+                      <div className="flex gap-2">
+                        <select
+                          value={campaignDiscountType}
+                          onChange={(e) => { setCampaignDiscountType(e.target.value as 'percent' | 'fixed'); setIsDirty(true) }}
+                          className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white"
+                        >
+                          <option value="percent">％OFF</option>
+                          <option value="fixed">円引き</option>
+                        </select>
+                        <input
+                          type="number"
+                          min={0}
+                          value={campaignDiscountValue}
+                          onChange={(e) => { setCampaignDiscountValue(e.target.value); setIsDirty(true) }}
+                          className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-slate-600">開始日</label>
+                          <input
+                            type="date"
+                            value={campaignStartDate}
+                            onChange={(e) => { setCampaignStartDate(e.target.value); setIsDirty(true) }}
+                            className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-slate-600">終了日（空欄=無期限）</label>
+                          <input
+                            type="date"
+                            value={campaignEndDate}
+                            onChange={(e) => { setCampaignEndDate(e.target.value); setIsDirty(true) }}
+                            className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-700">目安納期 (日数)</label>
                   <input
@@ -1222,36 +1330,80 @@ export default function Dashboard() {
                     </button>
                   </div>
 
-                  <div className="space-y-2">
-                    {menuItems.map((item, idx) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          placeholder="例: アイコン制作"
-                          value={item.title}
-                          onChange={(e) => handleMenuItemChange(idx, 'title', e.target.value)}
-                          className="flex-2 px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium"
-                        />
-                        <div className="relative flex-1">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-semibold">¥</span>
-                          <input
-                            type="number"
-                            step="500"
-                            placeholder="5000"
-                            value={item.price}
-                            onChange={(e) => handleMenuItemChange(idx, 'price', e.target.value)}
-                            className={`w-full pl-7 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-bold ${currentThemeObj.text}`}
-                          />
+                  <div className="space-y-3">
+                    {menuItems.map((item, idx) => {
+                      const discount = item.discount || { mode: 'inherit' }
+                      return (
+                        <div key={idx} className="p-2.5 rounded-xl border border-slate-100 bg-slate-50/40 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              placeholder="例: アイコン制作"
+                              value={item.title}
+                              onChange={(e) => handleMenuItemChange(idx, 'title', e.target.value)}
+                              className="flex-2 px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium bg-white"
+                            />
+                            <div className="relative flex-1">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-semibold">¥</span>
+                              <input
+                                type="number"
+                                step="500"
+                                placeholder="5000"
+                                value={item.price}
+                                onChange={(e) => handleMenuItemChange(idx, 'price', e.target.value)}
+                                className={`w-full pl-7 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-bold bg-white ${currentThemeObj.text}`}
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveMenuItem(idx)}
+                              className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer text-xs font-bold"
+                            >
+                              ✕
+                            </button>
+                          </div>
+
+                          <div className="flex items-center gap-2 pl-1">
+                            <span className="text-[10px] font-bold text-slate-400 shrink-0">このメニューの割引:</span>
+                            <select
+                              value={discount.mode}
+                              onChange={(e) =>
+                                handleMenuItemDiscountChange(idx, { ...discount, mode: e.target.value as ItemDiscountConfig['mode'] })
+                              }
+                              className="px-2 py-1 rounded-lg border border-slate-200 text-[11px] bg-white"
+                            >
+                              <option value="inherit">自動（キャンペーンに従う）</option>
+                              <option value="custom">個別に指定</option>
+                              <option value="exempt">割引対象外にする</option>
+                            </select>
+
+                            {discount.mode === 'custom' && (
+                              <>
+                                <select
+                                  value={discount.type || 'percent'}
+                                  onChange={(e) =>
+                                    handleMenuItemDiscountChange(idx, { ...discount, type: e.target.value as 'percent' | 'fixed' })
+                                  }
+                                  className="px-2 py-1 rounded-lg border border-slate-200 text-[11px] bg-white"
+                                >
+                                  <option value="percent">％OFF</option>
+                                  <option value="fixed">円引き</option>
+                                </select>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={discount.value ?? ''}
+                                  onChange={(e) =>
+                                    handleMenuItemDiscountChange(idx, { ...discount, value: Number(e.target.value) || 0 })
+                                  }
+                                  className="w-20 px-2 py-1 rounded-lg border border-slate-200 text-[11px] font-bold"
+                                />
+                              </>
+                            )}
+                          </div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveMenuItem(idx)}
-                          className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer text-xs font-bold"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
+                      )
+                    })}
                     {menuItems.length === 0 && (
                       <p className="text-xs text-slate-300 italic py-1">メニューが設定されていません</p>
                     )}
