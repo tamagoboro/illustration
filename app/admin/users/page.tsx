@@ -173,9 +173,14 @@ export default function AdminUsersPage() {
             <span>←</span> マイページへ
           </Link>
           <h1 className="text-sm font-bold text-slate-900">ユーザー管理</h1>
-          <Link href="/admin/rings" className="text-[11px] font-bold text-slate-400 hover:text-sky-600 transition-colors">
-            リング管理
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/admin/analytics" className="text-[11px] font-bold text-slate-400 hover:text-sky-600 transition-colors">
+              PV解析
+            </Link>
+            <Link href="/admin/rings" className="text-[11px] font-bold text-slate-400 hover:text-sky-600 transition-colors">
+              リング管理
+            </Link>
+          </div>
         </div>
       </header>
 

@@ -325,10 +325,13 @@ useEffect(() => {
     }
 
     try {
-      await supabase.from('analytics_logs').insert({
-        creator_id: id,
-        event_type: 'pv',
-      })
+      const { data: { user: viewer } } = await supabase.auth.getUser()
+      if (viewer?.id !== id) {
+        await supabase.from('analytics_logs').insert({
+          creator_id: id,
+          event_type: 'pv',
+        })
+      }
     } catch (e) {
       console.error('PV tracking error:', e)
     }
@@ -565,7 +568,9 @@ const themeColor = useMemo(() => {
 
   const handleCopySpec = async () => {
     if (!generatedSpec) return
-    await trackEstimateCalc()
+    if (currentUserId !== id) {
+      await trackEstimateCalc()
+    }
     navigator.clipboard.writeText(generatedSpec)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
@@ -579,7 +584,7 @@ const themeColor = useMemo(() => {
     const nowFavorite = await toggleFavoriteRecord(currentUserId, id, wasFavorite)
     setIsFavorite(nowFavorite)
 
-    if (nowFavorite && !wasFavorite) {
+    if (nowFavorite && !wasFavorite && currentUserId !== id) {
       try {
         await supabase.from('analytics_logs').insert({
           creator_id: id,
