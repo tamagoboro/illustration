@@ -1034,26 +1034,6 @@ export default function Home() {
             )}
           </section>
         </div>
-
-        {/* 人気のジャンルから探す（タグ別ページへの導線） */}
-        {displayedTastes.length > 0 && (
-          <div className="mt-10 pt-6 border-t border-sky-100">
-            <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">
-              ジャンルから探す
-            </h2>
-            <div className="flex flex-wrap gap-2">
-              {displayedTastes.map((taste) => (
-                <Link
-                  key={taste}
-                  href={`/tags/${encodeURIComponent(taste)}`}
-                  className="text-[11px] font-bold px-3 py-1.5 rounded-full bg-white border border-sky-100 text-sky-700 hover:bg-sky-50 hover:border-sky-200 transition-colors"
-                >
-                  {taste}
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
       </main>
 
       {/* 比較固定バー */}
