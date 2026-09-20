@@ -8,7 +8,6 @@ import AvatarRing from '@/components/AvatarRing'
 
 type FoundUser = {
   user_id: string
-  email: string
   display_name: string | null
   avatar_url: string | null
   balance: number
@@ -250,7 +249,6 @@ export default function AdminUsersPage() {
                 <span className="text-xs font-black text-slate-800 block truncate">
                   {found.display_name || '（表示名未設定）'}
                 </span>
-                <span className="text-[11px] text-slate-400 block truncate">{found.email}</span>
                 <span className="text-[11px] font-bold text-sky-600">{found.balance.toLocaleString()} pt</span>
               </div>
               <button
