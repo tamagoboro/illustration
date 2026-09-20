@@ -146,6 +146,7 @@ export default function Dashboard() {
     { title: 'アイコン制作', price: 5000 },
     { title: 'ヘッダー制作', price: 8000 }
   ])
+  const [expandedDiscountRows, setExpandedDiscountRows] = useState<Set<number>>(new Set())
 
   // 離脱防止アラート
   useEffect(() => {
@@ -364,6 +365,15 @@ export default function Dashboard() {
   const handleMenuItemDiscountChange = (index: number, discount: ItemDiscountConfig) => {
     setIsDirty(true)
     setMenuItems((prev) => prev.map((item, idx) => (idx === index ? { ...item, discount } : item)))
+  }
+
+  const toggleMenuItemDiscountRow = (index: number) => {
+    setExpandedDiscountRows((prev) => {
+      const next = new Set(prev)
+      if (next.has(index)) next.delete(index)
+      else next.add(index)
+      return next
+    })
   }
 
   const handleMenuItemChange = (index: number, key: keyof MenuItem, value: any) => {
@@ -1363,44 +1373,64 @@ export default function Dashboard() {
                             </button>
                           </div>
 
-                          <div className="flex items-center gap-2 pl-1">
-                            <span className="text-[10px] font-bold text-slate-400 shrink-0">このメニューの割引:</span>
-                            <select
-                              value={discount.mode}
-                              onChange={(e) =>
-                                handleMenuItemDiscountChange(idx, { ...discount, mode: e.target.value as ItemDiscountConfig['mode'] })
-                              }
-                              className="px-2 py-1 rounded-lg border border-slate-200 text-[11px] bg-white"
+                          {discount.mode === 'inherit' && !expandedDiscountRows.has(idx) ? (
+                            <button
+                              type="button"
+                              onClick={() => toggleMenuItemDiscountRow(idx)}
+                              className="text-[10px] font-bold text-indigo-400 hover:text-indigo-600 pl-1 cursor-pointer"
                             >
-                              <option value="inherit">自動（キャンペーンに従う）</option>
-                              <option value="custom">個別に指定</option>
-                              <option value="exempt">割引対象外にする</option>
-                            </select>
+                              この項目だけ割引を変える
+                            </button>
+                          ) : (
+                            <div className="flex items-center gap-2 pl-1 flex-wrap">
+                              <span className="text-[10px] font-bold text-slate-400 shrink-0">このメニューの割引:</span>
+                              <select
+                                value={discount.mode}
+                                onChange={(e) =>
+                                  handleMenuItemDiscountChange(idx, { ...discount, mode: e.target.value as ItemDiscountConfig['mode'] })
+                                }
+                                className="px-2 py-1 rounded-lg border border-slate-200 text-[11px] bg-white"
+                              >
+                                <option value="inherit">自動（キャンペーンに従う）</option>
+                                <option value="custom">個別に指定</option>
+                                <option value="exempt">割引対象外にする</option>
+                              </select>
 
-                            {discount.mode === 'custom' && (
-                              <>
-                                <select
-                                  value={discount.type || 'percent'}
-                                  onChange={(e) =>
-                                    handleMenuItemDiscountChange(idx, { ...discount, type: e.target.value as 'percent' | 'fixed' })
-                                  }
-                                  className="px-2 py-1 rounded-lg border border-slate-200 text-[11px] bg-white"
+                              {discount.mode === 'custom' && (
+                                <>
+                                  <select
+                                    value={discount.type || 'percent'}
+                                    onChange={(e) =>
+                                      handleMenuItemDiscountChange(idx, { ...discount, type: e.target.value as 'percent' | 'fixed' })
+                                    }
+                                    className="px-2 py-1 rounded-lg border border-slate-200 text-[11px] bg-white"
+                                  >
+                                    <option value="percent">％OFF</option>
+                                    <option value="fixed">円引き</option>
+                                  </select>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    value={discount.value ?? ''}
+                                    onChange={(e) =>
+                                      handleMenuItemDiscountChange(idx, { ...discount, value: Number(e.target.value) || 0 })
+                                    }
+                                    className="w-20 px-2 py-1 rounded-lg border border-slate-200 text-[11px] font-bold"
+                                  />
+                                </>
+                              )}
+
+                              {discount.mode === 'inherit' && (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleMenuItemDiscountRow(idx)}
+                                  className="text-[10px] font-bold text-slate-300 hover:text-slate-500 cursor-pointer"
                                 >
-                                  <option value="percent">％OFF</option>
-                                  <option value="fixed">円引き</option>
-                                </select>
-                                <input
-                                  type="number"
-                                  min={0}
-                                  value={discount.value ?? ''}
-                                  onChange={(e) =>
-                                    handleMenuItemDiscountChange(idx, { ...discount, value: Number(e.target.value) || 0 })
-                                  }
-                                  className="w-20 px-2 py-1 rounded-lg border border-slate-200 text-[11px] font-bold"
-                                />
-                              </>
-                            )}
-                          </div>
+                                  閉じる
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )
                     })}

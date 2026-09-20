@@ -111,6 +111,8 @@ const FORM_TEMPLATES: Record<string, FormConfig> = {
 }
 
 // フィールド・選択肢ごとの割引の個別指定コンポーネント（キャンペーンの一律割引を上書き）
+// 普段は「自動（キャンペーンに従う）」のままで済むことがほとんどなので、
+// 個別指定されていない限りリンククリックで展開するまで畳んでおく
 function DiscountConfigEditor({
   discount,
   onChange,
@@ -118,6 +120,20 @@ function DiscountConfigEditor({
   discount: ItemDiscountConfig
   onChange: (discount: ItemDiscountConfig) => void
 }) {
+  const [expanded, setExpanded] = useState(false)
+
+  if (discount.mode === 'inherit' && !expanded) {
+    return (
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        className="text-[10px] font-bold text-indigo-400 hover:text-indigo-600 cursor-pointer"
+      >
+        この項目だけ割引を変える
+      </button>
+    )
+  }
+
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
       <span className="text-[10px] font-bold text-slate-400 shrink-0">割引:</span>
@@ -148,6 +164,15 @@ function DiscountConfigEditor({
             className="w-16 px-1.5 py-1 rounded-lg border border-slate-200 text-[10px] font-bold"
           />
         </>
+      )}
+      {discount.mode === 'inherit' && (
+        <button
+          type="button"
+          onClick={() => setExpanded(false)}
+          className="text-[10px] font-bold text-slate-300 hover:text-slate-500 cursor-pointer"
+        >
+          閉じる
+        </button>
       )}
     </div>
   )
