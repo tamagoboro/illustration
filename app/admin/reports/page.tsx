@@ -93,14 +93,22 @@ export default function AdminReportsPage() {
     setReports((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)))
   }
 
-  // 同じクリエイターに未対応の通報が複数件来ている場合、重複の可能性が高く優先度が上がるため目立たせる
+  // 同じクリエイターに、別々の人からの未対応通報が複数件来ている場合に目立たせる。
+  // 同一人物の連投を「複数人が問題視している」と誤解しないよう、reporter_idの重複を除いた
+  // ユニーク人数で数える（匿名通報はreporter_idがnullで区別できないため1件＝1人として扱う）。
   const MULTI_REPORT_THRESHOLD = 2
 
   const openCountByCreator = useMemo(() => {
-    const map: Record<string, number> = {}
+    const reportersByCreator: Record<string, Set<string>> = {}
     reports.forEach((r) => {
       if (r.status !== 'open') return
-      map[r.creator_id] = (map[r.creator_id] || 0) + 1
+      const reporterKey = r.reporter_id || `anon:${r.id}`
+      if (!reportersByCreator[r.creator_id]) reportersByCreator[r.creator_id] = new Set()
+      reportersByCreator[r.creator_id].add(reporterKey)
+    })
+    const map: Record<string, number> = {}
+    Object.entries(reportersByCreator).forEach(([creatorId, set]) => {
+      map[creatorId] = set.size
     })
     return map
   }, [reports])
@@ -191,7 +199,7 @@ export default function AdminReportsPage() {
                   target="_blank"
                   className="text-[11px] font-bold bg-white border border-rose-200 text-rose-700 px-3 py-1.5 rounded-xl hover:bg-rose-100 transition-colors"
                 >
-                  {c.displayName}（{c.count}件）
+                  {c.displayName}（{c.count}人）
                 </Link>
               ))}
             </div>
@@ -232,7 +240,7 @@ export default function AdminReportsPage() {
               >
                 {isFlagged && (
                   <span className="inline-block text-[10px] font-black px-2 py-0.5 rounded-full bg-rose-500 text-white">
-                    🚨 このクリエイターへの未対応通報が合計{openCount}件あります
+                    🚨 このクリエイターへの未対応通報が{openCount}人から届いています
                   </span>
                 )}
                 <div className="flex items-start justify-between gap-2 flex-wrap">

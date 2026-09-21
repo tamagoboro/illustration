@@ -246,7 +246,12 @@ export default function CreatorClient({
       setReportSubmitted(true)
     } catch (error: any) {
       console.error('通報エラー:', error)
-      alert('通報の送信に失敗しました。時間をおいて再度お試しください。')
+      // P0001 は連投防止チェックが意図的に発生させたエラーなので、内容をそのまま案内する
+      const message =
+        error?.code === 'P0001' && error?.message
+          ? error.message
+          : '通報の送信に失敗しました。時間をおいて再度お試しください。'
+      alert(message)
     } finally {
       setSubmittingReport(false)
     }
