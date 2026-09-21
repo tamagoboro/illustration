@@ -456,11 +456,11 @@ export default function CreatorClient({
       if (isMounted) setIsFavorite(favs.includes(id))
 
       if (uid !== id) {
-        supabase
-          .from('analytics_logs')
-          .insert({ creator_id: id, event_type: 'pv' })
-          .then(() => {})
-          .catch((e) => console.error('PV tracking error:', e))
+        try {
+          await supabase.from('analytics_logs').insert({ creator_id: id, event_type: 'pv' })
+        } catch (e) {
+          console.error('PV tracking error:', e)
+        }
       }
     }
     initFavorite()
@@ -514,44 +514,42 @@ useEffect(() => {
     // 互いに独立している取得（プロフィール・作品・見積もりフォーム・レビュー・実績バッジ）を
     // 直列にawaitしていたため、待ち時間がそのまま合算されて表示が遅くなっていた。
     // 依存関係の無いものはPromise.allでまとめて並行実行する。
+    // supabaseのクエリビルダーはPromiseLike（.then()はあるが.catch()やPromise<T>としての
+    // 型は無い）なので、async IIFEでラップして正規のPromise<void>にしてから配列に入れる。
     const tasks: Promise<void>[] = []
 
     if (!initialProfile) {
       tasks.push(
-        supabase
-          .from('profiles')
-          .select('*')
-          .eq('user_id', id)
-          .single()
-          .then(({ data }) => {
-            if (data) setProfile(data as ExtendedProfile)
-          })
+        (async () => {
+          const { data } = await supabase.from('profiles').select('*').eq('user_id', id).single()
+          if (data) setProfile(data as ExtendedProfile)
+        })()
       )
     }
 
     if (works.length === 0) {
       tasks.push(
-        supabase
-          .from('portfolio_items')
-          .select('*')
-          .eq('user_id', id)
-          .order('sort_order', { ascending: true })
-          .then(({ data }) => {
-            if (data) setWorks(data)
-          })
+        (async () => {
+          const { data } = await supabase
+            .from('portfolio_items')
+            .select('*')
+            .eq('user_id', id)
+            .order('sort_order', { ascending: true })
+          if (data) setWorks(data)
+        })()
       )
     }
 
     if (forms.length === 0) {
       tasks.push(
-        supabase
-          .from('estimate_forms')
-          .select('*')
-          .eq('user_id', id)
-          .order('sort_order', { ascending: true })
-          .then(({ data }) => {
-            if (data) setForms(data as EstimateFormRow[])
-          })
+        (async () => {
+          const { data } = await supabase
+            .from('estimate_forms')
+            .select('*')
+            .eq('user_id', id)
+            .order('sort_order', { ascending: true })
+          if (data) setForms(data as EstimateFormRow[])
+        })()
       )
     }
 
@@ -560,9 +558,9 @@ useEffect(() => {
     }
 
     tasks.push(
-      supabase
-        .rpc('get_public_creator_badges', { p_user_id: id })
-        .then(({ data: badgeData }) => {
+      (async () => {
+        try {
+          const { data: badgeData } = await supabase.rpc('get_public_creator_badges', { p_user_id: id })
           if (badgeData && badgeData[0]) {
             setBadges({
               isTrending: !!badgeData[0].is_trending,
@@ -571,8 +569,10 @@ useEffect(() => {
               avgResponseHours: badgeData[0].avg_response_hours ?? null,
             })
           }
-        })
-        .catch((e) => console.error('実績バッジ取得エラー:', e))
+        } catch (e) {
+          console.error('実績バッジ取得エラー:', e)
+        }
+      })()
     )
 
     await Promise.all(tasks)
