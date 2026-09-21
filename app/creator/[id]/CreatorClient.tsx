@@ -441,7 +441,9 @@ export default function CreatorClient({
   }, [formAnswers, clientName, selectedFormId, id])
 
   // ログイン状態を確認しつつ、このクリエイターがお気に入り済みか判定する
-  // （ログイン中はアカウントに保存された一覧、未ログインはブラウザ保存分を使う）
+  // （ログイン中はアカウントに保存された一覧、未ログインはブラウザ保存分を使う）。
+  // supabase.auth.getUser()はSupabase側に問い合わせる実際の通信なので、PVトラッキング側と
+  // 別々に呼ぶと同じ確認を二重に行ってしまう。ここで取得したuidをPVトラッキングにも使い回す。
   useEffect(() => {
     let isMounted = true
     const initFavorite = async () => {
@@ -452,6 +454,14 @@ export default function CreatorClient({
 
       const favs = await loadFavorites(uid)
       if (isMounted) setIsFavorite(favs.includes(id))
+
+      if (uid !== id) {
+        supabase
+          .from('analytics_logs')
+          .insert({ creator_id: id, event_type: 'pv' })
+          .then(() => {})
+          .catch((e) => console.error('PV tracking error:', e))
+      }
     }
     initFavorite()
     return () => {
@@ -474,18 +484,14 @@ export default function CreatorClient({
     let profileMap: Record<string, { display_name: string | null; avatar_url: string | null }> = {}
     let ringMap: Record<string, string> = {}
     if (reviewerIds.length > 0) {
-      const { data: reviewerProfiles } = await supabase
-        .from('profiles')
-        .select('user_id, display_name, avatar_url')
-        .in('user_id', reviewerIds)
+      // レビュアーのプロフィールとリングは互いに独立しているので並行取得する
+      const [{ data: reviewerProfiles }, { data: reviewerRings }] = await Promise.all([
+        supabase.from('profiles').select('user_id, display_name, avatar_url').in('user_id', reviewerIds),
+        supabase.from('public_equipped_rings').select('user_id, equipped_ring_id').in('user_id', reviewerIds),
+      ])
       profileMap = Object.fromEntries(
         (reviewerProfiles || []).map((p) => [p.user_id, { display_name: p.display_name, avatar_url: p.avatar_url }])
       )
-
-      const { data: reviewerRings } = await supabase
-        .from('public_equipped_rings')
-        .select('user_id, equipped_ring_id')
-        .in('user_id', reviewerIds)
       ringMap = Object.fromEntries(
         (reviewerRings || []).map((r) => [r.user_id, r.equipped_ring_id as string])
       )
@@ -503,71 +509,76 @@ export default function CreatorClient({
 
 useEffect(() => {
   const fetchCreatorData = async () => {
+    if (!initialProfile) setLoading(true)
+
+    // 互いに独立している取得（プロフィール・作品・見積もりフォーム・レビュー・実績バッジ）を
+    // 直列にawaitしていたため、待ち時間がそのまま合算されて表示が遅くなっていた。
+    // 依存関係の無いものはPromise.allでまとめて並行実行する。
+    const tasks: Promise<void>[] = []
+
     if (!initialProfile) {
-      setLoading(true)
-
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', id)
-        .single()
-
-      if (profileData) {
-        setProfile(profileData as ExtendedProfile)
-      }
+      tasks.push(
+        supabase
+          .from('profiles')
+          .select('*')
+          .eq('user_id', id)
+          .single()
+          .then(({ data }) => {
+            if (data) setProfile(data as ExtendedProfile)
+          })
+      )
     }
 
     if (works.length === 0) {
-      const { data: worksData } = await supabase
-        .from('portfolio_items')
-        .select('*')
-        .eq('user_id', id)
-        .order('sort_order', { ascending: true })
-
-      if (worksData) setWorks(worksData)
+      tasks.push(
+        supabase
+          .from('portfolio_items')
+          .select('*')
+          .eq('user_id', id)
+          .order('sort_order', { ascending: true })
+          .then(({ data }) => {
+            if (data) setWorks(data)
+          })
+      )
     }
 
     if (forms.length === 0) {
-      const { data: formsData } = await supabase
-        .from('estimate_forms')
-        .select('*')
-        .eq('user_id', id)
-        .order('sort_order', { ascending: true })
-
-      if (formsData) setForms(formsData as EstimateFormRow[])
+      tasks.push(
+        supabase
+          .from('estimate_forms')
+          .select('*')
+          .eq('user_id', id)
+          .order('sort_order', { ascending: true })
+          .then(({ data }) => {
+            if (data) setForms(data as EstimateFormRow[])
+          })
+      )
     }
 
     if (reviews.length === 0) {
-      await refreshReviews()
+      tasks.push(refreshReviews())
     }
 
-    try {
-      const { data: badgeData } = await supabase.rpc('get_public_creator_badges', { p_user_id: id })
-      if (badgeData && badgeData[0]) {
-        setBadges({
-          isTrending: !!badgeData[0].is_trending,
-          isPopularInquiries: !!badgeData[0].is_popular_inquiries,
-          responseRate: badgeData[0].response_rate ?? null,
-          avgResponseHours: badgeData[0].avg_response_hours ?? null,
+    tasks.push(
+      supabase
+        .rpc('get_public_creator_badges', { p_user_id: id })
+        .then(({ data: badgeData }) => {
+          if (badgeData && badgeData[0]) {
+            setBadges({
+              isTrending: !!badgeData[0].is_trending,
+              isPopularInquiries: !!badgeData[0].is_popular_inquiries,
+              responseRate: badgeData[0].response_rate ?? null,
+              avgResponseHours: badgeData[0].avg_response_hours ?? null,
+            })
+          }
         })
-      }
-    } catch (e) {
-      console.error('実績バッジ取得エラー:', e)
-    }
+        .catch((e) => console.error('実績バッジ取得エラー:', e))
+    )
 
-    try {
-      const { data: { user: viewer } } = await supabase.auth.getUser()
-      if (viewer?.id !== id) {
-        await supabase.from('analytics_logs').insert({
-          creator_id: id,
-          event_type: 'pv',
-        })
-      }
-    } catch (e) {
-      console.error('PV tracking error:', e)
-    }
-
+    await Promise.all(tasks)
     setLoading(false)
+    // PVトラッキングは別のuseEffect（お気に入り判定）でsupabase.auth.getUser()の結果を
+    // 使い回して行っている（同じ確認をここでも呼ぶと通信が二重になるため）
   }
 
   fetchCreatorData()

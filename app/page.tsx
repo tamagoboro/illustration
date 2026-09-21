@@ -161,18 +161,46 @@ export default function Home() {
 
           setProfiles(randomized)
 
-          const { data: ringsData } = await supabase
-            .from('public_equipped_rings')
-            .select('user_id, equipped_ring_id')
-            .in('user_id', userIds)
+          // 行動データ（PV・問い合わせ数）に基づく実績バッジ。手動申請なしで自動計算されるが、
+          // analytics_logs全体を集計する重いクエリなのでトップページを開くたびに毎回叩かないよう、
+          // 同じタブ内では10分間だけsessionStorageにキャッシュして再利用する。
+          const BADGE_CACHE_KEY = 'drawker_badge_cache_v1'
+          const BADGE_CACHE_TTL_MS = 10 * 60 * 1000
+          let cachedBadges: any[] | null = null
+          try {
+            const cached = sessionStorage.getItem(BADGE_CACHE_KEY)
+            if (cached) {
+              const parsed = JSON.parse(cached)
+              if (Date.now() - parsed.savedAt < BADGE_CACHE_TTL_MS) {
+                cachedBadges = parsed.data
+              }
+            }
+          } catch (e) {
+            // noop
+          }
+
+          // リング取得とバッジ取得は互いに独立しているので、直列にawaitせず並行実行して
+          // 待ち時間を短縮する（バッジがキャッシュ済みならRPC自体を呼ばない）
+          const [ringsResult, badgeResult] = await Promise.all([
+            supabase.from('public_equipped_rings').select('user_id, equipped_ring_id').in('user_id', userIds),
+            cachedBadges ? Promise.resolve({ data: cachedBadges }) : supabase.rpc('get_public_creator_badges'),
+          ])
+
           const map: Record<string, string | null> = {}
-          ;(ringsData || []).forEach((r: any) => {
+          ;(ringsResult.data || []).forEach((r: any) => {
             map[r.user_id] = r.equipped_ring_id
           })
           setRingMap(map)
 
-          // 行動データ（PV・問い合わせ数）に基づく実績バッジ。手動申請なしで自動計算される
-          const { data: badgeData } = await supabase.rpc('get_public_creator_badges')
+          const badgeData = badgeResult.data
+          if (!cachedBadges) {
+            try {
+              sessionStorage.setItem(BADGE_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), data: badgeData }))
+            } catch (e) {
+              // noop
+            }
+          }
+
           const bMap: Record<string, { isTrending: boolean; isPopularInquiries: boolean; isFastResponder: boolean }> = {}
           ;(badgeData || []).forEach((b: any) => {
             bMap[b.user_id] = {
