@@ -89,6 +89,7 @@ const SNS_PLATFORM_LABELS: Record<string, string> = {
   twitch: 'Twitch',
   website: '公式Webサイト',
   email: '📧 メールで問い合わせ',
+  goods: '🛒 グッズ販売ページを見る',
   other: 'その他リンク',
 }
 
@@ -262,6 +263,10 @@ export default function CreatorClient({
   const [requestContent, setRequestContent] = useState('')
   const [requestBudget, setRequestBudget] = useState('')
   const [requestContactUrl, setRequestContactUrl] = useState('')
+  const [requestUsageType, setRequestUsageType] = useState('')
+  const [requestReferenceUrl, setRequestReferenceUrl] = useState('')
+  const [requestSizeSpec, setRequestSizeSpec] = useState('')
+  const [requestDeadline, setRequestDeadline] = useState('')
   const [requestImageFiles, setRequestImageFiles] = useState<File[]>([])
   const [requestImagePreviews, setRequestImagePreviews] = useState<string[]>([])
   const [submittingRequest, setSubmittingRequest] = useState(false)
@@ -291,9 +296,37 @@ export default function CreatorClient({
   // 入力するたびに下書きとして端末に保存する（画像は保存できないためテキスト項目のみ）
   useEffect(() => {
     if (!isRequestModalOpen) return
-    if (!requestContent.trim() && !requestBudget.trim() && !requestContactUrl.trim()) return
-    saveDraft(`request_${id}`, { content: requestContent, budget: requestBudget, contactUrl: requestContactUrl })
-  }, [requestContent, requestBudget, requestContactUrl, isRequestModalOpen, id])
+    if (
+      !requestContent.trim() &&
+      !requestBudget.trim() &&
+      !requestContactUrl.trim() &&
+      !requestUsageType.trim() &&
+      !requestReferenceUrl.trim() &&
+      !requestSizeSpec.trim() &&
+      !requestDeadline.trim()
+    ) {
+      return
+    }
+    saveDraft(`request_${id}`, {
+      content: requestContent,
+      budget: requestBudget,
+      contactUrl: requestContactUrl,
+      usageType: requestUsageType,
+      referenceUrl: requestReferenceUrl,
+      sizeSpec: requestSizeSpec,
+      deadline: requestDeadline,
+    })
+  }, [
+    requestContent,
+    requestBudget,
+    requestContactUrl,
+    requestUsageType,
+    requestReferenceUrl,
+    requestSizeSpec,
+    requestDeadline,
+    isRequestModalOpen,
+    id,
+  ])
 
   const handleSubmitRequest = async () => {
     if (!currentUserId || !requestContent.trim() || !requestContactUrl.trim()) return
@@ -324,6 +357,10 @@ export default function CreatorClient({
         budget: requestBudget ? Number(requestBudget) || null : null,
         client_contact_url: requestContactUrl.trim(),
         image_urls: uploadedUrls,
+        usage_type: requestUsageType || null,
+        reference_url: requestReferenceUrl.trim() || null,
+        size_spec: requestSizeSpec.trim() || null,
+        desired_deadline: requestDeadline || null,
       })
       if (error) throw error
       setRequestSubmitted(true)
@@ -1324,10 +1361,22 @@ const themeColor = useMemo(() => {
                 {profile.accepts_direct_requests !== false && currentUserId && currentUserId !== id && (
                   <button
                     onClick={() => {
-                      const draft = loadDraft<{ content: string; budget: string; contactUrl: string }>(`request_${id}`)
+                      const draft = loadDraft<{
+                        content: string
+                        budget: string
+                        contactUrl: string
+                        usageType?: string
+                        referenceUrl?: string
+                        sizeSpec?: string
+                        deadline?: string
+                      }>(`request_${id}`)
                       setRequestContent(draft?.content || '')
                       setRequestBudget(draft?.budget || '')
                       setRequestContactUrl(draft?.contactUrl || '')
+                      setRequestUsageType(draft?.usageType || '')
+                      setRequestReferenceUrl(draft?.referenceUrl || '')
+                      setRequestSizeSpec(draft?.sizeSpec || '')
+                      setRequestDeadline(draft?.deadline || '')
                       setRequestDraftRestored(!!draft)
                       setRequestImageFiles([])
                       setRequestImagePreviews([])
@@ -2239,6 +2288,10 @@ const themeColor = useMemo(() => {
                           setRequestContent('')
                           setRequestBudget('')
                           setRequestContactUrl('')
+                          setRequestUsageType('')
+                          setRequestReferenceUrl('')
+                          setRequestSizeSpec('')
+                          setRequestDeadline('')
                           clearDraft(`request_${id}`)
                           setRequestDraftRestored(false)
                         }}
@@ -2256,8 +2309,55 @@ const themeColor = useMemo(() => {
                     rows={5}
                     value={requestContent}
                     onChange={(e) => setRequestContent(e.target.value)}
-                    placeholder="どんな作品を、いつまでに欲しいか等をできるだけ具体的にご記入ください"
+                    placeholder="どんな作品を作ってほしいか具体的にご記入ください（キャラクターものの場合は髪色・目の色・衣装なども書くとスムーズです）"
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white resize-none"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-700">用途（任意）</label>
+                  <select
+                    value={requestUsageType}
+                    onChange={(e) => setRequestUsageType(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white"
+                  >
+                    <option value="">選択してください</option>
+                    <option value="個人利用">個人利用</option>
+                    <option value="商用利用">商用利用</option>
+                    <option value="まだ決めていない・相談したい">まだ決めていない・相談したい</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-700">サイズ・使用先（任意）</label>
+                    <input
+                      type="text"
+                      value={requestSizeSpec}
+                      onChange={(e) => setRequestSizeSpec(e.target.value)}
+                      placeholder="例: アイコン1000×1000px"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-700">希望納期（任意）</label>
+                    <input
+                      type="date"
+                      value={requestDeadline}
+                      onChange={(e) => setRequestDeadline(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-700">参考資料URL（任意）</label>
+                  <input
+                    type="url"
+                    value={requestReferenceUrl}
+                    onChange={(e) => setRequestReferenceUrl(e.target.value)}
+                    placeholder="PinterestボードやXの投稿URLなど"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white"
                   />
                 </div>
 

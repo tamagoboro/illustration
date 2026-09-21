@@ -12,6 +12,10 @@ type RequestRow = {
   budget: number | null
   client_contact_url: string | null
   image_urls: string[] | null
+  usage_type: string | null
+  reference_url: string | null
+  size_spec: string | null
+  desired_deadline: string | null
   status: 'pending' | 'accepted' | 'declined' | 'cancelled'
   creator_response: string | null
   created_at: string
@@ -167,8 +171,34 @@ export default function DashboardRequestsPage() {
                   </div>
                 )}
 
-                {r.budget != null && (
-                  <p className="text-xs font-bold text-sky-600">提示予算: ¥{r.budget.toLocaleString()}</p>
+                {(r.usage_type || r.size_spec || r.desired_deadline || r.budget != null) && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {r.usage_type && (
+                      <span className="text-[11px] font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded-lg">用途: {r.usage_type}</span>
+                    )}
+                    {r.size_spec && (
+                      <span className="text-[11px] font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded-lg">サイズ: {r.size_spec}</span>
+                    )}
+                    {r.desired_deadline && (
+                      <span className="text-[11px] font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded-lg">
+                        希望納期: {new Date(r.desired_deadline).toLocaleDateString('ja-JP')}
+                      </span>
+                    )}
+                    {r.budget != null && (
+                      <span className="text-[11px] font-bold bg-sky-50 text-sky-600 px-2 py-1 rounded-lg">予算: ¥{r.budget.toLocaleString()}</span>
+                    )}
+                  </div>
+                )}
+
+                {r.reference_url && (
+                  <a
+                    href={r.reference_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:underline"
+                  >
+                    📎 参考資料を見る
+                  </a>
                 )}
 
                 {r.client_contact_url && (

@@ -36,6 +36,7 @@ const SNS_PLATFORMS = [
   { id: 'twitch', label: 'Twitch' },
   { id: 'website', label: '公式Webサイト' },
   { id: 'email', label: '📧 メール (Gmail等)' },
+  { id: 'goods', label: '🛒 グッズ販売ページ (BOOTH等)' },
   { id: 'other', label: 'その他' },
 ]
 
