@@ -1013,7 +1013,7 @@ export default function Home() {
                               <AvatarRing
                                 src={profile.avatar_url}
                                 alt=""
-                                size={22}
+                                size={32}
                                 ringId={ringMap[profile.user_id]}
                                 fallback={<div className="w-full h-full rounded-full bg-sky-100" />}
                               />
