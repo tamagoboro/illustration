@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, ChangeEvent, FormEvent, KeyboardEvent } from 'react'
+import { useState, useEffect, useMemo, ChangeEvent, FormEvent, KeyboardEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { User } from '@supabase/supabase-js'
@@ -145,6 +145,7 @@ export default function Dashboard() {
   const [acceptsDirectRequests, setAcceptsDirectRequests] = useState(true)
 
   const [externalEstimationUrl, setExternalEstimationUrl] = useState('')
+  const [hasEstimateForm, setHasEstimateForm] = useState(false)
 
   const [snsLinks, setSnsLinks] = useState<SnsLinkItem[]>([
     { id: '1', platform: 'twitter', url: '' },
@@ -279,6 +280,20 @@ export default function Dashboard() {
           if (profileData.available_from_text) setAvailableFromText(profileData.available_from_text)
           if (typeof profileData.active_projects_count === 'number') setActiveProjectsCount(profileData.active_projects_count)
           if (typeof profileData.max_projects_capacity === 'number') setMaxProjectsCapacity(profileData.max_projects_capacity)
+        }
+
+        // 「オリジナル見積書フォーム」の作成済み判定はform-builderで作った実際のフォーム(estimate_forms)を見る。
+        // 以前はprofiles.external_estimation_url(外部リンク用の別項目)だけを見ていたため、
+        // form-builderでフォームを作成済みでも「未作成」と表示される不具合があった。
+        const { count: estimateFormCount, error: estimateFormError } = await supabase
+          .from('estimate_forms')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+
+        if (estimateFormError) {
+          console.error('見積もりフォーム件数取得エラー:', estimateFormError)
+        } else {
+          setHasEstimateForm((estimateFormCount || 0) > 0)
         }
 
         const { data: portfolioData, error: portfolioError } = await supabase
@@ -802,6 +817,28 @@ export default function Dashboard() {
     }
   }
 
+  // プロフィール完成度チェックリスト。既存項目を見るだけで計算できるので新規テーブルは不要。
+  const profileChecklist = useMemo(() => {
+    const items: { label: string; done: boolean; tab: 'basic' | 'pricing' | 'contact' | 'portfolio' }[] = [
+      { label: 'アイコン画像を設定する', done: avatarUrl.trim() !== '', tab: 'basic' },
+      { label: '自己紹介コメントを書く', done: statusComment.trim() !== '', tab: 'basic' },
+      { label: '得意なタグを1つ以上設定する', done: tastes.length > 0, tab: 'contact' },
+      {
+        label: '料金メニューを1つ以上設定する',
+        done: menuItems.some((item) => item.title.trim() !== '' && item.price !== ''),
+        tab: 'pricing',
+      },
+      { label: '参考最低価格を設定する', done: priceMin.trim() !== '' && Number(priceMin) > 0, tab: 'pricing' },
+      { label: '目安納期を設定する', done: leadTimeDays.trim() !== '' && Number(leadTimeDays) > 0, tab: 'pricing' },
+      { label: 'SNS・連絡先リンクを1つ以上設定する', done: snsLinks.some((link) => link.url.trim() !== ''), tab: 'contact' },
+      { label: '作品を1つ以上掲載する', done: portfolioUrls.some((url) => url.trim() !== ''), tab: 'portfolio' },
+      { label: '見積もりフォームを作成する', done: hasEstimateForm, tab: 'contact' },
+    ]
+    const doneCount = items.filter((i) => i.done).length
+    const percent = Math.round((doneCount / items.length) * 100)
+    return { items, percent }
+  }, [avatarUrl, statusComment, tastes, menuItems, priceMin, leadTimeDays, snsLinks, portfolioUrls, hasEstimateForm])
+
   const handleLogout = async () => {
     if (isDirty) {
       const confirmLogout = window.confirm(
@@ -974,6 +1011,45 @@ export default function Dashboard() {
             </button>
           </div>
         </div>
+
+        {/* プロフィール完成度 */}
+        {profileChecklist.percent < 100 && (
+          <div className="bg-white rounded-3xl border border-slate-200/80 p-4 sm:p-5 shadow-xs space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
+                📋 プロフィール完成度
+              </h2>
+              <span className={`text-sm font-black ${currentThemeObj.text}`}>
+                {profileChecklist.percent}%
+              </span>
+            </div>
+
+            <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+              <div
+                className={`h-full rounded-full ${currentThemeObj.bg} transition-all duration-500`}
+                style={{ width: `${profileChecklist.percent}%` }}
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {profileChecklist.items
+                .filter((item) => !item.done)
+                .map((item) => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={() => handleTabChange(item.tab)}
+                    className="text-[11px] font-bold px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 transition-colors cursor-pointer"
+                  >
+                    ○ {item.label}
+                  </button>
+                ))}
+            </div>
+            <p className="text-[10px] text-slate-400">
+              項目をクリックすると該当のタブに移動します。埋まっているほど依頼者の目に留まりやすくなります。
+            </p>
+          </div>
+        )}
 
         {/* アクセス解析（PV・問い合わせ・お気に入り） */}
         {analytics && (
@@ -1821,7 +1897,7 @@ export default function Dashboard() {
                       <div className="flex items-center justify-between">
                         <label className="text-xs font-bold text-slate-800 flex items-center gap-2">
                           <span>オリジナル見積書フォーム</span>
-                          {externalEstimationUrl ? (
+                          {hasEstimateForm ? (
                             <span className="px-2 py-0.5 text-[10px] bg-emerald-100 text-emerald-700 rounded-md font-extrabold">
                               作成済み
                             </span>
@@ -1842,9 +1918,12 @@ export default function Dashboard() {
                         </Link>
                       </div>
 
+                      <p className="text-[10px] text-slate-400">
+                        下の欄は任意です。Googleフォーム等、Drawker以外で作った見積もりフォームを使いたい場合だけ入力してください。
+                      </p>
                       <input
                         type="url"
-                        placeholder="https://...（見積書作成ページで自動生成されたURLまたは外部フォームURL）"
+                        placeholder="https://...（Drawker以外の外部フォームを使う場合のみ入力）"
                         value={externalEstimationUrl}
                         onChange={(e) => {
                           setExternalEstimationUrl(e.target.value)
