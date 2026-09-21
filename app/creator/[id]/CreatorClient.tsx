@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { supabase, Profile, PortfolioItem } from '@/lib/supabase'
 import { loadFavorites, toggleFavoriteRecord } from '@/lib/favorites'
 import { convertToWebp } from '@/lib/imageUtils'
+import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft'
 import AvatarRing from '@/components/AvatarRing'
 import ProtectedImage from '@/components/ProtectedImage'
 import NotificationBell from '@/components/NotificationBell'
@@ -188,7 +189,12 @@ export default function CreatorClient({
   const [loading, setLoading] = useState(!initialProfile)
   const [isFavorite, setIsFavorite] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  const [badges, setBadges] = useState<{ isTrending: boolean; isPopularInquiries: boolean } | null>(null)
+  const [badges, setBadges] = useState<{
+    isTrending: boolean
+    isPopularInquiries: boolean
+    responseRate: number | null
+    avgResponseHours: number | null
+  } | null>(null)
 
   // モーダル管理
   const [isEstimateOpen, setIsEstimateOpen] = useState(false)
@@ -255,6 +261,7 @@ export default function CreatorClient({
   const [requestImagePreviews, setRequestImagePreviews] = useState<string[]>([])
   const [submittingRequest, setSubmittingRequest] = useState(false)
   const [requestSubmitted, setRequestSubmitted] = useState(false)
+  const [requestDraftRestored, setRequestDraftRestored] = useState(false)
 
   const REQUEST_MAX_IMAGES = 3
 
@@ -275,6 +282,13 @@ export default function CreatorClient({
     setRequestImageFiles((prev) => prev.filter((_, i) => i !== index))
     setRequestImagePreviews((prev) => prev.filter((_, i) => i !== index))
   }
+
+  // 入力するたびに下書きとして端末に保存する（画像は保存できないためテキスト項目のみ）
+  useEffect(() => {
+    if (!isRequestModalOpen) return
+    if (!requestContent.trim() && !requestBudget.trim() && !requestContactUrl.trim()) return
+    saveDraft(`request_${id}`, { content: requestContent, budget: requestBudget, contactUrl: requestContactUrl })
+  }, [requestContent, requestBudget, requestContactUrl, isRequestModalOpen, id])
 
   const handleSubmitRequest = async () => {
     if (!currentUserId || !requestContent.trim() || !requestContactUrl.trim()) return
@@ -308,9 +322,15 @@ export default function CreatorClient({
       })
       if (error) throw error
       setRequestSubmitted(true)
+      clearDraft(`request_${id}`)
     } catch (error: any) {
       console.error('リクエスト送信エラー:', error)
-      alert('リクエストの送信に失敗しました。時間をおいて再度お試しください。')
+      // P0001 は送信制限(連投防止)チェックが意図的に発生させたエラーなので、内容をそのまま案内する
+      const message =
+        error?.code === 'P0001' && error?.message
+          ? error.message
+          : 'リクエストの送信に失敗しました。時間をおいて再度お試しください。'
+      alert(message)
     } finally {
       setSubmittingRequest(false)
     }
@@ -334,6 +354,7 @@ export default function CreatorClient({
   const [generatedSpec, setGeneratedSpec] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [shareCopied, setShareCopied] = useState(false)
+  const [estimateDraftRestored, setEstimateDraftRestored] = useState(false)
 
   const BACKGROUND_IMAGE_URL =
     'https://qcklfkslqtjnxufqcqyi.supabase.co/storage/v1/object/public/portfolios/bg.png'
@@ -350,11 +371,32 @@ export default function CreatorClient({
     }
   }, [isEstimateOpen, isContactOpen, isFormPickerOpen, isReviewModalOpen, lightboxImageUrl, selectedWork])
 
-  // 開いているフォームが切り替わったら、前のフォームの回答・生成済み仕様書を引き継がない
+  // 開いているフォームが切り替わったら、前のフォームの回答・生成済み仕様書を引き継がない。
+  // ただし、同じ端末で以前に途中まで入力していた下書きがあればそちらを復元する。
   useEffect(() => {
-    setFormAnswers({})
     setGeneratedSpec(null)
-  }, [selectedFormId])
+    if (!selectedFormId) {
+      setFormAnswers({})
+      setEstimateDraftRestored(false)
+      return
+    }
+    const draft = loadDraft<{ answers: Record<string, any>; clientName: string }>(`estimate_${id}_${selectedFormId}`)
+    if (draft) {
+      setFormAnswers(draft.answers || {})
+      if (draft.clientName) setClientName(draft.clientName)
+      setEstimateDraftRestored(true)
+    } else {
+      setFormAnswers({})
+      setEstimateDraftRestored(false)
+    }
+  }, [selectedFormId, id])
+
+  // 入力するたびに下書きとして端末に保存する（送信するまでは自分のブラウザにしか残らない）
+  useEffect(() => {
+    if (!selectedFormId) return
+    if (Object.keys(formAnswers).length === 0 && !clientName.trim()) return
+    saveDraft(`estimate_${id}_${selectedFormId}`, { answers: formAnswers, clientName })
+  }, [formAnswers, clientName, selectedFormId, id])
 
   // ログイン状態を確認しつつ、このクリエイターがお気に入り済みか判定する
   // （ログイン中はアカウントに保存された一覧、未ログインはブラウザ保存分を使う）
@@ -463,6 +505,8 @@ useEffect(() => {
         setBadges({
           isTrending: !!badgeData[0].is_trending,
           isPopularInquiries: !!badgeData[0].is_popular_inquiries,
+          responseRate: badgeData[0].response_rate ?? null,
+          avgResponseHours: badgeData[0].avg_response_hours ?? null,
         })
       }
     } catch (e) {
@@ -718,6 +762,7 @@ const themeColor = useMemo(() => {
     }
     navigator.clipboard.writeText(generatedSpec)
     setCopied(true)
+    if (selectedFormId) clearDraft(`estimate_${id}_${selectedFormId}`)
     setTimeout(() => setCopied(false), 2000)
   }
 
@@ -1025,6 +1070,11 @@ const themeColor = useMemo(() => {
                         🔥 問い合わせ多数
                       </span>
                     )}
+                    {badges?.responseRate != null && badges.responseRate >= 80 && (
+                      <span className="text-[11px] bg-emerald-500/10 text-emerald-800 font-extrabold px-3 py-0.5 rounded-full border border-emerald-300 shadow-2xs">
+                        💬 応答率{badges.responseRate}%
+                      </span>
+                    )}
                     {profile.ai_usage === 'none' && (
                       <span className="text-[11px] bg-sky-900/10 text-sky-900 font-extrabold px-3 py-0.5 rounded-full border border-sky-300 shadow-2xs">
                         ✦ 完全手描き
@@ -1269,9 +1319,11 @@ const themeColor = useMemo(() => {
                 {profile.accepts_direct_requests !== false && currentUserId && currentUserId !== id && (
                   <button
                     onClick={() => {
-                      setRequestContent('')
-                      setRequestBudget('')
-                      setRequestContactUrl('')
+                      const draft = loadDraft<{ content: string; budget: string; contactUrl: string }>(`request_${id}`)
+                      setRequestContent(draft?.content || '')
+                      setRequestBudget(draft?.budget || '')
+                      setRequestContactUrl(draft?.contactUrl || '')
+                      setRequestDraftRestored(!!draft)
                       setRequestImageFiles([])
                       setRequestImagePreviews([])
                       setRequestSubmitted(false)
@@ -1282,6 +1334,11 @@ const themeColor = useMemo(() => {
                   >
                     <span>📩</span> メニューに無い依頼をリクエストする
                   </button>
+                )}
+                {profile.accepts_direct_requests !== false && badges?.avgResponseHours != null && (
+                  <p className="text-[10px] text-slate-400 text-center -mt-1">
+                    平均返信時間: 約{badges.avgResponseHours < 1 ? '1時間以内' : `${Math.round(badges.avgResponseHours)}時間`}
+                  </p>
                 )}
 
                 <button
@@ -1686,6 +1743,24 @@ const themeColor = useMemo(() => {
                       <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-sky-100 text-sky-700 border border-sky-200 inline-flex items-center gap-1">
                         🎨 参考指定作品: {referenceWorkTitle}
                       </span>
+                    </div>
+                  )}
+                  {estimateDraftRestored && !generatedSpec && (
+                    <div className="pl-7 pt-1 flex items-center gap-2">
+                      <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">
+                        📝 前回の続きから復元しました
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormAnswers({})
+                          if (selectedFormId) clearDraft(`estimate_${id}_${selectedFormId}`)
+                          setEstimateDraftRestored(false)
+                        }}
+                        className="text-[10px] font-bold text-slate-400 hover:text-rose-500 cursor-pointer"
+                      >
+                        最初から入力し直す
+                      </button>
                     </div>
                   )}
                 </div>
@@ -2148,6 +2223,26 @@ const themeColor = useMemo(() => {
                   <p className="text-[11px] text-slate-400 mt-1">
                     {profile.display_name}さんへ直接リクエストを送ります。承諾されるとは限りませんので、あくまで打診としてお使いください。
                   </p>
+                  {requestDraftRestored && (
+                    <div className="flex items-center gap-2 pt-2">
+                      <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">
+                        📝 前回の続きから復元しました（画像は再度添付してください）
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRequestContent('')
+                          setRequestBudget('')
+                          setRequestContactUrl('')
+                          clearDraft(`request_${id}`)
+                          setRequestDraftRestored(false)
+                        }}
+                        className="text-[10px] font-bold text-slate-400 hover:text-rose-500 cursor-pointer"
+                      >
+                        最初から入力し直す
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-1.5">

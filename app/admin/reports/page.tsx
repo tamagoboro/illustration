@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 
@@ -93,7 +93,36 @@ export default function AdminReportsPage() {
     setReports((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)))
   }
 
-  const visibleReports = reports.filter((r) => statusFilter === 'all' || r.status === statusFilter)
+  // 同じクリエイターに未対応の通報が複数件来ている場合、重複の可能性が高く優先度が上がるため目立たせる
+  const MULTI_REPORT_THRESHOLD = 2
+
+  const openCountByCreator = useMemo(() => {
+    const map: Record<string, number> = {}
+    reports.forEach((r) => {
+      if (r.status !== 'open') return
+      map[r.creator_id] = (map[r.creator_id] || 0) + 1
+    })
+    return map
+  }, [reports])
+
+  const flaggedCreators = useMemo(() => {
+    const entries = Object.entries(openCountByCreator).filter(([, count]) => count >= MULTI_REPORT_THRESHOLD)
+    return entries
+      .map(([creatorId, count]) => ({
+        creatorId,
+        count,
+        displayName: reports.find((r) => r.creator_id === creatorId)?.creator_display_name || creatorId,
+      }))
+      .sort((a, b) => b.count - a.count)
+  }, [openCountByCreator, reports])
+
+  const visibleReports = reports
+    .filter((r) => statusFilter === 'all' || r.status === statusFilter)
+    .sort((a, b) => {
+      const diff = (openCountByCreator[b.creator_id] || 0) - (openCountByCreator[a.creator_id] || 0)
+      if (diff !== 0) return diff
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    })
 
   if (checking) {
     return <div className="p-8 text-center text-xs font-bold text-slate-400">読み込み中...</div>
@@ -149,6 +178,26 @@ export default function AdminReportsPage() {
       </header>
 
       <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-4">
+        {flaggedCreators.length > 0 && (
+          <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 space-y-2">
+            <h2 className="text-xs font-black text-rose-700 flex items-center gap-1.5">
+              🚨 複数の未対応通報があるクリエイター
+            </h2>
+            <div className="flex flex-wrap gap-2">
+              {flaggedCreators.map((c) => (
+                <Link
+                  key={c.creatorId}
+                  href={`/creator/${c.creatorId}`}
+                  target="_blank"
+                  className="text-[11px] font-bold bg-white border border-rose-200 text-rose-700 px-3 py-1.5 rounded-xl hover:bg-rose-100 transition-colors"
+                >
+                  {c.displayName}（{c.count}件）
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-wrap gap-1.5">
           {(['open', 'reviewed', 'dismissed', 'all'] as const).map((s) => (
             <button
@@ -171,8 +220,21 @@ export default function AdminReportsPage() {
           <p className="text-xs text-slate-400 text-center py-8">該当する通報はありません</p>
         ) : (
           <div className="space-y-3">
-            {visibleReports.map((r) => (
-              <div key={r.id} className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm space-y-2">
+            {visibleReports.map((r) => {
+              const openCount = openCountByCreator[r.creator_id] || 0
+              const isFlagged = openCount >= MULTI_REPORT_THRESHOLD
+              return (
+              <div
+                key={r.id}
+                className={`rounded-2xl p-4 shadow-sm space-y-2 ${
+                  isFlagged ? 'bg-rose-50/60 border-2 border-rose-300' : 'bg-white border border-slate-100'
+                }`}
+              >
+                {isFlagged && (
+                  <span className="inline-block text-[10px] font-black px-2 py-0.5 rounded-full bg-rose-500 text-white">
+                    🚨 このクリエイターへの未対応通報が合計{openCount}件あります
+                  </span>
+                )}
                 <div className="flex items-start justify-between gap-2 flex-wrap">
                   <div>
                     <span
@@ -228,7 +290,8 @@ export default function AdminReportsPage() {
                   </div>
                 )}
               </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>

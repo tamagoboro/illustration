@@ -78,7 +78,7 @@ export default function Home() {
   // お気に入りステート
   const [favorites, setFavorites] = useState<string[]>([])
   const [ringMap, setRingMap] = useState<Record<string, string | null>>({})
-  const [badgeMap, setBadgeMap] = useState<Record<string, { isTrending: boolean; isPopularInquiries: boolean }>>({})
+  const [badgeMap, setBadgeMap] = useState<Record<string, { isTrending: boolean; isPopularInquiries: boolean; isFastResponder: boolean }>>({})
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false)
   const [isCompareOpen, setIsCompareOpen] = useState(false)
 
@@ -173,9 +173,13 @@ export default function Home() {
 
           // 行動データ（PV・問い合わせ数）に基づく実績バッジ。手動申請なしで自動計算される
           const { data: badgeData } = await supabase.rpc('get_public_creator_badges')
-          const bMap: Record<string, { isTrending: boolean; isPopularInquiries: boolean }> = {}
+          const bMap: Record<string, { isTrending: boolean; isPopularInquiries: boolean; isFastResponder: boolean }> = {}
           ;(badgeData || []).forEach((b: any) => {
-            bMap[b.user_id] = { isTrending: !!b.is_trending, isPopularInquiries: !!b.is_popular_inquiries }
+            bMap[b.user_id] = {
+              isTrending: !!b.is_trending,
+              isPopularInquiries: !!b.is_popular_inquiries,
+              isFastResponder: !!b.is_fast_responder,
+            }
           })
           setBadgeMap(bMap)
         }
@@ -881,6 +885,11 @@ export default function Home() {
                           {badges?.isPopularInquiries && (
                             <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-violet-500 text-white shadow-xs">
                               🔥 問い合わせ多数
+                            </span>
+                          )}
+                          {badges?.isFastResponder && (
+                            <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-emerald-500 text-white shadow-xs">
+                              ⚡ 返信はやい
                             </span>
                           )}
 

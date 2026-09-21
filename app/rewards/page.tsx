@@ -20,6 +20,7 @@ export default function RewardsPage() {
   const [sentRequests, setSentRequests] = useState<
     { id: string; creator_id: string; content: string; status: string; creator_response: string | null; created_at: string; creator_display_name?: string | null }[]
   >([])
+  const [busyRequestId, setBusyRequestId] = useState<string | null>(null)
   const [linkCopied, setLinkCopied] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
 
@@ -60,6 +61,20 @@ export default function RewardsPage() {
     }
 
     setSentRequests(data.map((r: any) => ({ ...r, creator_display_name: nameMap[r.creator_id] || null })))
+  }
+
+  const cancelRequest = async (id: string) => {
+    if (!confirm('このリクエストを取り下げますか？')) return
+    setBusyRequestId(id)
+    const { error } = await supabase.from('requests').update({ status: 'cancelled' }).eq('id', id)
+    setBusyRequestId(null)
+
+    if (error) {
+      console.error('リクエストのキャンセルエラー:', error)
+      alert('キャンセルに失敗しました。時間をおいて再度お試しください。')
+      return
+    }
+    setSentRequests((prev) => prev.map((r) => (r.id === id ? { ...r, status: 'cancelled' } : r)))
   }
 
   useEffect(() => {
@@ -247,32 +262,43 @@ export default function RewardsPage() {
             <h2 className="text-xs font-black text-slate-900 uppercase tracking-widest">📩 送ったリクエスト</h2>
             <div className="space-y-2">
               {sentRequests.map((r) => (
-                <Link
+                <div
                   key={r.id}
-                  href={`/creator/${r.creator_id}`}
-                  className="block p-3.5 rounded-2xl border border-slate-100 bg-slate-50/60 hover:bg-slate-50 transition-colors space-y-1.5"
+                  className="p-3.5 rounded-2xl border border-slate-100 bg-slate-50/60 space-y-1.5"
                 >
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <span className="text-xs font-bold text-slate-800">{r.creator_display_name || 'クリエイター'}</span>
-                    <span
-                      className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                        r.status === 'pending'
-                          ? 'bg-amber-100 text-amber-700'
-                          : r.status === 'accepted'
-                          ? 'bg-emerald-100 text-emerald-700'
-                          : 'bg-slate-100 text-slate-500'
-                      }`}
+                  <Link href={`/creator/${r.creator_id}`} className="block hover:opacity-80 transition-opacity space-y-1.5">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-xs font-bold text-slate-800">{r.creator_display_name || 'クリエイター'}</span>
+                      <span
+                        className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                          r.status === 'pending'
+                            ? 'bg-amber-100 text-amber-700'
+                            : r.status === 'accepted'
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-slate-100 text-slate-500'
+                        }`}
+                      >
+                        {r.status === 'pending' ? '未回答' : r.status === 'accepted' ? '承諾済み' : r.status === 'declined' ? '辞退済み' : 'キャンセル済み'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 line-clamp-2">{r.content}</p>
+                    {r.creator_response && (
+                      <p className="text-[11px] text-sky-600 border-t border-slate-200 pt-1.5">
+                        返信: {r.creator_response}
+                      </p>
+                    )}
+                  </Link>
+                  {r.status === 'pending' && (
+                    <button
+                      type="button"
+                      onClick={() => cancelRequest(r.id)}
+                      disabled={busyRequestId === r.id}
+                      className="text-[10px] font-bold text-rose-500 hover:text-rose-600 cursor-pointer disabled:opacity-50"
                     >
-                      {r.status === 'pending' ? '未回答' : r.status === 'accepted' ? '承諾済み' : r.status === 'declined' ? '辞退済み' : 'キャンセル済み'}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 line-clamp-2">{r.content}</p>
-                  {r.creator_response && (
-                    <p className="text-[11px] text-sky-600 border-t border-slate-200 pt-1.5">
-                      返信: {r.creator_response}
-                    </p>
+                      {busyRequestId === r.id ? '処理中...' : 'このリクエストを取り下げる'}
+                    </button>
                   )}
-                </Link>
+                </div>
               ))}
             </div>
           </div>
