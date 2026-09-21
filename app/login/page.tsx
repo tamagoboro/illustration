@@ -376,6 +376,15 @@ export default function LoginPage() {
                 >
                   利用規約
                 </Link>
+                ・
+                <Link
+                  href="/privacy"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-bold text-sky-600 hover:underline"
+                >
+                  プライバシーポリシー
+                </Link>
                 に同意する
               </span>
             </label>

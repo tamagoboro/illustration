@@ -87,6 +87,7 @@ const SNS_PLATFORM_LABELS: Record<string, string> = {
   coconala: 'ココナラ',
   twitch: 'Twitch',
   website: '公式Webサイト',
+  email: '📧 メールで問い合わせ',
   other: 'その他リンク',
 }
 
@@ -133,6 +134,16 @@ const formatExternalUrl = (url?: string | null) => {
   if (!url) return ''
   if (url.startsWith('http://') || url.startsWith('https://')) return url
   return `https://${url}`
+}
+
+// SNSリンクの platform が 'email' の場合だけ mailto: リンクにする
+// （formatExternalUrlはメールアドレスの先頭にhttps://を付けてしまい壊れるため）
+const formatContactHref = (link: { platform: string; url: string }) => {
+  if (link.platform === 'email') {
+    const email = link.url.replace(/^mailto:/i, '').trim()
+    return `mailto:${email}`
+  }
+  return formatExternalUrl(link.url)
 }
 
 // カラーコード (Hex / キーワード) を RGBA に変換する補助関数
@@ -2239,13 +2250,13 @@ const themeColor = useMemo(() => {
                 profile.sns_links.map((link) => (
                   <a
                     key={link.id}
-                    href={formatExternalUrl(link.url)}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    href={formatContactHref(link)}
+                    target={link.platform === 'email' ? undefined : '_blank'}
+                    rel={link.platform === 'email' ? undefined : 'noopener noreferrer'}
                     className="w-full py-3 px-4 bg-sky-100 text-sky-800 font-bold rounded-xl text-xs transition hover:bg-sky-200 flex items-center justify-between"
                   >
                     <span>{SNS_PLATFORM_LABELS[link.platform] || link.platform}</span>
-                    <span>↗</span>
+                    <span>{link.platform === 'email' ? '✉️' : '↗'}</span>
                   </a>
                 ))
               ) : (

@@ -35,6 +35,7 @@ const SNS_PLATFORMS = [
   { id: 'coconala', label: 'ココナラ' },
   { id: 'twitch', label: 'Twitch' },
   { id: 'website', label: '公式Webサイト' },
+  { id: 'email', label: '📧 メール (Gmail等)' },
   { id: 'other', label: 'その他' },
 ]
 
@@ -1914,8 +1915,8 @@ export default function Dashboard() {
                             </select>
 
                             <input
-                              type="url"
-                              placeholder="https://..."
+                              type={item.platform === 'email' ? 'email' : 'url'}
+                              placeholder={item.platform === 'email' ? 'example@gmail.com' : 'https://...'}
                               value={item.url}
                               onChange={(e) => handleSnsLinkChange(item.id, 'url', e.target.value)}
                               className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-mono text-[11px]"
