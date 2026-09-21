@@ -398,7 +398,18 @@ export default function Home() {
 
           {/* アクションボタンエリア */}
           <div className="flex items-center gap-2.5">
-            
+
+            {/* 応援・寄付リンク */}
+            <a
+              href="https://buy.stripe.com/6oU6oIcOQ7YVckj2v94Ja00"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3.5 py-2 text-xs font-bold rounded-2xl border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700 shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+            >
+              <span>☕</span>
+              <span className="hidden sm:inline">応援する</span>
+            </a>
+
             {/* お気に入りフィルターボタン */}
             <button
               onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
@@ -1092,14 +1103,6 @@ export default function Home() {
           <Link href="/privacy" className="hover:text-sky-600 transition-colors">
             プライバシーポリシー
           </Link>
-          <a
-            href="https://buy.stripe.com/6oU6oIcOQ7YVckj2v94Ja00"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-sky-600 transition-colors"
-          >
-            ☕ Drawkerを応援する
-          </a>
           <span className="text-slate-300">© Drawker</span>
         </div>
       </footer>
