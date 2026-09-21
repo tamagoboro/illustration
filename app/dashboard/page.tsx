@@ -146,6 +146,7 @@ export default function Dashboard() {
 
   const [externalEstimationUrl, setExternalEstimationUrl] = useState('')
   const [hasEstimateForm, setHasEstimateForm] = useState(false)
+  const [equippedRingId, setEquippedRingId] = useState<string | null>(null)
 
   const [snsLinks, setSnsLinks] = useState<SnsLinkItem[]>([
     { id: '1', platform: 'twitter', url: '' },
@@ -285,15 +286,22 @@ export default function Dashboard() {
         // 「オリジナル見積書フォーム」の作成済み判定はform-builderで作った実際のフォーム(estimate_forms)を見る。
         // 以前はprofiles.external_estimation_url(外部リンク用の別項目)だけを見ていたため、
         // form-builderでフォームを作成済みでも「未作成」と表示される不具合があった。
-        const { count: estimateFormCount, error: estimateFormError } = await supabase
-          .from('estimate_forms')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', user.id)
+        // アイコンリングの装着状況とは互いに独立しているので並行取得する。
+        const [estimateFormRes, ringRes] = await Promise.all([
+          supabase.from('estimate_forms').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+          supabase.from('user_points').select('equipped_ring_id').eq('user_id', user.id).maybeSingle(),
+        ])
 
-        if (estimateFormError) {
-          console.error('見積もりフォーム件数取得エラー:', estimateFormError)
+        if (estimateFormRes.error) {
+          console.error('見積もりフォーム件数取得エラー:', estimateFormRes.error)
         } else {
-          setHasEstimateForm((estimateFormCount || 0) > 0)
+          setHasEstimateForm((estimateFormRes.count || 0) > 0)
+        }
+
+        if (ringRes.error) {
+          console.error('アイコンリング装着状況取得エラー:', ringRes.error)
+        } else {
+          setEquippedRingId(ringRes.data?.equipped_ring_id || null)
         }
 
         const { data: portfolioData, error: portfolioError } = await supabase
@@ -1048,6 +1056,27 @@ export default function Dashboard() {
             <p className="text-[10px] text-slate-400">
               項目をクリックすると該当のタブに移動します。埋まっているほど依頼者の目に留まりやすくなります。
             </p>
+          </div>
+        )}
+
+        {/* アイコンリング未装着の案内 */}
+        {!equippedRingId && (
+          <div className="bg-gradient-to-r from-fuchsia-50 to-sky-50 rounded-3xl border border-fuchsia-100 p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🎀</span>
+              <div>
+                <p className="text-xs font-extrabold text-slate-900">アイコンリングを設定してみませんか？</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  まだリングを装着していません。ポイントで手に入れたリングをアイコンの周りに飾って、プロフィールを目立たせましょう。
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/rewards"
+              className="shrink-0 px-4 py-2 bg-fuchsia-500 hover:bg-fuchsia-600 text-white font-bold text-xs rounded-xl transition-colors cursor-pointer whitespace-nowrap"
+            >
+              リングショップを見る
+            </Link>
           </div>
         )}
 
