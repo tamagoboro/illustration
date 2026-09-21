@@ -10,6 +10,8 @@ type RequestRow = {
   client_id: string
   content: string
   budget: number | null
+  client_contact_url: string | null
+  image_urls: string[] | null
   status: 'pending' | 'accepted' | 'declined' | 'cancelled'
   creator_response: string | null
   created_at: string
@@ -155,8 +157,29 @@ export default function DashboardRequestsPage() {
 
                 <p className="text-xs text-slate-700 whitespace-pre-wrap bg-slate-50 p-3 rounded-xl">{r.content}</p>
 
+                {r.image_urls && r.image_urls.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {r.image_urls.map((url) => (
+                      <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="w-16 h-16 rounded-xl overflow-hidden border border-slate-200 block">
+                        <img src={url} alt="参考画像" loading="lazy" decoding="async" className="w-full h-full object-cover" />
+                      </a>
+                    ))}
+                  </div>
+                )}
+
                 {r.budget != null && (
                   <p className="text-xs font-bold text-sky-600">提示予算: ¥{r.budget.toLocaleString()}</p>
+                )}
+
+                {r.client_contact_url && (
+                  <a
+                    href={r.client_contact_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-bold text-sky-600 hover:underline"
+                  >
+                    🔗 依頼者の連絡先を開く
+                  </a>
                 )}
 
                 {r.status === 'pending' ? (

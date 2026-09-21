@@ -250,18 +250,61 @@ export default function CreatorClient({
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false)
   const [requestContent, setRequestContent] = useState('')
   const [requestBudget, setRequestBudget] = useState('')
+  const [requestContactUrl, setRequestContactUrl] = useState('')
+  const [requestImageFiles, setRequestImageFiles] = useState<File[]>([])
+  const [requestImagePreviews, setRequestImagePreviews] = useState<string[]>([])
   const [submittingRequest, setSubmittingRequest] = useState(false)
   const [requestSubmitted, setRequestSubmitted] = useState(false)
 
+  const REQUEST_MAX_IMAGES = 3
+
+  const handleRequestImageChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return
+    const files = Array.from(e.target.files)
+    const room = REQUEST_MAX_IMAGES - requestImageFiles.length
+    if (room <= 0) {
+      alert(`画像は最大${REQUEST_MAX_IMAGES}枚までです`)
+      return
+    }
+    const accepted = files.slice(0, room)
+    setRequestImageFiles((prev) => [...prev, ...accepted])
+    setRequestImagePreviews((prev) => [...prev, ...accepted.map((f: File) => URL.createObjectURL(f))])
+  }
+
+  const removeRequestImage = (index: number) => {
+    setRequestImageFiles((prev) => prev.filter((_, i) => i !== index))
+    setRequestImagePreviews((prev) => prev.filter((_, i) => i !== index))
+  }
+
   const handleSubmitRequest = async () => {
-    if (!currentUserId || !requestContent.trim()) return
+    if (!currentUserId || !requestContent.trim() || !requestContactUrl.trim()) return
     setSubmittingRequest(true)
     try {
+      const uploadedUrls: string[] = []
+      for (const file of requestImageFiles) {
+        const webpBlob = await convertToWebp(file, 0.85, 1600)
+        const fileName = `${currentUserId}/request_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.webp`
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('portfolios')
+          .upload(fileName, webpBlob, { contentType: 'image/webp' })
+
+        if (uploadError) throw uploadError
+
+        const { data: publicUrlData } = supabase.storage
+          .from('portfolios')
+          .getPublicUrl(uploadData.path)
+
+        uploadedUrls.push(publicUrlData.publicUrl)
+      }
+
       const { error } = await supabase.from('requests').insert({
         creator_id: id,
         client_id: currentUserId,
         content: requestContent.trim(),
         budget: requestBudget ? Number(requestBudget) || null : null,
+        client_contact_url: requestContactUrl.trim(),
+        image_urls: uploadedUrls,
       })
       if (error) throw error
       setRequestSubmitted(true)
@@ -1228,6 +1271,9 @@ const themeColor = useMemo(() => {
                     onClick={() => {
                       setRequestContent('')
                       setRequestBudget('')
+                      setRequestContactUrl('')
+                      setRequestImageFiles([])
+                      setRequestImagePreviews([])
                       setRequestSubmitted(false)
                       setIsRequestModalOpen(true)
                     }}
@@ -2130,9 +2176,56 @@ const themeColor = useMemo(() => {
                   </div>
                 </div>
 
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-700">
+                    あなたの連絡先URL（X・Instagram等） <span className="text-rose-500">必須</span>
+                  </label>
+                  <input
+                    type="url"
+                    value={requestContactUrl}
+                    onChange={(e) => setRequestContactUrl(e.target.value)}
+                    placeholder="https://x.com/your_account"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white"
+                  />
+                  <p className="text-[10px] text-slate-400">
+                    やり取りを続けるための連絡先です。クリエイターがここから折り返しご連絡します。
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-slate-700">参考画像（任意）</label>
+                    <span className="text-[10px] text-slate-300">{requestImageFiles.length} / {REQUEST_MAX_IMAGES}</span>
+                  </div>
+
+                  {requestImagePreviews.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {requestImagePreviews.map((url, i) => (
+                        <div key={url} className="relative w-16 h-16 rounded-xl overflow-hidden border border-slate-200 group">
+                          <img src={url} alt="" className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => removeRequestImage(i)}
+                            className="absolute inset-0 bg-slate-900/50 opacity-0 group-hover:opacity-100 text-white text-xs font-black flex items-center justify-center transition-opacity cursor-pointer"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {requestImageFiles.length < REQUEST_MAX_IMAGES && (
+                    <label className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-[11px] rounded-xl cursor-pointer transition-colors">
+                      <span>🖼️ 画像を追加</span>
+                      <input type="file" accept="image/*" multiple className="hidden" onChange={handleRequestImageChange} />
+                    </label>
+                  )}
+                </div>
+
                 <button
                   onClick={handleSubmitRequest}
-                  disabled={submittingRequest || !requestContent.trim()}
+                  disabled={submittingRequest || !requestContent.trim() || !requestContactUrl.trim()}
                   style={{ backgroundColor: themeColor }}
                   className="w-full py-3 text-white font-extrabold rounded-xl text-xs transition disabled:opacity-50 cursor-pointer hover:opacity-90"
                 >

@@ -1066,6 +1066,27 @@ export default function Home() {
         </div>
       </main>
 
+      {/* フッター */}
+      <footer className="border-t border-sky-100/60 bg-white/60 backdrop-blur-md py-6 px-4 mt-4">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-5 text-[11px] font-bold text-slate-500">
+          <a
+            href="https://x.com/Drawker06"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-sky-600 transition-colors"
+          >
+            𝕏 (X) 公式アカウント
+          </a>
+          <Link href="/terms" className="hover:text-sky-600 transition-colors">
+            利用規約
+          </Link>
+          <Link href="/privacy" className="hover:text-sky-600 transition-colors">
+            プライバシーポリシー
+          </Link>
+          <span className="text-slate-300">© Drawker</span>
+        </div>
+      </footer>
+
       {/* 比較固定バー */}
       {compareList.length > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/90 text-white backdrop-blur-md px-6 py-3 rounded-2xl shadow-lg flex items-center gap-6 z-40 border border-slate-700">
