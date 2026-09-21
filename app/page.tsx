@@ -8,6 +8,7 @@ import { loadFavorites, toggleFavoriteRecord } from '@/lib/favorites'
 import { SlidersHorizontal, RotateCcw, Search, Wallet, Clock, Tag } from 'lucide-react'
 import AvatarRing from '@/components/AvatarRing'
 import ProtectedImage from '@/components/ProtectedImage'
+import NotificationBell from '@/components/NotificationBell'
 import { isCampaignActive, applyDiscount, formatDiscountBadge, Campaign } from '@/lib/discount'
 
 // メニュー項目の型定義
@@ -424,6 +425,9 @@ export default function Home() {
                 </span>
               )}
             </button>
+
+            {/* 通知ベル：ログイン中のみ表示 */}
+            <NotificationBell />
 
             {/* マイページ（ポイント・アイコンリング）ボタン：ログイン中のみ表示 */}
             {isLoggedIn && (

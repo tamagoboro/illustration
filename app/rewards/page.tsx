@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useIconRings, isRingAvailableNow } from '@/lib/iconRings'
 import AvatarRing from '@/components/AvatarRing'
+import NotificationBell from '@/components/NotificationBell'
 
 export default function RewardsPage() {
   const iconRings = useIconRings()
@@ -16,6 +17,9 @@ export default function RewardsPage() {
   const [ownedRingIds, setOwnedRingIds] = useState<string[]>([])
   const [busyRingId, setBusyRingId] = useState<string | null>(null)
   const [referralCount, setReferralCount] = useState(0)
+  const [sentRequests, setSentRequests] = useState<
+    { id: string; creator_id: string; content: string; status: string; creator_response: string | null; created_at: string; creator_display_name?: string | null }[]
+  >([])
   const [linkCopied, setLinkCopied] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
 
@@ -29,6 +33,33 @@ export default function RewardsPage() {
     setBalance(walletRes.data?.balance ?? 0)
     setEquippedRingId(walletRes.data?.equipped_ring_id ?? null)
     setOwnedRingIds((ownedRes.data || []).map((r) => r.ring_id))
+  }
+
+  const refreshSentRequests = async (uid: string) => {
+    const { data, error } = await supabase
+      .from('requests')
+      .select('*')
+      .eq('client_id', uid)
+      .order('created_at', { ascending: false })
+
+    if (error || !data) {
+      if (error) console.error('送信済みリクエストの取得エラー:', error)
+      return
+    }
+
+    const creatorIds = Array.from(new Set(data.map((r: any) => r.creator_id)))
+    const nameMap: Record<string, string> = {}
+    if (creatorIds.length > 0) {
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('user_id, display_name')
+        .in('user_id', creatorIds)
+      ;(profilesData || []).forEach((p: any) => {
+        nameMap[p.user_id] = p.display_name
+      })
+    }
+
+    setSentRequests(data.map((r: any) => ({ ...r, creator_display_name: nameMap[r.creator_id] || null })))
   }
 
   useEffect(() => {
@@ -56,6 +87,7 @@ export default function RewardsPage() {
         setReferralCount(referralRes.count || 0)
 
         await refreshWallet(uid)
+        await refreshSentRequests(uid)
       }
 
       setLoading(false)
@@ -138,16 +170,17 @@ export default function RewardsPage() {
             <span>←</span> サイトトップへ
           </Link>
           <h1 className="text-sm font-bold text-slate-900">マイページ・ポイント</h1>
-          {isAdmin ? (
-            <Link
-              href="/admin/rings"
-              className="text-[11px] font-bold text-slate-400 hover:text-sky-600 transition-colors"
-            >
-              リング管理
-            </Link>
-          ) : (
-            <span className="w-[3.5rem]" />
-          )}
+          <div className="flex items-center gap-3">
+            <NotificationBell />
+            {isAdmin && (
+              <Link
+                href="/admin/rings"
+                className="text-[11px] font-bold text-slate-400 hover:text-sky-600 transition-colors"
+              >
+                リング管理
+              </Link>
+            )}
+          </div>
         </div>
       </header>
 
@@ -207,6 +240,43 @@ export default function RewardsPage() {
         <div className="p-4 rounded-2xl bg-sky-50 border border-sky-100 text-xs text-sky-700 leading-relaxed">
           💡 新規登録すると、ログイン特典として100ptも進呈されます。
         </div>
+
+        {/* 送信したリクエスト */}
+        {sentRequests.length > 0 && (
+          <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm space-y-3">
+            <h2 className="text-xs font-black text-slate-900 uppercase tracking-widest">📩 送ったリクエスト</h2>
+            <div className="space-y-2">
+              {sentRequests.map((r) => (
+                <Link
+                  key={r.id}
+                  href={`/creator/${r.creator_id}`}
+                  className="block p-3.5 rounded-2xl border border-slate-100 bg-slate-50/60 hover:bg-slate-50 transition-colors space-y-1.5"
+                >
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className="text-xs font-bold text-slate-800">{r.creator_display_name || 'クリエイター'}</span>
+                    <span
+                      className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                        r.status === 'pending'
+                          ? 'bg-amber-100 text-amber-700'
+                          : r.status === 'accepted'
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : 'bg-slate-100 text-slate-500'
+                      }`}
+                    >
+                      {r.status === 'pending' ? '未回答' : r.status === 'accepted' ? '承諾済み' : r.status === 'declined' ? '辞退済み' : 'キャンセル済み'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 line-clamp-2">{r.content}</p>
+                  {r.creator_response && (
+                    <p className="text-[11px] text-sky-600 border-t border-slate-200 pt-1.5">
+                      返信: {r.creator_response}
+                    </p>
+                  )}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* リングショップ */}
         <div className="space-y-3">

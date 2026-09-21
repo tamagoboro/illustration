@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { ItemDiscountConfig, toDateInputValue, fromDateInputValue } from '@/lib/discount'
+import NotificationBell from '@/components/NotificationBell'
 
 const PRESET_TASTES = [
   'アイコン',
@@ -139,6 +140,7 @@ export default function Dashboard() {
   const [copyrightTransferAvailable, setCopyrightTransferAvailable] = useState(false)
   const [freeRevisionCount, setFreeRevisionCount] = useState<string>('2')
   const [r18Allowed, setR18Allowed] = useState(false)
+  const [acceptsDirectRequests, setAcceptsDirectRequests] = useState(true)
 
   const [externalEstimationUrl, setExternalEstimationUrl] = useState('')
 
@@ -266,6 +268,7 @@ export default function Dashboard() {
           setAiUsage(profileData.ai_usage || 'none')
           setAiLearningAllowed(profileData.ai_learning_allowed ?? false)
           setExpressOptionAvailable(profileData.express_option_available ?? false)
+          setAcceptsDirectRequests(profileData.accepts_direct_requests ?? true)
           setCopyrightTransferAvailable(profileData.copyright_transfer_available ?? false)
           const parsedFreeRevision = safeParseInt(profileData.free_revision_count)
           setFreeRevisionCount(parsedFreeRevision !== null ? String(parsedFreeRevision) : '2')
@@ -716,6 +719,7 @@ export default function Dashboard() {
         ai_usage: aiUsage,
         ai_learning_allowed: Boolean(aiLearningAllowed),
         express_option_available: Boolean(expressOptionAvailable),
+        accepts_direct_requests: Boolean(acceptsDirectRequests),
         copyright_transfer_available: Boolean(copyrightTransferAvailable),
         free_revision_count: finalFreeRevisionCount,
         r18_allowed: Boolean(r18Allowed),
@@ -901,6 +905,7 @@ export default function Dashboard() {
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
+              <NotificationBell />
               {user && (
                 <Link
                   href={`/creator/${user.id}`}
@@ -1845,6 +1850,40 @@ export default function Dashboard() {
                         }}
                         className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono text-[11px]"
                       />
+                    </div>
+
+                    <div className="space-y-2 p-4 rounded-2xl bg-pink-50/40 border border-pink-100">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-800 flex items-center gap-2">
+                          <span>📩 直接リクエストの受付</span>
+                        </label>
+                        <Link
+                          href="/dashboard/requests"
+                          className={`text-xs font-bold ${currentThemeObj.text} hover:underline flex items-center gap-1`}
+                        >
+                          <span>受け取ったリクエストを見る</span>
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                          </svg>
+                        </Link>
+                      </div>
+                      <p className="text-[11px] text-slate-400">
+                        オンにすると、プロフィールに「メニューに無い依頼をリクエストする」ボタンが表示され、依頼者から直接オファーを受け取れるようになります。
+                      </p>
+                      <label className="flex items-center gap-2 cursor-pointer pt-1">
+                        <input
+                          type="checkbox"
+                          checked={acceptsDirectRequests}
+                          onChange={(e) => {
+                            setAcceptsDirectRequests(e.target.checked)
+                            setIsDirty(true)
+                          }}
+                          className="rounded border-slate-300 text-pink-500 accent-pink-500 w-4 h-4 cursor-pointer"
+                        />
+                        <span className="text-xs font-bold text-slate-700">
+                          {acceptsDirectRequests ? '受付中' : '受け付けない'}
+                        </span>
+                      </label>
                     </div>
 
                     <div className="space-y-3 pt-2">

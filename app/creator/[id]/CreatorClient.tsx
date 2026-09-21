@@ -8,6 +8,7 @@ import { loadFavorites, toggleFavoriteRecord } from '@/lib/favorites'
 import { convertToWebp } from '@/lib/imageUtils'
 import AvatarRing from '@/components/AvatarRing'
 import ProtectedImage from '@/components/ProtectedImage'
+import NotificationBell from '@/components/NotificationBell'
 import { ItemDiscountConfig, Campaign, isCampaignActive, resolveDiscount, applyDiscount, formatDiscountBadge, formatSavingsBadge } from '@/lib/discount'
 
 type Option = {
@@ -125,6 +126,7 @@ type ExtendedProfile = Profile & {
   campaign_discount_value?: number | null
   campaign_start_at?: string | null
   campaign_end_at?: string | null
+  accepts_direct_requests?: boolean | null
 }
 
 const formatExternalUrl = (url?: string | null) => {
@@ -230,6 +232,33 @@ export default function CreatorClient({
       alert('通報の送信に失敗しました。時間をおいて再度お試しください。')
     } finally {
       setSubmittingReport(false)
+    }
+  }
+
+  // クライアントからの直接リクエスト送信（メニューに無い依頼をクリエイターに直接オファーできる）
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false)
+  const [requestContent, setRequestContent] = useState('')
+  const [requestBudget, setRequestBudget] = useState('')
+  const [submittingRequest, setSubmittingRequest] = useState(false)
+  const [requestSubmitted, setRequestSubmitted] = useState(false)
+
+  const handleSubmitRequest = async () => {
+    if (!currentUserId || !requestContent.trim()) return
+    setSubmittingRequest(true)
+    try {
+      const { error } = await supabase.from('requests').insert({
+        creator_id: id,
+        client_id: currentUserId,
+        content: requestContent.trim(),
+        budget: requestBudget ? Number(requestBudget) || null : null,
+      })
+      if (error) throw error
+      setRequestSubmitted(true)
+    } catch (error: any) {
+      console.error('リクエスト送信エラー:', error)
+      alert('リクエストの送信に失敗しました。時間をおいて再度お試しください。')
+    } finally {
+      setSubmittingRequest(false)
     }
   }
 
@@ -882,6 +911,7 @@ const themeColor = useMemo(() => {
           <span className="text-[11px] font-black tracking-widest text-sky-400 uppercase">
             Creator Portfolio
           </span>
+          <NotificationBell />
         </div>
       </header>
 
@@ -1180,6 +1210,21 @@ const themeColor = useMemo(() => {
                   <div className="w-full py-3 px-3 bg-sky-100/80 text-sky-500 font-bold rounded-xl text-xs text-center border border-sky-200/60 leading-relaxed">
                     見積もりシミュレーターは準備中です。<br />下の「直接相談・お問い合わせ」から気軽にご相談ください。
                   </div>
+                )}
+
+                {profile.accepts_direct_requests !== false && currentUserId && currentUserId !== id && (
+                  <button
+                    onClick={() => {
+                      setRequestContent('')
+                      setRequestBudget('')
+                      setRequestSubmitted(false)
+                      setIsRequestModalOpen(true)
+                    }}
+                    style={{ backgroundColor: themeColor }}
+                    className="w-full py-3.5 hover:opacity-90 active:scale-[0.98] text-white font-extrabold rounded-xl transition-all shadow-lg text-sm cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <span>📩</span> メニューに無い依頼をリクエストする
+                  </button>
                 )}
 
                 <button
@@ -2012,6 +2057,79 @@ const themeColor = useMemo(() => {
             className="max-h-[85vh] max-w-full object-contain rounded-2xl shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           />
+        </div>
+      )}
+
+      {/* リクエスト送信モーダル */}
+      {isRequestModalOpen && (
+        <div className="fixed inset-0 bg-sky-950/70 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl border border-sky-100 relative">
+            <button
+              onClick={() => setIsRequestModalOpen(false)}
+              aria-label="閉じる"
+              className="absolute top-4 right-4 text-slate-300 hover:text-slate-600 text-sm font-black cursor-pointer"
+            >
+              ✕
+            </button>
+
+            {requestSubmitted ? (
+              <div className="text-center py-6 space-y-2">
+                <p className="text-2xl">📩</p>
+                <p className="text-sm font-bold text-slate-700">リクエストを送信しました</p>
+                <p className="text-xs text-slate-400">クリエイターが内容を確認し、承諾・辞退の返事をお待ちください。</p>
+                <button
+                  onClick={() => setIsRequestModalOpen(false)}
+                  className="mt-2 px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+                >
+                  閉じる
+                </button>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">メニューに無い依頼をリクエスト</h3>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    {profile.display_name}さんへ直接リクエストを送ります。承諾されるとは限りませんので、あくまで打診としてお使いください。
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-700">依頼内容</label>
+                  <textarea
+                    rows={5}
+                    value={requestContent}
+                    onChange={(e) => setRequestContent(e.target.value)}
+                    placeholder="どんな作品を、いつまでに欲しいか等をできるだけ具体的にご記入ください"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white resize-none"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-700">予算（任意）</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-semibold">¥</span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={requestBudget}
+                      onChange={(e) => setRequestBudget(e.target.value)}
+                      placeholder="10000"
+                      className="w-full pl-7 pr-3 py-2 rounded-xl border border-slate-200 text-xs bg-white"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleSubmitRequest}
+                  disabled={submittingRequest || !requestContent.trim()}
+                  style={{ backgroundColor: themeColor }}
+                  className="w-full py-3 text-white font-extrabold rounded-xl text-xs transition disabled:opacity-50 cursor-pointer hover:opacity-90"
+                >
+                  {submittingRequest ? '送信中...' : 'リクエストを送信する'}
+                </button>
+              </>
+            )}
+          </div>
         </div>
       )}
 
