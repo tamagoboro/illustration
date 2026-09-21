@@ -1092,6 +1092,14 @@ export default function Home() {
           <Link href="/privacy" className="hover:text-sky-600 transition-colors">
             プライバシーポリシー
           </Link>
+          <a
+            href="https://buy.stripe.com/6oU6oIcOQ7YVckj2v94Ja00"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-sky-600 transition-colors"
+          >
+            ☕ Drawkerを応援する
+          </a>
           <span className="text-slate-300">© Drawker</span>
         </div>
       </footer>
