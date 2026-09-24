@@ -50,10 +50,12 @@ export default function AdminUsersPage() {
   const [listedUsers, setListedUsers] = useState<ListedUser[]>([])
   const [usersLoading, setUsersLoading] = useState(false)
   const [usersHasMore, setUsersHasMore] = useState(true)
+  const [usersError, setUsersError] = useState('')
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null)
 
   const loadUsers = async (reset: boolean) => {
     setUsersLoading(true)
+    setUsersError('')
     const offset = reset ? 0 : listedUsers.length
     const { data, error } = await supabase.rpc('admin_list_users', {
       p_limit: USERS_PAGE_SIZE,
@@ -63,6 +65,7 @@ export default function AdminUsersPage() {
 
     if (error) {
       console.error('ユーザー一覧取得エラー:', error)
+      setUsersError(error.message || '取得に失敗しました。')
       return
     }
     const rows = (data || []) as ListedUser[]
@@ -317,7 +320,10 @@ export default function AdminUsersPage() {
                 </div>
               </div>
             ))}
-            {listedUsers.length === 0 && !usersLoading && (
+            {usersError && (
+              <p className="text-xs font-bold text-rose-500 text-center py-6">取得エラー: {usersError}</p>
+            )}
+            {!usersError && listedUsers.length === 0 && !usersLoading && (
               <p className="text-xs text-slate-400 text-center py-6">ユーザーがいません</p>
             )}
           </div>
