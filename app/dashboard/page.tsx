@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect, useMemo, ChangeEvent, FormEvent, KeyboardEvent } from 'react'
+import { useState, useEffect, useMemo, useRef, ChangeEvent, FormEvent, KeyboardEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { ItemDiscountConfig, toDateInputValue, fromDateInputValue } from '@/lib/discount'
 import NotificationBell from '@/components/NotificationBell'
+import { backgroundImageStyle } from '@/lib/background'
 
 const PRESET_TASTES = [
   'アイコン',
@@ -86,6 +87,17 @@ const normalizeStorageUrl = (url: string): string => {
   return trimmed
 }
 
+// 公開URLから「portfolios」バケット内のパスだけを取り出す（storage.remove()に渡すため）。
+// アバター/作品画像を差し替えるたびに古いファイルがストレージに残り続けるのを防ぐのに使う。
+const extractStoragePath = (url: string): string | null => {
+  if (!url) return null
+  const marker = '/storage/v1/object/public/portfolios/'
+  const idx = url.indexOf(marker)
+  if (idx === -1) return null
+  const path = url.slice(idx + marker.length).split('?')[0]
+  return path || null
+}
+
 export default function Dashboard() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -155,7 +167,14 @@ export default function Dashboard() {
 
   const [portfolioUrls, setPortfolioUrls] = useState<string[]>(['', '', '', ''])
   const [portfolioTitles, setPortfolioTitles] = useState<string[]>(['', '', '', ''])
-  
+
+  // DBに実際に保存されている（＝公開中の）URLを覚えておき、保存が成功した後にだけ
+  // 「もう使われなくなった古いファイル」をストレージから削除するために使う。
+  // 保存前（isDirtyな状態）に削除してしまうと、保存せずに離脱した場合に
+  // 公開中の画像を消してしまう事故になるため、必ず保存成功後にのみ比較・削除する。
+  const savedAvatarUrlRef = useRef('')
+  const savedPortfolioUrlsRef = useRef<string[]>(['', '', '', ''])
+
   const [menuItems, setMenuItems] = useState<MenuItem[]>([
     { title: 'アイコン制作', price: 5000 },
     { title: 'ヘッダー制作', price: 8000 }
@@ -267,6 +286,7 @@ export default function Dashboard() {
 
           setCommercialUseAllowed(profileData.commercial_use_allowed ?? true)
           setAvatarUrl(normalizeStorageUrl(profileData.avatar_url || ''))
+          savedAvatarUrlRef.current = normalizeStorageUrl(profileData.avatar_url || '')
           setExternalEstimationUrl(profileData.external_estimation_url || '')
 
           setAiUsage(profileData.ai_usage || 'none')
@@ -325,6 +345,7 @@ export default function Dashboard() {
           })
           setPortfolioUrls(urls)
           setPortfolioTitles(titles)
+          savedPortfolioUrlsRef.current = urls
         }
 
         setIsDirty(false)
@@ -771,6 +792,21 @@ export default function Dashboard() {
         console.error('保存エラー詳細:', JSON.stringify(error, null, 2))
         alert('保存に失敗しました。通信環境をご確認のうえ、もう一度お試しください。入力内容は消えていませんので、そのまま再度保存ボタンを押してみてください。')
       } else {
+        // 保存が成功し、アイコン画像が差し替えられた場合だけ、もう使われなくなった
+        // 古い画像ファイルをストレージから削除する（保存前に消すと事故になるためここで行う）
+        const newAvatarUrl = profilePayload.avatar_url || ''
+        const oldAvatarUrl = savedAvatarUrlRef.current
+        if (oldAvatarUrl && oldAvatarUrl !== newAvatarUrl) {
+          const oldPath = extractStoragePath(oldAvatarUrl)
+          if (oldPath) {
+            supabase.storage
+              .from('portfolios')
+              .remove([oldPath])
+              .catch((e) => console.error('古いアイコン画像の削除エラー:', e))
+          }
+        }
+        savedAvatarUrlRef.current = newAvatarUrl
+
         showSuccessToast('プロフィール情報を更新しました！')
         setIsDirty(false)
       }
@@ -788,6 +824,13 @@ export default function Dashboard() {
     setSaving(true)
 
     try {
+      // 保存前の登録件数を見ておき、「0件→1件以上」に変わった瞬間だけ
+      // 「一覧に表示されるようになりました」の通知を送る
+      const { count: previousCount } = await supabase
+        .from('portfolio_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+
       const { error: deleteError } = await supabase
         .from('portfolio_items')
         .delete()
@@ -815,6 +858,35 @@ export default function Dashboard() {
           throw insertError
         }
       }
+
+      if ((previousCount || 0) === 0 && itemsToInsert.length > 0) {
+        try {
+          await supabase.from('notifications').insert({
+            user_id: user.id,
+            type: 'portfolio_first_upload',
+            title: '🎉 プロフィールが一覧に表示されるようになりました！',
+            body: '作品が登録されたので、トップページや検索結果にプロフィールが表示されるようになります。',
+            link_url: `/creator/${user.id}`,
+          })
+        } catch (notifyError) {
+          console.error('通知作成エラー:', notifyError)
+        }
+      }
+
+      // 保存が成功した枠だけ、差し替えで使われなくなった古い画像ファイルを削除する
+      // （保存前に消すと、保存せず離脱した場合に公開中の画像を消してしまうためここで行う）
+      const newNormalizedUrls = portfolioUrls.map((url) => normalizeStorageUrl(url))
+      const oldUrls = savedPortfolioUrlsRef.current
+      const pathsToRemove = oldUrls
+        .map((oldUrl, idx) => (oldUrl && oldUrl !== newNormalizedUrls[idx] ? extractStoragePath(oldUrl) : null))
+        .filter((path): path is string => !!path)
+      if (pathsToRemove.length > 0) {
+        supabase.storage
+          .from('portfolios')
+          .remove(pathsToRemove)
+          .catch((e) => console.error('古い作品画像の削除エラー:', e))
+      }
+      savedPortfolioUrlsRef.current = newNormalizedUrls
 
       showSuccessToast('作品ポートフォリオを更新しました！')
       setIsDirty(false)
@@ -873,17 +945,19 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
+      <div className="min-h-screen flex items-center justify-center relative bg-cover bg-center" style={backgroundImageStyle}>
+        <div className="absolute inset-0 bg-gradient-to-b from-sky-400/20 via-sky-100/10 to-sky-900/20 backdrop-blur-[2px] pointer-events-none -z-10" />
+        <div className="flex flex-col items-center gap-3 bg-white/80 backdrop-blur-md rounded-3xl px-8 py-6 shadow-lg">
           <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-xs font-bold text-slate-500 tracking-wider">設定データを読み込み中...</p>
+          <p className="text-xs font-bold text-slate-600 tracking-wider">設定データを読み込み中...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-50/60 text-slate-800 pb-24 font-sans antialiased selection:bg-indigo-500 selection:text-white">
+    <div className="min-h-screen text-slate-800 pb-24 font-sans antialiased selection:bg-indigo-500 selection:text-white relative bg-cover bg-center" style={backgroundImageStyle}>
+      <div className="absolute inset-0 bg-gradient-to-b from-sky-400/20 via-sky-100/10 to-sky-900/20 backdrop-blur-[2px] pointer-events-none -z-10" />
       {saveSuccess && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 bg-slate-900 text-white rounded-2xl shadow-2xl border border-slate-700 animate-in fade-in slide-in-from-bottom-5 duration-300">
           <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-xs text-white font-bold">✓</div>
@@ -1022,6 +1096,28 @@ export default function Dashboard() {
             </button>
           </div>
         </div>
+
+        {/* 作品未登録の警告：ポートフォリオが1枚も無いと検索・一覧に表示されない */}
+        {portfolioUrls.every((url) => !url.trim()) && (
+          <div className="bg-amber-50 border border-amber-200 rounded-3xl p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">⚠️</span>
+              <div>
+                <p className="text-xs font-extrabold text-amber-800">作品が1枚も登録されていません</p>
+                <p className="text-[11px] text-amber-700 mt-0.5">
+                  作品を1枚も登録していないクリエイターは、トップページや検索結果に表示されません。「作品」タブから1枚以上アップロードしてください。
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleTabChange('portfolio')}
+              className="shrink-0 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl transition-colors cursor-pointer whitespace-nowrap"
+            >
+              作品を登録する
+            </button>
+          </div>
+        )}
 
         {/* プロフィール完成度 */}
         {profileChecklist.percent < 100 && (

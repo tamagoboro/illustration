@@ -9,6 +9,7 @@ import { SlidersHorizontal, RotateCcw, Search, Wallet, Clock, Tag } from 'lucide
 import AvatarRing from '@/components/AvatarRing'
 import ProtectedImage from '@/components/ProtectedImage'
 import NotificationBell from '@/components/NotificationBell'
+import RecentlyViewedCreators from '@/components/RecentlyViewedCreators'
 import { isCampaignActive, applyDiscount, formatDiscountBadge, Campaign } from '@/lib/discount'
 
 // メニュー項目の型定義
@@ -155,12 +156,16 @@ export default function Home() {
             })
           }
 
-          const combined: ProfileWithImage[] = profileData.map((p) => ({
-            ...p,
-            thumbnail_url: imageMap[p.user_id] || p.avatar_url || null,
-            likes_count: p.likes_count ?? 0,
-            menu_items: Array.isArray(p.menu_items) ? p.menu_items : null
-          }))
+          // 作品を1枚も登録していないクリエイターは一覧に出しても価値が低いため非表示にする
+          // （アバターだけの空っぽなカードが並ぶのを防ぐ）
+          const combined: ProfileWithImage[] = profileData
+            .filter((p) => !!imageMap[p.user_id])
+            .map((p) => ({
+              ...p,
+              thumbnail_url: imageMap[p.user_id],
+              likes_count: p.likes_count ?? 0,
+              menu_items: Array.isArray(p.menu_items) ? p.menu_items : null
+            }))
 
           const randomized = [...combined]
           for (let i = randomized.length - 1; i > 0; i--) {
@@ -527,6 +532,35 @@ export default function Home() {
         <p className="text-xl sm:text-2xl font-bold text-sky-900 drop-shadow-xs tracking-wider pt-1">
           条件から作品まで、すぐ見つかるクリエイター検索
         </p>
+        <div className="pt-2">
+          <Link
+            href="/match"
+            className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:brightness-105 text-white font-black text-sm shadow-lg transition-all active:scale-95"
+          >
+            <span>🔮</span> 4つの質問でぴったりのクリエイターを診断する
+          </Link>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 pt-1 text-xs font-bold text-sky-700/80">
+          <Link href="/guide" className="hover:text-sky-700 underline underline-offset-2">
+            はじめての方はこちら（ご利用の流れ）
+          </Link>
+          <Link href="/gallery" className="hover:text-sky-700 underline underline-offset-2">
+            🖼 新着作品から探す
+          </Link>
+          <Link href="/market" className="hover:text-sky-700 underline underline-offset-2">
+            💰 ジャンル別の相場を見る
+          </Link>
+          <Link href="/ranking" className="hover:text-sky-700 underline underline-offset-2">
+            📊 今週の注目クリエイター
+          </Link>
+          <Link href="/tags" className="hover:text-sky-700 underline underline-offset-2">
+            🏷 ジャンル一覧から探す
+          </Link>
+        </div>
+      </section>
+
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 mb-8">
+        <RecentlyViewedCreators />
       </section>
 
       {!isLoggedIn && (
@@ -1132,6 +1166,24 @@ export default function Home() {
           >
             𝕏 (X) 公式アカウント
           </a>
+          <Link href="/guide" className="hover:text-sky-600 transition-colors">
+            使い方ガイド
+          </Link>
+          <Link href="/faq" className="hover:text-sky-600 transition-colors">
+            よくある質問
+          </Link>
+          <Link href="/tags" className="hover:text-sky-600 transition-colors">
+            ジャンル一覧
+          </Link>
+          <Link href="/updates" className="hover:text-sky-600 transition-colors">
+            お知らせ
+          </Link>
+          <Link href="/ranking" className="hover:text-sky-600 transition-colors">
+            注目クリエイター
+          </Link>
+          <Link href="/favorites" className="hover:text-sky-600 transition-colors">
+            お気に入り一覧
+          </Link>
           <Link href="/terms" className="hover:text-sky-600 transition-colors">
             利用規約
           </Link>

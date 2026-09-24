@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { backgroundImageStyle } from '@/lib/background'
 
 type CreatorStatRow = {
   user_id: string
@@ -26,6 +27,7 @@ export default function AdminAnalyticsPage() {
   const [rows, setRows] = useState<CreatorStatRow[]>([])
   const [loadingRows, setLoadingRows] = useState(true)
   const [loadError, setLoadError] = useState('')
+  const [userCounts, setUserCounts] = useState<{ total: number; creators: number; clients: number } | null>(null)
 
   const [query, setQuery] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('pv_30d')
@@ -57,15 +59,30 @@ export default function AdminAnalyticsPage() {
   const refreshStats = async () => {
     setLoadingRows(true)
     setLoadError('')
-    const { data, error } = await supabase.rpc('admin_get_creator_pv_stats')
+
+    // PV統計と会員構成（クリエイター/依頼者の内訳）は互いに独立しているので並行取得する
+    const [pvStatsRes, totalRes, creatorRes] = await Promise.all([
+      supabase.rpc('admin_get_creator_pv_stats'),
+      supabase.from('profiles').select('user_id', { count: 'exact', head: true }),
+      supabase.from('profiles').select('user_id', { count: 'exact', head: true }).eq('has_dashboard_setup', true),
+    ])
+
     setLoadingRows(false)
 
-    if (error) {
-      console.error('PV統計の取得エラー:', error)
-      setLoadError('データの取得に失敗しました。' + error.message)
-      return
+    if (pvStatsRes.error) {
+      console.error('PV統計の取得エラー:', pvStatsRes.error)
+      setLoadError('データの取得に失敗しました。' + pvStatsRes.error.message)
+    } else {
+      setRows((pvStatsRes.data || []) as CreatorStatRow[])
     }
-    setRows((data || []) as CreatorStatRow[])
+
+    if (totalRes.error || creatorRes.error) {
+      console.error('会員構成の取得エラー:', totalRes.error || creatorRes.error)
+    } else {
+      const total = totalRes.count || 0
+      const creators = creatorRes.count || 0
+      setUserCounts({ total, creators, clients: total - creators })
+    }
   }
 
   const visibleRows = useMemo(() => {
@@ -92,7 +109,8 @@ export default function AdminAnalyticsPage() {
 
   if (!loggedIn) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="min-h-screen flex items-center justify-center p-4 relative bg-cover bg-center" style={backgroundImageStyle}>
+        <div className="absolute inset-0 bg-gradient-to-b from-sky-400/20 via-sky-100/10 to-sky-900/20 backdrop-blur-[2px] pointer-events-none -z-10" />
         <div className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 text-center space-y-3 max-w-sm w-full">
           <p className="text-sm font-bold text-slate-700">ログインが必要です</p>
           <Link
@@ -108,7 +126,8 @@ export default function AdminAnalyticsPage() {
 
   if (!isAdmin) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="min-h-screen flex items-center justify-center p-4 relative bg-cover bg-center" style={backgroundImageStyle}>
+        <div className="absolute inset-0 bg-gradient-to-b from-sky-400/20 via-sky-100/10 to-sky-900/20 backdrop-blur-[2px] pointer-events-none -z-10" />
         <div className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 text-center space-y-2 max-w-sm w-full">
           <p className="text-sm font-bold text-slate-700">このページへのアクセス権がありません</p>
           <p className="text-xs text-slate-400">管理者アカウントでログインしてください。</p>
@@ -126,7 +145,8 @@ export default function AdminAnalyticsPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-slate-50/60 pb-24">
+    <div className="min-h-screen pb-24 relative bg-cover bg-center" style={backgroundImageStyle}>
+      <div className="absolute inset-0 bg-gradient-to-b from-sky-400/20 via-sky-100/10 to-sky-900/20 backdrop-blur-[2px] pointer-events-none -z-10" />
       <header className="px-4 sm:px-6 py-3.5 bg-white/90 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-30 shadow-xs">
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
           <Link href="/rewards" className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors">
@@ -148,6 +168,33 @@ export default function AdminAnalyticsPage() {
       </header>
 
       <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-6">
+        {/* 会員構成（クリエイター/依頼者の内訳） */}
+        {userCounts && (
+          <div className="bg-white rounded-3xl p-4 border border-slate-100 shadow-sm">
+            <span className="text-[10px] font-bold text-slate-400 block mb-2">登録ユーザー構成</span>
+            <div className="flex items-end gap-4 flex-wrap">
+              <div>
+                <span className="text-2xl font-black text-slate-900">{userCounts.total.toLocaleString()}</span>
+                <span className="text-[11px] font-bold text-slate-400 ml-1">人</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-sky-500" />
+                <span className="text-xs font-bold text-slate-600">クリエイター {userCounts.creators.toLocaleString()}人</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-slate-300" />
+                <span className="text-xs font-bold text-slate-600">依頼者 {userCounts.clients.toLocaleString()}人</span>
+              </div>
+            </div>
+            <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden mt-3 flex">
+              <div
+                className="h-full bg-sky-500"
+                style={{ width: `${userCounts.total > 0 ? (userCounts.creators / userCounts.total) * 100 : 0}%` }}
+              />
+            </div>
+          </div>
+        )}
+
         {/* サマリー */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="bg-white rounded-3xl p-4 border border-slate-100 shadow-sm">

@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { convertToWebp } from '@/lib/imageUtils'
 import AvatarRing from '@/components/AvatarRing'
 import ProtectedImage from '@/components/ProtectedImage'
+import { backgroundImageStyle } from '@/lib/background'
 
 type Comment = {
   id: string
@@ -322,11 +323,12 @@ export default function FeedPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50/50 py-8 px-4">
+    <div className="min-h-screen py-8 px-4 relative bg-cover bg-center" style={backgroundImageStyle}>
+      <div className="absolute inset-0 bg-gradient-to-b from-sky-400/20 via-sky-100/10 to-sky-900/20 backdrop-blur-[2px] pointer-events-none -z-10" />
       <div className="max-w-xl mx-auto space-y-6">
         {/* ヘッダー */}
         <div className="flex items-center justify-between px-2">
-          <h1 className="text-xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+          <h1 className="text-xl font-black text-slate-800 drop-shadow-sm tracking-tight flex items-center gap-2">
             <span className="text-pink-500">✨</span>タイムライン
           </h1>
           {searchTag && (
@@ -416,10 +418,10 @@ export default function FeedPage() {
 
         {/* タイムライン */}
         {loading ? (
-          <div className="text-center py-10 text-xs font-bold text-slate-400">読み込み中...</div>
+          <div className="text-center py-10 text-xs font-bold text-slate-600 drop-shadow-sm">読み込み中...</div>
         ) : filteredPosts.length === 0 ? (
-          <div className="text-center py-16 bg-white/40 rounded-3xl border border-dashed border-slate-200">
-            <p className="text-sm font-bold text-slate-400">投稿がありません</p>
+          <div className="text-center py-16 bg-white/70 backdrop-blur-md rounded-3xl border border-dashed border-slate-200">
+            <p className="text-sm font-bold text-slate-500">投稿がありません</p>
           </div>
         ) : (
           <div className="space-y-4">

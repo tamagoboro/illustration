@@ -7,6 +7,7 @@ import { supabase, Profile, PortfolioItem } from '@/lib/supabase'
 import { loadFavorites, toggleFavoriteRecord } from '@/lib/favorites'
 import { convertToWebp } from '@/lib/imageUtils'
 import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft'
+import { recordRecentlyViewed } from '@/lib/recentlyViewed'
 import AvatarRing from '@/components/AvatarRing'
 import ProtectedImage from '@/components/ProtectedImage'
 import NotificationBell from '@/components/NotificationBell'
@@ -468,6 +469,17 @@ export default function CreatorClient({
       isMounted = false
     }
   }, [id])
+
+  // 「最近見たクリエイター」履歴（ブラウザのlocalStorageのみ）。自分自身のページは記録しない
+  useEffect(() => {
+    if (!profile || currentUserId === id) return
+    recordRecentlyViewed({
+      userId: id,
+      displayName: profile.display_name || 'クリエイター',
+      avatarUrl: profile.avatar_url || null,
+      thumbnailUrl: works[0]?.image_url || null,
+    })
+  }, [profile, works, currentUserId, id])
 
   // レビュー一覧の取得。reviewer_id は profiles を持たない場合があるため、
   // 表示名・アイコンは別クエリで取得してから手動で合成する
@@ -1363,7 +1375,13 @@ const themeColor = useMemo(() => {
                   >
                     <span>🧮</span> {availableForms.length > 1 ? '見積もりフォームを選んで作成' : '簡単見積もり・仕様書作成'}
                   </button>
-                ) : (
+                ) : null}
+                {availableForms.length > 0 && (
+                  <p className="text-[10px] text-slate-400 text-center -mt-1">
+                    用意されたメニューから概算金額をその場で計算します（送信はご自身でお願いします）
+                  </p>
+                )}
+                {availableForms.length === 0 && (
                   <div className="w-full py-3 px-3 bg-sky-100/80 text-sky-500 font-bold rounded-xl text-xs text-center border border-sky-200/60 leading-relaxed">
                     見積もりシミュレーターは準備中です。<br />下の「直接相談・お問い合わせ」から気軽にご相談ください。
                   </div>
@@ -1399,6 +1417,11 @@ const themeColor = useMemo(() => {
                   >
                     <span>📩</span> メニューに無い依頼をリクエストする
                   </button>
+                )}
+                {profile.accepts_direct_requests !== false && (
+                  <p className="text-[10px] text-slate-400 text-center -mt-1">
+                    見積もりシミュレーターにない内容や、細かい要望はこちらから直接クリエイターへ相談できます
+                  </p>
                 )}
                 {profile.accepts_direct_requests !== false && badges?.avgResponseHours != null && (
                   <p className="text-[10px] text-slate-400 text-center -mt-1">

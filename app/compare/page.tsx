@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { ArrowLeft, Check, X, ExternalLink, Trash2, Sparkles } from 'lucide-react'
 import AvatarRing from '@/components/AvatarRing'
 import ProtectedImage from '@/components/ProtectedImage'
+import { backgroundImageStyle } from '@/lib/background'
 
 // Profile型に追加項目を拡張
 type ExtendedProfile = Profile & {
@@ -61,17 +62,19 @@ export default function ComparePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <p className="text-slate-500 font-bold">比較データを読み込み中...</p>
+      <div className="min-h-screen flex items-center justify-center relative bg-cover bg-center" style={backgroundImageStyle}>
+        <div className="absolute inset-0 bg-gradient-to-b from-sky-400/20 via-sky-100/10 to-sky-900/20 backdrop-blur-[2px] pointer-events-none -z-10" />
+        <p className="text-slate-700 font-bold drop-shadow-sm bg-white/80 backdrop-blur-md px-6 py-3 rounded-2xl">比較データを読み込み中...</p>
       </div>
     )
   }
 
   if (selectedIds.length === 0) {
     return (
-      <div className="min-h-screen bg-slate-50 p-8 flex flex-col items-center justify-center">
-        <h1 className="text-2xl font-bold text-slate-800 mb-4">比較対象が選択されていません</h1>
-        <p className="text-slate-600 mb-6">一覧ページからイラストレーターを比較リストに追加してください。</p>
+      <div className="min-h-screen p-8 flex flex-col items-center justify-center relative bg-cover bg-center" style={backgroundImageStyle}>
+        <div className="absolute inset-0 bg-gradient-to-b from-sky-400/20 via-sky-100/10 to-sky-900/20 backdrop-blur-[2px] pointer-events-none -z-10" />
+        <h1 className="text-2xl font-bold text-slate-800 drop-shadow-sm mb-4">比較対象が選択されていません</h1>
+        <p className="text-slate-700 font-medium drop-shadow-sm mb-6">一覧ページからイラストレーターを比較リストに追加してください。</p>
         <Link
           href="/"
           className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-indigo-700 transition"
@@ -83,7 +86,8 @@ export default function ComparePage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 md:p-12 pb-24">
+    <div className="min-h-screen p-6 md:p-12 pb-24 relative bg-cover bg-center" style={backgroundImageStyle}>
+      <div className="absolute inset-0 bg-gradient-to-b from-sky-400/20 via-sky-100/10 to-sky-900/20 backdrop-blur-[2px] pointer-events-none -z-10" />
       {/* ヘッダー */}
       <div className="max-w-7xl mx-auto flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
@@ -93,7 +97,7 @@ export default function ComparePage() {
           >
             <ArrowLeft size={20} />
           </Link>
-          <h1 className="text-2xl md:text-3xl font-bold text-slate-800">イラストレーター比較</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-slate-800 drop-shadow-sm">イラストレーター比較</h1>
         </div>
         <button
           onClick={clear}

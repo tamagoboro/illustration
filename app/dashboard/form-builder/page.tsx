@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { ItemDiscountConfig, Campaign, resolveDiscount, applyDiscount, formatSavingsBadge } from '@/lib/discount'
+import { backgroundImageStyle } from '@/lib/background'
 
 type Option = {
   label: string
@@ -564,7 +565,8 @@ export default function FormBuilderPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50/60">
+    <div className="min-h-screen relative bg-cover bg-center" style={backgroundImageStyle}>
+      <div className="absolute inset-0 bg-gradient-to-b from-sky-400/20 via-sky-100/10 to-sky-900/20 backdrop-blur-[2px] pointer-events-none -z-10" />
       {/* ヘッダー */}
       <header className="px-4 sm:px-6 py-3.5 bg-white/90 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-30 shadow-xs">
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
@@ -609,8 +611,8 @@ export default function FormBuilderPage() {
           <div className="space-y-5">
             <div className="flex items-center justify-between flex-wrap gap-3">
               <div>
-                <h1 className="font-black text-slate-800 text-lg">見積もりフォーム一覧</h1>
-                <p className="text-xs text-slate-400 mt-1">
+                <h1 className="font-black text-slate-800 text-lg drop-shadow-sm">見積もりフォーム一覧</h1>
+                <p className="text-xs text-slate-600 font-medium drop-shadow-sm mt-1">
                   用途ごとに複数の見積もりフォームを作成できます（例: アイコン用・立ち絵用など）。依頼者はプロフィールページからフォームを選んで見積もりを作成します。
                 </p>
               </div>

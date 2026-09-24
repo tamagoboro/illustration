@@ -8,12 +8,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = rawSiteUrl.startsWith('http') ? rawSiteUrl : `https://${rawSiteUrl}`
 
   // 公開中の全クリエイターIDを取得
-  const { data: profiles } = await supabase
+  const { data: allProfiles } = await supabase
     .from('profiles')
     .select('user_id, updated_at, tastes')
     .eq('is_public', true)
 
-  const creatorUrls: MetadataRoute.Sitemap = (profiles || []).map((profile) => ({
+  // 作品を1枚も登録していないクリエイターはトップページ・タグページ双方から除外済みなので、
+  // サイトマップからも同じ条件で除外する（薄いページをGoogleに送らないようにする）
+  const userIds = (allProfiles || []).map((p) => p.user_id)
+  const { data: thumbData } =
+    userIds.length > 0
+      ? await supabase.from('first_portfolio_thumbnails').select('user_id').in('user_id', userIds)
+      : { data: [] as { user_id: string }[] }
+  const hasPortfolioSet = new Set((thumbData || []).map((t) => t.user_id))
+  const profiles = (allProfiles || []).filter((p) => hasPortfolioSet.has(p.user_id))
+
+  const creatorUrls: MetadataRoute.Sitemap = profiles.map((profile) => ({
     url: `${baseUrl}/creator/${profile.user_id}`,
     lastModified: new Date(profile.updated_at || Date.now()),
     changeFrequency: 'weekly',

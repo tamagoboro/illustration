@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { convertToWebp } from '@/lib/imageUtils'
 import { invalidateIconRingsCache } from '@/lib/iconRings'
+import { backgroundImageStyle } from '@/lib/background'
 
 type RingRow = {
   id: string
@@ -242,7 +243,8 @@ export default function AdminRingsPage() {
 
   if (!loggedIn) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="min-h-screen flex items-center justify-center p-4 relative bg-cover bg-center" style={backgroundImageStyle}>
+        <div className="absolute inset-0 bg-gradient-to-b from-sky-400/20 via-sky-100/10 to-sky-900/20 backdrop-blur-[2px] pointer-events-none -z-10" />
         <div className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 text-center space-y-3 max-w-sm w-full">
           <p className="text-sm font-bold text-slate-700">ログインが必要です</p>
           <Link
@@ -258,7 +260,8 @@ export default function AdminRingsPage() {
 
   if (!isAdmin) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="min-h-screen flex items-center justify-center p-4 relative bg-cover bg-center" style={backgroundImageStyle}>
+        <div className="absolute inset-0 bg-gradient-to-b from-sky-400/20 via-sky-100/10 to-sky-900/20 backdrop-blur-[2px] pointer-events-none -z-10" />
         <div className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 text-center space-y-2 max-w-sm w-full">
           <p className="text-sm font-bold text-slate-700">このページへのアクセス権がありません</p>
           <p className="text-xs text-slate-400">管理者アカウントでログインしてください。</p>
@@ -268,7 +271,8 @@ export default function AdminRingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50/60 pb-24">
+    <div className="min-h-screen pb-24 relative bg-cover bg-center" style={backgroundImageStyle}>
+      <div className="absolute inset-0 bg-gradient-to-b from-sky-400/20 via-sky-100/10 to-sky-900/20 backdrop-blur-[2px] pointer-events-none -z-10" />
       <header className="px-4 sm:px-6 py-3.5 bg-white/90 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-30 shadow-xs">
         <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
           <Link href="/rewards" className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors">
