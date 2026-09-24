@@ -850,17 +850,11 @@ const themeColor = useMemo(() => {
       }
     }
 
-    // ホームページのいいねボタンと同じくDB側のカウントも更新する
-    // （今まではここが抜けていて、このページの「いいね数」表示が実際には更新されなかった）
-    setProfile((prev) => (prev ? { ...prev, likes_count: newLikes } : prev))
-
-    const { error } = await supabase.rpc('increment_likes', {
-      target_user_id: id,
-      is_liking: !wasFavorite,
-    })
-
-    if (error) {
-      console.error('いいね数の更新に失敗しました:', error)
+    // いいね数はDB側のトリガーが favorite_creators から集計する。数えられるのは
+    // ログイン中の他人へのお気に入りだけなので、画面の数もその場合だけ動かす
+    // （未ログインのお気に入りはブラウザ保存のみ／自分自身は数えない）
+    if (currentUserId && currentUserId !== id && nowFavorite !== wasFavorite) {
+      setProfile((prev) => (prev ? { ...prev, likes_count: newLikes } : prev))
     }
   }
 

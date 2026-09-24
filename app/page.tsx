@@ -266,21 +266,18 @@ export default function Home() {
       nowFavorite ? [...prev, userId] : prev.filter((fid) => fid !== userId)
     )
 
-    setProfiles((prevProfiles) =>
-      prevProfiles.map((p) =>
-        p.user_id === userId ? { ...p, likes_count: newLikes } : p
+    // いいね数はDB側のトリガーが favorite_creators から集計する。数えられるのは
+    // ログイン中の他人へのお気に入りだけなので、画面の数もその場合だけ動かす
+    // （未ログインのお気に入りはブラウザ保存のみ／自分自身は数えない）
+    const countChanged = !!currentUserId && currentUserId !== userId && nowFavorite !== isFav
+    if (countChanged) {
+      setProfiles((prevProfiles) =>
+        prevProfiles.map((p) =>
+          p.user_id === userId ? { ...p, likes_count: newLikes } : p
+        )
       )
-    )
-    // compareList は profiles から自動導出されるため、上の setProfiles だけで比較モーダルのいいね数も同期される
-
-    const { error } = await supabase.rpc('increment_likes', {
-      target_user_id: userId,
-      is_liking: !isFav,
-    })
-
-    if (error) {
-      console.error('いいね数の更新に失敗しました:', error)
     }
+    // compareList は profiles から自動導出されるため、上の setProfiles だけで比較モーダルのいいね数も同期される
   }
 
   const toggleTaste = (taste: string) => {
