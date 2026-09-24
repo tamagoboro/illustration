@@ -18,10 +18,16 @@ export async function ensureProfileFromSignupMetadata(user: User) {
   const displayName = typeof meta.display_name === 'string' ? meta.display_name.trim() : ''
   if (!displayName) return
 
+  // 新規登録時に選んだ「依頼者/クリエイター」で初期状態を分ける。
+  // クリエイターを選んだ場合のみ、最初から一覧に公開しダッシュボード導線を表示する。
+  // 依頼者を選んだ場合も、あとからダッシュボードで保存すればいつでもクリエイター化できる。
+  const isCreator = meta.account_type === 'creator'
+
   await supabase.from('profiles').upsert(
     {
       user_id: user.id,
-      is_public: true,
+      is_public: isCreator,
+      has_dashboard_setup: isCreator,
       display_name: displayName,
       status: 'available',
       theme_color: 'indigo',

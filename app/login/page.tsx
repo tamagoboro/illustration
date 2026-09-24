@@ -87,6 +87,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
+  const [accountType, setAccountType] = useState<'client' | 'creator'>('client')
   const [selectedAvatarId, setSelectedAvatarId] = useState(AVATAR_PRESETS[0].id)
   const [customAvatarFile, setCustomAvatarFile] = useState<File | null>(null)
   const [customAvatarPreview, setCustomAvatarPreview] = useState('')
@@ -164,6 +165,7 @@ export default function LoginPage() {
             referred_by: referrerId || undefined,
             display_name: displayName.trim(),
             avatar_url: avatarDataUrl,
+            account_type: accountType,
           },
         },
       })
@@ -300,6 +302,39 @@ export default function LoginPage() {
 
           {isSignUp && (
             <>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1.5">利用方法</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAccountType('client')}
+                    className={`px-3 py-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                      accountType === 'client'
+                        ? 'bg-sky-500 border-sky-500 text-white shadow-sm'
+                        : 'bg-white/90 border-sky-100 text-slate-600 hover:border-sky-300'
+                    }`}
+                  >
+                    🙋 依頼者として利用する
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAccountType('creator')}
+                    className={`px-3 py-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                      accountType === 'creator'
+                        ? 'bg-sky-500 border-sky-500 text-white shadow-sm'
+                        : 'bg-white/90 border-sky-100 text-slate-600 hover:border-sky-300'
+                    }`}
+                  >
+                    🎨 クリエイターとして利用する
+                  </button>
+                </div>
+                {accountType === 'creator' && (
+                  <p className="text-[10px] text-slate-400 mt-1.5">
+                    クリエイターアカウントの場合でも依頼をすることが可能です。
+                  </p>
+                )}
+              </div>
+
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1">表示名</label>
                 <input

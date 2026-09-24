@@ -757,6 +757,9 @@ export default function Dashboard() {
         campaign_discount_value: finalCampaignDiscountValue,
         campaign_start_at: fromDateInputValue(campaignStartDate, false),
         campaign_end_at: fromDateInputValue(campaignEndDate, true),
+        // ダッシュボードで一度でも保存したら「クリエイター」として扱う
+        // （is_publicとは別軸。一覧非公開のままでもクリエイター向け導線は出す）
+        has_dashboard_setup: true,
         updated_at: new Date().toISOString(),
       }
 

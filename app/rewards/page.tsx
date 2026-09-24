@@ -23,6 +23,7 @@ export default function RewardsPage() {
   const [busyRequestId, setBusyRequestId] = useState<string | null>(null)
   const [linkCopied, setLinkCopied] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [hasDashboardSetup, setHasDashboardSetup] = useState(false)
 
   const refreshWallet = async (uid: string) => {
     // 互いに依存しないので並行実行（直列だと通信の往復時間が2倍かかる）
@@ -88,7 +89,7 @@ export default function RewardsPage() {
         // 残高の読み取りだけは、ボーナス付与が確実に終わってから行う必要があるので
         // このあとの refreshWallet で改めて直列にする。
         const [profileRes, adminRes, referralRes] = await Promise.all([
-          supabase.from('profiles').select('avatar_url').eq('user_id', uid).maybeSingle(),
+          supabase.from('profiles').select('avatar_url, has_dashboard_setup').eq('user_id', uid).maybeSingle(),
           supabase.from('admins').select('user_id').eq('user_id', uid).maybeSingle(),
           supabase.from('referrals').select('id', { count: 'exact', head: true }).eq('referrer_id', uid),
           // 初回アクセス時のウェルカムボーナス（DB側で1人1回だけになるよう制御済み）
@@ -98,6 +99,7 @@ export default function RewardsPage() {
         ])
 
         setAvatarUrl(profileRes.data?.avatar_url || null)
+        setHasDashboardSetup(!!profileRes.data?.has_dashboard_setup)
         setIsAdmin(!!adminRes.data)
         setReferralCount(referralRes.count || 0)
 
@@ -200,6 +202,27 @@ export default function RewardsPage() {
       </header>
 
       <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
+        {/* クリエイター未登録の人への案内 */}
+        {!hasDashboardSetup && (
+          <div className="bg-gradient-to-r from-sky-50 to-cyan-50 rounded-3xl border border-sky-100 p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🎨</span>
+              <div>
+                <p className="text-xs font-extrabold text-slate-900">クリエイターとして活動してみませんか？</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  ポートフォリオや料金メニューを登録すると、依頼者から見つけてもらえるようになります。依頼者としての利用はそのまま続けられます。
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/dashboard"
+              className="shrink-0 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs rounded-xl transition-colors cursor-pointer whitespace-nowrap"
+            >
+              クリエイター登録する
+            </Link>
+          </div>
+        )}
+
         {/* 残高・現在の装着状況 */}
         <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm flex flex-col sm:flex-row items-center gap-5">
           <AvatarRing

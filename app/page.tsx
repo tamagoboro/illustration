@@ -58,6 +58,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [hasDashboardSetup, setHasDashboardSetup] = useState(false)
 
   // 検索・フィルター・ソート用ステート
   const [searchTerm, setSearchTerm] = useState('')
@@ -100,8 +101,16 @@ export default function Home() {
       setCurrentUserId(uid)
       if (uid) setIsLoggedIn(true)
 
-      const favs = await loadFavorites(uid)
-      if (isMounted) setFavorites(favs)
+      // お気に入り一覧と「クリエイター登録済みか」は互いに独立しているので並行取得する
+      const [favs, dashboardSetupRes] = await Promise.all([
+        loadFavorites(uid),
+        uid
+          ? supabase.from('profiles').select('has_dashboard_setup').eq('user_id', uid).maybeSingle()
+          : Promise.resolve({ data: null }),
+      ])
+      if (!isMounted) return
+      setFavorites(favs)
+      setHasDashboardSetup(!!dashboardSetupRes.data?.has_dashboard_setup)
     }
     initFavorites()
     return () => {
@@ -483,27 +492,25 @@ export default function Home() {
               </Link>
             )}
 
-            {/* ログイン / ダッシュボードボタン */}
-            <Link
-              href={isLoggedIn ? '/dashboard' : '/login'}
-              className={`px-4 py-2 text-xs font-bold rounded-2xl shadow-sm hover:shadow transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
-                isLoggedIn
-                  ? 'bg-slate-800 hover:bg-slate-700 text-white border border-slate-600'
-                  : 'bg-gradient-to-r from-sky-400 to-cyan-400 hover:brightness-105 text-white border border-sky-200'
-              }`}
-            >
-              {isLoggedIn ? (
-                <>
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span>ダッシュボード</span>
-                </>
-              ) : (
-                <>
-                  <span className="text-white">✦</span>
-                  <span>クリエイター無料登録</span>
-                </>
-              )}
-            </Link>
+            {/* ログイン中でクリエイター登録済みの場合だけダッシュボードへの導線を出す。
+                依頼者アカウントには出さず、代わりにクリエイター登録への案内を出す */}
+            {isLoggedIn && hasDashboardSetup ? (
+              <Link
+                href="/dashboard"
+                className="px-4 py-2 text-xs font-bold rounded-2xl shadow-sm hover:shadow transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 bg-slate-800 hover:bg-slate-700 text-white border border-slate-600"
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>ダッシュボード</span>
+              </Link>
+            ) : (
+              <Link
+                href={isLoggedIn ? '/dashboard' : '/login'}
+                className="px-4 py-2 text-xs font-bold rounded-2xl shadow-sm hover:shadow transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 bg-gradient-to-r from-sky-400 to-cyan-400 hover:brightness-105 text-white border border-sky-200"
+              >
+                <span className="text-white">✦</span>
+                <span>クリエイター無料登録</span>
+              </Link>
+            )}
 
           </div>
         </div>
