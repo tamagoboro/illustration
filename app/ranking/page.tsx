@@ -16,14 +16,19 @@ type RankedProfile = {
 // 真偽値（急上昇中か／問い合わせ多数か）しか返さない。そのため本ページも1位・2位…という
 // 数値順位ではなく、条件を満たすクリエイターを badge種別ごとにグルーピングして紹介する形にする。
 async function getFeaturedCreators() {
-  const { data: badgeData } = await supabase.rpc('get_public_creator_badges')
+  const { data: badgeData, error: badgeError } = await supabase.rpc('get_public_creator_badges')
+
+  if (badgeError) {
+    console.error('get_public_creator_badges 取得エラー:', badgeError)
+    return { trending: [] as RankedProfile[], popular: [] as RankedProfile[], error: badgeError.message }
+  }
 
   const trendingIds = (badgeData || []).filter((b: any) => b.is_trending).map((b: any) => b.user_id)
   const popularIds = (badgeData || []).filter((b: any) => b.is_popular_inquiries).map((b: any) => b.user_id)
   const allIds = Array.from(new Set([...trendingIds, ...popularIds]))
 
   if (allIds.length === 0) {
-    return { trending: [] as RankedProfile[], popular: [] as RankedProfile[] }
+    return { trending: [] as RankedProfile[], popular: [] as RankedProfile[], error: null as string | null }
   }
 
   const { data: profileData } = await supabase
@@ -47,6 +52,7 @@ async function getFeaturedCreators() {
   return {
     trending: trendingIds.map((id: string) => profileMap.get(id)).filter(Boolean) as RankedProfile[],
     popular: popularIds.map((id: string) => profileMap.get(id)).filter(Boolean) as RankedProfile[],
+    error: null as string | null,
   }
 }
 
@@ -74,7 +80,7 @@ function CreatorRow({ profile }: { profile: RankedProfile }) {
 }
 
 export default async function RankingPage() {
-  const { trending, popular } = await getFeaturedCreators()
+  const { trending, popular, error } = await getFeaturedCreators()
   const isEmpty = trending.length === 0 && popular.length === 0
 
   return (
@@ -93,8 +99,15 @@ export default async function RankingPage() {
           </p>
         </div>
 
-        {isEmpty ? (
-          <p className="text-center text-sm text-slate-600 font-bold drop-shadow-sm py-16">現在、該当するクリエイターはいません。</p>
+        {error ? (
+          <p className="text-center text-sm font-bold text-rose-500 drop-shadow-sm py-16">取得エラー: {error}</p>
+        ) : isEmpty ? (
+          <div className="text-center py-16 space-y-2">
+            <p className="text-sm text-slate-600 font-bold drop-shadow-sm">現在、条件を満たすクリエイターはいません。</p>
+            <p className="text-[11px] text-slate-500 drop-shadow-sm">
+              直近7日のPVが5件以上かつ前週の2倍以上、または直近30日の見積もり利用が5件以上のクリエイターが対象です。まだアクセスが少ない間は0件になることがあります。
+            </p>
+          </div>
         ) : (
           <>
             {trending.length > 0 && (
