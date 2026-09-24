@@ -164,9 +164,7 @@ export default async function MarketPage() {
               {genreStats.map((s) => (
                 <div key={s.taste} className="bg-white rounded-2xl p-4 shadow-xs border border-sky-100/60 space-y-2">
                   <div className="flex items-center justify-between">
-                    <Link href={`/tags/${encodeURIComponent(s.taste)}`} className="text-sm font-black text-slate-800 hover:text-sky-600">
-                      {s.taste}
-                    </Link>
+                    <span className="text-sm font-black text-slate-800">{s.taste}</span>
                     <span className="text-[10px] font-bold text-slate-400">{s.count}人のデータ</span>
                   </div>
                   <PriceBar min={s.min} max={s.max} avg={s.avg} overallMax={overallGenreMax} />

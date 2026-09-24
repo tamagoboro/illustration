@@ -10,10 +10,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // 公開中の全クリエイターIDを取得
   const { data: allProfiles } = await supabase
     .from('profiles')
-    .select('user_id, updated_at, tastes')
+    .select('user_id, updated_at')
     .eq('is_public', true)
 
-  // 作品を1枚も登録していないクリエイターはトップページ・タグページ双方から除外済みなので、
+  // 作品を1枚も登録していないクリエイターはトップページから除外済みなので、
   // サイトマップからも同じ条件で除外する（薄いページをGoogleに送らないようにする）
   const userIds = (allProfiles || []).map((p) => p.user_id)
   const { data: thumbData } =
@@ -30,20 +30,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.8,
   }))
 
-  // タグ別一覧ページ（実際に使われているタグの分だけ）
-  const tagSet = new Set<string>()
-  ;(profiles || []).forEach((p: any) => {
-    ;(p.tastes || []).forEach((t: string) => {
-      if (t) tagSet.add(t)
-    })
-  })
-  const tagUrls: MetadataRoute.Sitemap = Array.from(tagSet).map((tag) => ({
-    url: `${baseUrl}/tags/${encodeURIComponent(tag)}`,
-    lastModified: new Date(),
-    changeFrequency: 'weekly',
-    priority: 0.6,
-  }))
-
   return [
     {
       url: baseUrl,
@@ -52,6 +38,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 1.0,
     },
     ...creatorUrls,
-    ...tagUrls,
   ]
 }

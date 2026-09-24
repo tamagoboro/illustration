@@ -565,12 +565,6 @@ export default function Home() {
           >
             📊 注目クリエイター
           </Link>
-          <Link
-            href="/tags"
-            className="px-3.5 py-1.5 bg-white/85 backdrop-blur-md rounded-full text-[11px] font-bold text-sky-700 shadow-2xs border border-white/60 hover:bg-white transition-colors"
-          >
-            🏷 ジャンル一覧
-          </Link>
         </div>
       </section>
 
@@ -1186,9 +1180,6 @@ export default function Home() {
           </Link>
           <Link href="/faq" className="hover:text-sky-600 transition-colors">
             よくある質問
-          </Link>
-          <Link href="/tags" className="hover:text-sky-600 transition-colors">
-            ジャンル一覧
           </Link>
           <Link href="/updates" className="hover:text-sky-600 transition-colors">
             お知らせ
