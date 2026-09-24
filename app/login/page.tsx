@@ -96,6 +96,9 @@ export default function LoginPage() {
   const [errorMsg, setErrorMsg] = useState('')
   const [infoMsg, setInfoMsg] = useState('')
   const [referrerId, setReferrerId] = useState<string | null>(null)
+  const [forgotMode, setForgotMode] = useState(false)
+  const [resetSending, setResetSending] = useState(false)
+  const [resetSent, setResetSent] = useState(false)
 
   // 招待リンク（/login?ref=紹介者のuser_id）経由で来た場合、紹介者IDを覚えておく。
   // useSearchParams はSuspense境界が必要になるため、素朴にlocationから読む。
@@ -218,6 +221,31 @@ export default function LoginPage() {
     setLoading(false)
   }
 
+  // パスワード再設定メールを送るだけで、実際の変更は本人がメール内のリンクから
+  // 新しいパスワードを設定した時点で初めて反映される（Supabase側の仕組みに準拠。
+  // メール送信時点では古いパスワードは一切変更されない）。
+  const handleSendResetEmail = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!email.trim()) {
+      setErrorMsg('メールアドレスを入力してください。')
+      return
+    }
+    setLoading(true)
+    setErrorMsg('')
+    setResetSending(true)
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/reset-password`,
+    })
+    setResetSending(false)
+    setLoading(false)
+
+    if (error) {
+      setErrorMsg('送信に失敗しました: ' + error.message)
+      return
+    }
+    setResetSent(true)
+  }
+
   return (
     <div
       className="min-h-screen flex items-center justify-center p-6 font-sans antialiased relative bg-cover bg-center"
@@ -249,10 +277,14 @@ export default function LoginPage() {
 
         <div className="text-center space-y-1">
           <h1 className="text-2xl font-black text-slate-800 tracking-tight">
-            {isSignUp ? 'アカウント新規作成' : 'ログイン'}
+            {forgotMode ? 'パスワードの再設定' : isSignUp ? 'アカウント新規作成' : 'ログイン'}
           </h1>
           <p className="text-xs text-slate-500 font-medium">
-            {isSignUp ? 'お気に入り保存やマイページ機能を利用できます' : 'マイページにアクセスします'}
+            {forgotMode
+              ? '登録済みのメールアドレスに再設定用のリンクをお送りします'
+              : isSignUp
+              ? 'お気に入り保存やマイページ機能を利用できます'
+              : 'マイページにアクセスします'}
           </p>
         </div>
 
@@ -274,6 +306,55 @@ export default function LoginPage() {
           </div>
         )}
 
+        {forgotMode ? (
+          resetSent ? (
+            <div className="space-y-4 text-center">
+              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-2xl text-xs font-bold">
+                再設定用のメールを送信しました。メール内のリンクから新しいパスワードを設定してください。
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setForgotMode(false)
+                  setResetSent(false)
+                }}
+                className="text-xs text-sky-600 hover:underline font-bold cursor-pointer"
+              >
+                ← ログイン画面に戻る
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleSendResetEmail} className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">メールアドレス</label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="example@mail.com"
+                  className="w-full px-3 py-2 rounded-xl border border-sky-100 bg-white/90 text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={resetSending}
+                className="w-full py-3 bg-gradient-to-r from-sky-400 to-cyan-400 hover:brightness-105 text-white font-black rounded-2xl transition text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer active:scale-95"
+              >
+                {resetSending ? '送信中...' : '再設定メールを送信する'}
+              </button>
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => setForgotMode(false)}
+                  className="text-xs text-slate-400 hover:text-sky-600 font-bold cursor-pointer"
+                >
+                  ← ログイン画面に戻る
+                </button>
+              </div>
+            </form>
+          )
+        ) : (
         <form onSubmit={handleAuth} className="space-y-4">
           <div>
             <label className="block text-[11px] font-bold text-slate-700 mb-1">メールアドレス</label>
@@ -298,6 +379,20 @@ export default function LoginPage() {
               placeholder="6文字以上のパスワード"
               className="w-full px-3 py-2 rounded-xl border border-sky-100 bg-white/90 text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400"
             />
+            {!isSignUp && (
+              <button
+                type="button"
+                onClick={() => {
+                  setForgotMode(true)
+                  setErrorMsg('')
+                  setInfoMsg('')
+                  setResetSent(false)
+                }}
+                className="mt-1.5 text-[11px] font-bold text-sky-600 hover:underline cursor-pointer"
+              >
+                パスワードをお忘れですか？
+              </button>
+            )}
           </div>
 
           {isSignUp && (
@@ -433,7 +528,9 @@ export default function LoginPage() {
             {loading ? '処理中...' : isSignUp ? 'アカウントを作成する' : 'ログインする'}
           </button>
         </form>
+        )}
 
+        {!forgotMode && (
         <div className="text-center pt-2">
           <button
             type="button"
@@ -447,6 +544,7 @@ export default function LoginPage() {
             {isSignUp ? 'すでにアカウントをお持ちの方はこちら（ログイン）' : '新規アカウント作成はこちら'}
           </button>
         </div>
+        )}
 
         <div className="text-center pt-4 border-t border-sky-100">
           <Link href="/" className="text-xs text-slate-400 hover:text-sky-600 font-medium">

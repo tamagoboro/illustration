@@ -11,6 +11,9 @@
 -- 切り替える。is_public は一覧に参考情報として表示するのみ。
 
 -- 全ユーザー一覧（新しい順・ページング対応）
+-- profilesにはcreated_atが無いため、代わりに必ず存在するupdated_atで並べる
+-- （戻り値の列構成が変わるためCREATE OR REPLACEできず、先にDROPが必要）
+drop function if exists admin_list_users(int, int);
 create or replace function admin_list_users(p_limit int default 50, p_offset int default 0)
 returns table(
   user_id uuid,
@@ -18,7 +21,7 @@ returns table(
   avatar_url text,
   has_dashboard_setup boolean,
   is_public boolean,
-  created_at timestamptz
+  updated_at timestamptz
 )
 language plpgsql
 security definer
@@ -30,9 +33,9 @@ begin
   end if;
 
   return query
-  select p.user_id, p.display_name, p.avatar_url, p.has_dashboard_setup, p.is_public, p.created_at
+  select p.user_id, p.display_name, p.avatar_url, p.has_dashboard_setup, p.is_public, p.updated_at
   from profiles p
-  order by p.created_at desc
+  order by p.updated_at desc nulls last
   limit p_limit offset p_offset;
 end;
 $$;

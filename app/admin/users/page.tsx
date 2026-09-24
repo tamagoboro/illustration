@@ -20,7 +20,7 @@ type ListedUser = {
   avatar_url: string | null
   has_dashboard_setup: boolean
   is_public: boolean
-  created_at: string
+  updated_at: string
 }
 
 const USERS_PAGE_SIZE = 50
