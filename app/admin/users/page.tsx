@@ -14,6 +14,17 @@ type FoundUser = {
   balance: number
 }
 
+type ListedUser = {
+  user_id: string
+  display_name: string | null
+  avatar_url: string | null
+  has_dashboard_setup: boolean
+  is_public: boolean
+  created_at: string
+}
+
+const USERS_PAGE_SIZE = 50
+
 export default function AdminUsersPage() {
   const iconRings = useIconRings()
   const [checking, setChecking] = useState(true)
@@ -35,6 +46,48 @@ export default function AdminUsersPage() {
 
   const [message, setMessage] = useState('')
 
+  // 全ユーザー一覧（クリエイター/依頼者の種別を手動で直すため）
+  const [listedUsers, setListedUsers] = useState<ListedUser[]>([])
+  const [usersLoading, setUsersLoading] = useState(false)
+  const [usersHasMore, setUsersHasMore] = useState(true)
+  const [updatingUserId, setUpdatingUserId] = useState<string | null>(null)
+
+  const loadUsers = async (reset: boolean) => {
+    setUsersLoading(true)
+    const offset = reset ? 0 : listedUsers.length
+    const { data, error } = await supabase.rpc('admin_list_users', {
+      p_limit: USERS_PAGE_SIZE,
+      p_offset: offset,
+    })
+    setUsersLoading(false)
+
+    if (error) {
+      console.error('ユーザー一覧取得エラー:', error)
+      return
+    }
+    const rows = (data || []) as ListedUser[]
+    setListedUsers((prev) => (reset ? rows : [...prev, ...rows]))
+    setUsersHasMore(rows.length === USERS_PAGE_SIZE)
+  }
+
+  const handleSetAccountType = async (userId: string, isCreator: boolean) => {
+    setUpdatingUserId(userId)
+    const { error } = await supabase.rpc('admin_set_account_type', {
+      p_user_id: userId,
+      p_is_creator: isCreator,
+    })
+    setUpdatingUserId(null)
+
+    if (error) {
+      console.error('アカウント種別更新エラー:', error)
+      alert('更新に失敗しました。' + error.message)
+      return
+    }
+    setListedUsers((prev) =>
+      prev.map((u) => (u.user_id === userId ? { ...u, has_dashboard_setup: isCreator } : u))
+    )
+  }
+
   useEffect(() => {
     const init = async () => {
       const { data } = await supabase.auth.getUser()
@@ -48,6 +101,7 @@ export default function AdminUsersPage() {
           .eq('user_id', uid)
           .maybeSingle()
         setIsAdmin(!!adminRow)
+        if (adminRow) await loadUsers(true)
       }
       setChecking(false)
     }
@@ -212,6 +266,71 @@ export default function AdminUsersPage() {
             </button>
           </div>
           {searchError && <p className="text-[11px] font-bold text-rose-500">{searchError}</p>}
+        </div>
+
+        {/* 全ユーザー一覧：クリエイター/依頼者の種別を手動で直す */}
+        <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-black text-slate-900 uppercase tracking-widest">全ユーザー一覧（種別の手動設定）</h2>
+            <span className="text-[10px] text-slate-400 font-bold">{listedUsers.length}件表示中</span>
+          </div>
+          <p className="text-[10px] text-slate-400">
+            「ダッシュボードで保存したら自動でクリエイター扱い」の仕様上、意図せずクリエイター扱いになっているアカウントがあります。ここで手動で直せます（一覧への公開設定は変更しません）。
+          </p>
+
+          <div className="divide-y divide-slate-100">
+            {listedUsers.map((u) => (
+              <div key={u.user_id} className="flex items-center gap-3 py-2.5">
+                <AvatarRing
+                  src={u.avatar_url}
+                  alt=""
+                  size={32}
+                  fallback={<div className="w-full h-full rounded-full bg-sky-100 flex items-center justify-center text-xs">👤</div>}
+                />
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs font-bold text-slate-800 block truncate">
+                    {u.display_name || '（表示名未設定）'}
+                  </span>
+                  <span className="text-[9px] text-slate-300 block truncate">
+                    {u.is_public ? '一覧公開中' : '一覧非公開'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={() => handleSetAccountType(u.user_id, true)}
+                    disabled={updatingUserId === u.user_id}
+                    className={`px-2.5 py-1.5 rounded-lg text-[10px] font-black transition cursor-pointer disabled:opacity-50 ${
+                      u.has_dashboard_setup ? 'bg-sky-500 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                    }`}
+                  >
+                    🎨 クリエイター
+                  </button>
+                  <button
+                    onClick={() => handleSetAccountType(u.user_id, false)}
+                    disabled={updatingUserId === u.user_id}
+                    className={`px-2.5 py-1.5 rounded-lg text-[10px] font-black transition cursor-pointer disabled:opacity-50 ${
+                      !u.has_dashboard_setup ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                    }`}
+                  >
+                    🙋 依頼者
+                  </button>
+                </div>
+              </div>
+            ))}
+            {listedUsers.length === 0 && !usersLoading && (
+              <p className="text-xs text-slate-400 text-center py-6">ユーザーがいません</p>
+            )}
+          </div>
+
+          {usersHasMore && (
+            <button
+              onClick={() => loadUsers(false)}
+              disabled={usersLoading}
+              className="w-full py-2 bg-slate-50 hover:bg-slate-100 text-slate-500 font-bold text-xs rounded-xl transition cursor-pointer disabled:opacity-50"
+            >
+              {usersLoading ? '読み込み中...' : 'もっと見る'}
+            </button>
+          )}
         </div>
 
         {/* 複数件ヒットしたときの候補一覧 */}

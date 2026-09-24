@@ -540,21 +540,36 @@ export default function Home() {
             <span>🔮</span> 4つの質問でぴったりのクリエイターを診断する
           </Link>
         </div>
-        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 pt-1 text-xs font-bold text-sky-700/80">
-          <Link href="/guide" className="hover:text-sky-700 underline underline-offset-2">
-            はじめての方はこちら（ご利用の流れ）
+        <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+          <Link
+            href="/guide"
+            className="px-3.5 py-1.5 bg-white/85 backdrop-blur-md rounded-full text-[11px] font-bold text-sky-700 shadow-2xs border border-white/60 hover:bg-white transition-colors"
+          >
+            はじめての方はこちら
           </Link>
-          <Link href="/gallery" className="hover:text-sky-700 underline underline-offset-2">
-            🖼 新着作品から探す
+          <Link
+            href="/gallery"
+            className="px-3.5 py-1.5 bg-white/85 backdrop-blur-md rounded-full text-[11px] font-bold text-sky-700 shadow-2xs border border-white/60 hover:bg-white transition-colors"
+          >
+            🖼 新着作品
           </Link>
-          <Link href="/market" className="hover:text-sky-700 underline underline-offset-2">
-            💰 ジャンル別の相場を見る
+          <Link
+            href="/market"
+            className="px-3.5 py-1.5 bg-white/85 backdrop-blur-md rounded-full text-[11px] font-bold text-sky-700 shadow-2xs border border-white/60 hover:bg-white transition-colors"
+          >
+            💰 相場マップ
           </Link>
-          <Link href="/ranking" className="hover:text-sky-700 underline underline-offset-2">
-            📊 今週の注目クリエイター
+          <Link
+            href="/ranking"
+            className="px-3.5 py-1.5 bg-white/85 backdrop-blur-md rounded-full text-[11px] font-bold text-sky-700 shadow-2xs border border-white/60 hover:bg-white transition-colors"
+          >
+            📊 注目クリエイター
           </Link>
-          <Link href="/tags" className="hover:text-sky-700 underline underline-offset-2">
-            🏷 ジャンル一覧から探す
+          <Link
+            href="/tags"
+            className="px-3.5 py-1.5 bg-white/85 backdrop-blur-md rounded-full text-[11px] font-bold text-sky-700 shadow-2xs border border-white/60 hover:bg-white transition-colors"
+          >
+            🏷 ジャンル一覧
           </Link>
         </div>
       </section>
