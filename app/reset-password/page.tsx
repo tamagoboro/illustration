@@ -21,21 +21,40 @@ export default function ResetPasswordPage() {
   const [done, setDone] = useState(false)
 
   useEffect(() => {
+    let isMounted = true
+
     const { data: listener } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') {
+      // 旧形式（#access_token=...&type=recovery）のメールリンクはこちらで検知される
+      if (event === 'PASSWORD_RECOVERY' && isMounted) {
         setHasRecoverySession(true)
         setReady(true)
       }
     })
 
-    // リンクを踏んだ直後は上のイベントが飛んでくるが、リロード等で既にセッション処理済みの
-    // 場合に備えて、現在のセッション有無も一応チェックしておく
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) setHasRecoverySession(true)
-      setReady(true)
-    })
+    const init = async () => {
+      // 新形式（?code=...）のメールリンクは自動検出されないため、
+      // URLにcodeパラメータがあれば明示的にセッションと交換する
+      const code = new URLSearchParams(window.location.search).get('code')
+      if (code) {
+        const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+        if (isMounted) {
+          if (!error && data.session) setHasRecoverySession(true)
+          setReady(true)
+        }
+        return
+      }
+
+      // codeが無ければ、既にセッション処理済み（リロード等）かどうかを確認
+      const { data } = await supabase.auth.getSession()
+      if (isMounted) {
+        if (data.session) setHasRecoverySession(true)
+        setReady(true)
+      }
+    }
+    init()
 
     return () => {
+      isMounted = false
       listener.subscription.unsubscribe()
     }
   }, [])
