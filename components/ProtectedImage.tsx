@@ -1,6 +1,6 @@
 'use client'
 
-import { ImgHTMLAttributes, useMemo, useRef, useState } from 'react'
+import { ImgHTMLAttributes, useEffect, useMemo, useRef, useState } from 'react'
 
 // 無断保存対策用の警告画像。右クリック保存・ドラッグ保存・スマホの長押し保存を検知した瞬間だけ、
 // 本物のイラストの代わりにこの画像に一時的に差し替える（完全な防止はできないが、
@@ -54,6 +54,9 @@ export default function ProtectedImage({
   ...rest
 }: ImgHTMLAttributes<HTMLImageElement> & { watermarkText?: string; wrapperClassName?: string }) {
   const [showDecoy, setShowDecoy] = useState(false)
+  // 画像ファイルが無い・URLが壊れているときに、alt文字が丸出しになるのを避けるための表示切り替え
+  const [loadFailed, setLoadFailed] = useState(false)
+  useEffect(() => setLoadFailed(false), [src])
   const restoreTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -75,10 +78,24 @@ export default function ProtectedImage({
     }
   }
 
+  if (loadFailed) {
+    return (
+      <div className={wrapperClassName}>
+        <div className="w-full h-full flex items-center justify-center bg-slate-100 text-[10px] font-bold text-slate-400 text-center p-2">
+          画像を表示できません
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className={wrapperClassName}>
       <img
         {...rest}
+        onError={(e) => {
+          setLoadFailed(true)
+          rest.onError?.(e)
+        }}
         src={showDecoy ? DECOY_IMAGE_URL : src}
         draggable={false}
         onDragStart={(e) => e.preventDefault()}
