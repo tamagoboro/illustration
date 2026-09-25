@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { serializeJsonLd } from '@/lib/safeUrl'
 import CreatorClient from './CreatorClient'
 
 type Props = {
@@ -234,7 +235,7 @@ export default async function Page({ params }: Props) {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
       <CreatorClient
         id={id}

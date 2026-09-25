@@ -1,6 +1,8 @@
 -- 現行DB（public）の関数・トリガー関数の定義。supabase/export_current_schema.sql の①で書き出したもの（記録用）。
 -- get_public_creator_badges は add_get_public_creator_badges.sql が正なのでここには含めていない。
--- どのトリガーがどの関数を呼ぶか（pg_trigger）は含まない。DBを変更したらこの記録も更新すること。
+-- どのトリガーがどの関数を呼ぶかは schema_triggers.md を参照。DBを変更したらこの記録も更新すること。
+-- 最終確認: harden_security.sql / remove_duplicate_request_notifications.sql /
+--           fix_starter_bonus_and_cleanup_duplicates.sql の適用後。
 
 CREATE OR REPLACE FUNCTION public.admin_adjust_points(p_user_id uuid, p_amount integer, p_reason text DEFAULT NULL::text)
  RETURNS integer
@@ -246,6 +248,18 @@ CREATE OR REPLACE FUNCTION public.grant_review_points()
  SET search_path TO 'public'
 AS $function$
 begin
+  if new.reviewer_id = new.creator_id then
+    return new;
+  end if;
+
+  if exists (
+    select 1 from point_transactions
+    where user_id = new.reviewer_id
+      and reason = 'review_posted:' || new.creator_id
+  ) then
+    return new;
+  end if;
+
   insert into user_points (user_id, balance) values (new.reviewer_id, 50)
     on conflict (user_id) do update set balance = user_points.balance + 50;
 
@@ -274,6 +288,9 @@ begin
   insert into user_points (user_id, balance)
   values (uid, 0)
   on conflict (user_id) do nothing;
+
+  -- 同じユーザーの同時実行はここで待たされ、先の実行がコミットされたあとに下の確認へ進む
+  perform 1 from user_points where user_id = uid for update;
 
   if not exists (select 1 from point_transactions where user_id = uid and reason = 'starter_bonus') then
     update user_points set balance = balance + 100, updated_at = now() where user_id = uid;
@@ -327,6 +344,7 @@ AS $function$
 declare
   referrer uuid;
   bonus integer := 50;
+  max_rewarded_referrals integer := 10;
 begin
   begin
     referrer := (new.raw_user_meta_data->>'referred_by')::uuid;
@@ -339,6 +357,10 @@ begin
   end if;
 
   if not exists (select 1 from auth.users where id = referrer) then
+    return new;
+  end if;
+
+  if (select count(*) from referrals where referrer_id = referrer) >= max_rewarded_referrals then
     return new;
   end if;
 
@@ -364,17 +386,11 @@ $function$
 
 CREATE OR REPLACE FUNCTION public.increment_likes(target_user_id uuid, is_liking boolean)
  RETURNS void
- LANGUAGE plpgsql
+ LANGUAGE sql
  SECURITY DEFINER
  SET search_path TO 'public'
 AS $function$
-begin
-  if is_liking then
-    update profiles set likes_count = coalesce(likes_count, 0) + 1 where user_id = target_user_id;
-  else
-    update profiles set likes_count = greatest(coalesce(likes_count, 0) - 1, 0) where user_id = target_user_id;
-  end if;
-end;
+  select;
 $function$
 ;
 
@@ -551,48 +567,6 @@ end;
 $function$
 ;
 
-CREATE OR REPLACE FUNCTION public.notify_on_new_request()
- RETURNS trigger
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-begin
-  insert into notifications (user_id, type, title, body, link_url)
-  values (
-    new.creator_id,
-    'request_received',
-    '新しいリクエストが届きました',
-    left(new.content, 100),
-    '/dashboard/requests'
-  );
-  return new;
-end;
-$function$
-;
-
-CREATE OR REPLACE FUNCTION public.notify_on_request_status_change()
- RETURNS trigger
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-begin
-  if new.status is distinct from old.status and new.status in ('accepted', 'declined') then
-    insert into notifications (user_id, type, title, body, link_url)
-    values (
-      new.client_id,
-      'request_' || new.status,
-      case when new.status = 'accepted' then '依頼が承諾されました！' else '依頼が辞退されました' end,
-      new.creator_response,
-      '/creator/' || new.creator_id::text
-    );
-  end if;
-  return new;
-end;
-$function$
-;
-
 CREATE OR REPLACE FUNCTION public.notify_referrer_on_new_referral()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -664,6 +638,101 @@ begin
 
   insert into point_transactions (user_id, amount, reason)
     values (v_uid, -v_cost, 'purchase_ring:' || p_ring_id);
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.guard_requests_write()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_uid uuid := auth.uid();
+  v_is_creator boolean;
+  v_is_client boolean;
+begin
+  if current_user not in ('anon', 'authenticated') then
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    new.status := 'pending';
+    new.creator_response := null;
+    return new;
+  end if;
+
+  v_is_creator := v_uid is not null and v_uid = old.creator_id;
+  v_is_client  := v_uid is not null and v_uid = old.client_id;
+
+  if new.creator_id is distinct from old.creator_id
+     or new.client_id is distinct from old.client_id
+     or new.content is distinct from old.content
+     or new.budget is distinct from old.budget
+     or new.client_contact_url is distinct from old.client_contact_url
+     or new.image_urls is distinct from old.image_urls
+     or new.usage_type is distinct from old.usage_type
+     or new.reference_url is distinct from old.reference_url
+     or new.size_spec is distinct from old.size_spec
+     or new.desired_deadline is distinct from old.desired_deadline
+     or new.created_at is distinct from old.created_at then
+    raise exception 'リクエストの内容は変更できません';
+  end if;
+
+  if new.status is distinct from old.status
+     or new.creator_response is distinct from old.creator_response then
+    if v_is_creator and new.status in ('accepted', 'declined') and old.status <> 'cancelled' then
+      null; -- クリエイターの返信
+    elsif v_is_client and new.status = 'cancelled' and old.status = 'pending'
+          and new.creator_response is not distinct from old.creator_response then
+      null; -- 依頼者の取り下げ
+    else
+      raise exception 'この操作は許可されていません';
+    end if;
+  end if;
+
+  return new;
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.protect_profile_likes_count()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+begin
+  if current_user in ('anon', 'authenticated') then
+    if tg_op = 'INSERT' then
+      new.likes_count := 0;
+    else
+      new.likes_count := old.likes_count;
+    end if;
+  end if;
+  return new;
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.sync_profile_likes_count()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  if tg_op = 'INSERT' then
+    if new.user_id <> new.creator_id then
+      update profiles set likes_count = coalesce(likes_count, 0) + 1
+      where user_id = new.creator_id;
+    end if;
+  elsif tg_op = 'DELETE' then
+    if old.user_id <> old.creator_id then
+      update profiles set likes_count = greatest(coalesce(likes_count, 0) - 1, 0)
+      where user_id = old.creator_id;
+    end if;
+  end if;
+  return null;
 end;
 $function$
 ;

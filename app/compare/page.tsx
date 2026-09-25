@@ -8,6 +8,7 @@ import { ArrowLeft, Check, X, ExternalLink, Trash2, Sparkles } from 'lucide-reac
 import AvatarRing from '@/components/AvatarRing'
 import ProtectedImage from '@/components/ProtectedImage'
 import { backgroundImageStyle } from '@/lib/background'
+import { toSafeHttpUrl } from '@/lib/safeUrl'
 
 // Profile型に追加項目を拡張
 type ExtendedProfile = Profile & {
@@ -338,9 +339,9 @@ export default function ComparePage() {
             </div>
             {profiles.map((p) => (
               <div key={p.user_id} className="p-4">
-                {p.external_estimation_url ? (
+                {toSafeHttpUrl(p.external_estimation_url) ? (
                   <a
-                    href={p.external_estimation_url}
+                    href={toSafeHttpUrl(p.external_estimation_url)!}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="block text-center w-full py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition"

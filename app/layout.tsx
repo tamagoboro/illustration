@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import { serializeJsonLd } from '@/lib/safeUrl'
 
 const rawSiteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://drawker.com'
 const siteUrl = rawSiteUrl.startsWith('http') ? rawSiteUrl : `https://${rawSiteUrl}`
@@ -80,7 +81,7 @@ export default function RootLayout({
       <head>
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+          dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
         />
       </head>
       <body>{children}</body>
