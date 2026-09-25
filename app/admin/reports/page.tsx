@@ -182,6 +182,9 @@ export default function AdminReportsPage() {
             <Link href="/admin/analytics" className="text-[11px] font-bold text-slate-400 hover:text-sky-600 transition-colors">
               PV解析
             </Link>
+            <Link href="/admin/images" className="text-[11px] font-bold text-slate-400 hover:text-sky-600 transition-colors">
+              画像管理
+            </Link>
             <Link href="/admin/users" className="text-[11px] font-bold text-slate-400 hover:text-sky-600 transition-colors">
               ユーザー管理
             </Link>
@@ -264,13 +267,21 @@ export default function AdminReportsPage() {
                       {new Date(r.created_at).toLocaleString('ja-JP')}
                     </span>
                   </div>
-                  <Link
-                    href={`/creator/${r.creator_id}`}
-                    target="_blank"
-                    className="text-[11px] font-bold text-sky-600 hover:underline"
-                  >
-                    {r.creator_display_name || r.creator_id} のページを見る →
-                  </Link>
+                  <div className="flex items-center gap-3">
+                    <Link
+                      href={`/admin/images?user=${r.creator_id}`}
+                      className="text-[11px] font-bold text-rose-600 hover:underline"
+                    >
+                      画像を管理 →
+                    </Link>
+                    <Link
+                      href={`/creator/${r.creator_id}`}
+                      target="_blank"
+                      className="text-[11px] font-bold text-sky-600 hover:underline"
+                    >
+                      {r.creator_display_name || r.creator_id} のページを見る →
+                    </Link>
+                  </div>
                 </div>
 
                 <p className="text-xs font-bold text-slate-800">
