@@ -44,6 +44,8 @@ export default function CreatorImageManager({
   const [works, setWorks] = useState<WorkRow[]>([])
   const [loadingWorks, setLoadingWorks] = useState(true)
   const [reason, setReason] = useState('')
+  // クリエイターへ通知するかは管理者の任意（既定は通知する）。理由と「通知なし」の旨は操作履歴に残る
+  const [notify, setNotify] = useState(true)
   const [busyKey, setBusyKey] = useState<string | null>(null)
   const [message, setMessage] = useState('')
 
@@ -116,10 +118,14 @@ export default function CreatorImageManager({
   const handleRemoveWork = async (item: WorkRow) => {
     const r = requireReason()
     if (!r) return
-    if (!confirm('この作品を削除します。クリエイターに理由つきで通知されます。よろしいですか？')) return
+    if (!confirm(`この作品を削除します。${notify ? 'クリエイターに理由つきで通知されます。' : 'クリエイターには通知されません。'}よろしいですか？`)) return
 
     setBusyKey(`work:${item.id}`)
-    const { data, error } = await supabase.rpc('admin_remove_portfolio_item', { p_item_id: item.id, p_reason: r })
+    const { data, error } = await supabase.rpc('admin_remove_portfolio_item', {
+      p_item_id: item.id,
+      p_reason: r,
+      p_notify: notify,
+    })
     setBusyKey(null)
     if (error) {
       console.error('作品削除エラー:', error)
@@ -142,6 +148,7 @@ export default function CreatorImageManager({
       p_field: field,
       p_new_url: newUrl,
       p_reason: r,
+      p_notify: notify,
     })
     setBusyKey(null)
     if (error) {
@@ -165,6 +172,7 @@ export default function CreatorImageManager({
       p_user_id: user.user_id,
       p_new_url: newUrl,
       p_reason: r,
+      p_notify: notify,
     })
     setBusyKey(null)
     if (error) {
@@ -223,7 +231,7 @@ export default function CreatorImageManager({
 
       <div className="space-y-1.5">
         <label className="text-[11px] font-black text-slate-700">
-          理由（必須・クリエイターに通知されます）
+          理由（必須・操作履歴に記録されます）
         </label>
         <input
           value={reason}
@@ -244,9 +252,20 @@ export default function CreatorImageManager({
             </button>
           ))}
         </div>
+        <label className="flex items-center gap-2 pt-1 cursor-pointer w-fit">
+          <input
+            type="checkbox"
+            checked={notify}
+            onChange={(e) => setNotify(e.target.checked)}
+            className="w-3.5 h-3.5 accent-sky-500 cursor-pointer"
+          />
+          <span className="text-[11px] font-bold text-slate-600">
+            クリエイターに通知する（理由が本人に表示されます）
+          </span>
+        </label>
       </div>
 
-      {message && <p className="text-[11px] font-bold text-emerald-600">{message}</p>}
+      {message &&<p className="text-[11px] font-bold text-emerald-600">{message}</p>}
 
       <div className="flex items-center gap-3 bg-white rounded-xl p-2.5 border border-slate-100">
         <div className="w-12 h-12 rounded-full overflow-hidden bg-slate-100 shrink-0">

@@ -10,7 +10,7 @@ type AuditRow = {
   id: string
   action: string
   target_user_id: string | null
-  detail: { reason?: string } | null
+  detail: { reason?: string; notified?: boolean } | null
   created_at: string
 }
 
@@ -235,6 +235,9 @@ export default function AdminImagesPage() {
                   <span className="font-bold">{ACTION_LABELS[a.action] || a.action}</span>
                   {a.target_user_id && <span>/ {nameMap[a.target_user_id] || a.target_user_id}</span>}
                   {a.detail?.reason && <span className="text-slate-400">（{a.detail.reason}）</span>}
+                  {a.detail?.notified === false && (
+                    <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-1.5 rounded">通知なし</span>
+                  )}
                 </li>
               ))}
             </ul>

@@ -5,7 +5,7 @@
 --       admin_remove_portfolio_item   作品を1件削除する
 --       admin_replace_portfolio_image 作品の画像 / ビフォー画像を差し替える（ビフォー画像は null で外す）
 --       admin_replace_avatar          アイコンを差し替える（null で外す）
---   ・操作の記録（admin_audit_log）と、クリエイターへの通知（理由つき）
+--   ・操作の記録（admin_audit_log）と、クリエイターへの通知（理由つき。通知するかは管理者の任意）
 --   ・moderated_images: 「この画像URLは削除/差し替え済み」の記録。
 --       クリエイターのダッシュボードは、作品を「全削除→入れ直し」で保存する作りのため、
 --       管理者が消した画像が、古い画面からの保存で復活してしまう。これをトリガーで防ぐ。
@@ -54,8 +54,15 @@ create index if not exists admin_audit_log_created_idx
 -- 管理者用RPC
 -- ============================================================
 
+-- どの操作も p_notify（クリエイターへ通知するか）を持つ。通知するかは管理者の任意で、
+-- 通知しない場合も、理由と「通知なし」の旨は操作履歴（admin_audit_log）に残る。
+-- 引数を増やしたため、以前の版（p_notify なし）が残っていると別の関数として共存してしまうので先に消す。
+drop function if exists public.admin_remove_portfolio_item(uuid, text);
+drop function if exists public.admin_replace_portfolio_image(uuid, text, text, text);
+drop function if exists public.admin_replace_avatar(uuid, text, text);
+
 -- 作品を1件削除する。削除した画像URLの配列を返す（呼び出し側がストレージからファイルを消す）。
-create or replace function public.admin_remove_portfolio_item(p_item_id uuid, p_reason text)
+create or replace function public.admin_remove_portfolio_item(p_item_id uuid, p_reason text, p_notify boolean default true)
 returns text[]
 language plpgsql
 security definer
@@ -93,11 +100,13 @@ begin
   insert into admin_audit_log (admin_id, action, target_type, target_id, target_user_id, detail)
   values (auth.uid(), 'remove_portfolio_item', 'portfolio_item', p_item_id::text, v_item.user_id,
           jsonb_build_object('image_url', v_item.image_url, 'before_image_url', v_item.before_image_url,
-                             'title', v_item.title, 'reason', trim(p_reason)));
+                             'title', v_item.title, 'reason', trim(p_reason), 'notified', coalesce(p_notify, true)));
 
-  insert into notifications (user_id, type, title, body, link_url)
-  values (v_item.user_id, 'image_moderated', '🛡️ 作品が管理者により削除されました',
-          '理由: ' || trim(p_reason), '/dashboard');
+  if coalesce(p_notify, true) then
+    insert into notifications (user_id, type, title, body, link_url)
+    values (v_item.user_id, 'image_moderated', '🛡️ 作品が管理者により削除されました',
+            '理由: ' || trim(p_reason), '/dashboard');
+  end if;
 
   return array_remove(array[v_item.image_url, v_item.before_image_url], null);
 end;
@@ -108,7 +117,7 @@ $$;
 --   p_field = 'before' : ビフォー画像。p_new_url が null なら画像を外す
 -- 差し替え前のURLを返す（呼び出し側がストレージからファイルを消す）。
 create or replace function public.admin_replace_portfolio_image(
-  p_item_id uuid, p_field text, p_new_url text, p_reason text
+  p_item_id uuid, p_field text, p_new_url text, p_reason text, p_notify boolean default true
 )
 returns text
 language plpgsql
@@ -162,20 +171,23 @@ begin
   values (auth.uid(),
           case when p_new_url is null then 'remove_before_image' else 'replace_portfolio_image' end,
           'portfolio_item', p_item_id::text, v_item.user_id,
-          jsonb_build_object('field', p_field, 'old_url', v_old, 'new_url', p_new_url, 'reason', trim(p_reason)));
+          jsonb_build_object('field', p_field, 'old_url', v_old, 'new_url', p_new_url, 'reason', trim(p_reason),
+                             'notified', coalesce(p_notify, true)));
 
-  insert into notifications (user_id, type, title, body, link_url)
-  values (v_item.user_id, 'image_moderated',
-          case when p_new_url is null then '🛡️ 作品の画像が管理者により削除されました'
-               else '🛡️ 作品の画像が管理者により差し替えられました' end,
-          '理由: ' || trim(p_reason), '/dashboard');
+  if coalesce(p_notify, true) then
+    insert into notifications (user_id, type, title, body, link_url)
+    values (v_item.user_id, 'image_moderated',
+            case when p_new_url is null then '🛡️ 作品の画像が管理者により削除されました'
+                 else '🛡️ 作品の画像が管理者により差し替えられました' end,
+            '理由: ' || trim(p_reason), '/dashboard');
+  end if;
 
   return v_old;
 end;
 $$;
 
 -- アイコンを差し替える（p_new_url が null なら外す）。差し替え前のURLを返す。
-create or replace function public.admin_replace_avatar(p_user_id uuid, p_new_url text, p_reason text)
+create or replace function public.admin_replace_avatar(p_user_id uuid, p_new_url text, p_reason text, p_notify boolean default true)
 returns text
 language plpgsql
 security definer
@@ -214,24 +226,27 @@ begin
   values (auth.uid(),
           case when p_new_url is null then 'remove_avatar' else 'replace_avatar' end,
           'profile', p_user_id::text, p_user_id,
-          jsonb_build_object('old_url', v_old, 'new_url', p_new_url, 'reason', trim(p_reason)));
+          jsonb_build_object('old_url', v_old, 'new_url', p_new_url, 'reason', trim(p_reason),
+                             'notified', coalesce(p_notify, true)));
 
-  insert into notifications (user_id, type, title, body, link_url)
-  values (p_user_id, 'image_moderated',
-          case when p_new_url is null then '🛡️ アイコンが管理者により削除されました'
-               else '🛡️ アイコンが管理者により差し替えられました' end,
-          '理由: ' || trim(p_reason), '/dashboard');
+  if coalesce(p_notify, true) then
+    insert into notifications (user_id, type, title, body, link_url)
+    values (p_user_id, 'image_moderated',
+            case when p_new_url is null then '🛡️ アイコンが管理者により削除されました'
+                 else '🛡️ アイコンが管理者により差し替えられました' end,
+            '理由: ' || trim(p_reason), '/dashboard');
+  end if;
 
   return v_old;
 end;
 $$;
 
-revoke execute on function public.admin_remove_portfolio_item(uuid, text) from public, anon;
-revoke execute on function public.admin_replace_portfolio_image(uuid, text, text, text) from public, anon;
-revoke execute on function public.admin_replace_avatar(uuid, text, text) from public, anon;
-grant execute on function public.admin_remove_portfolio_item(uuid, text) to authenticated;
-grant execute on function public.admin_replace_portfolio_image(uuid, text, text, text) to authenticated;
-grant execute on function public.admin_replace_avatar(uuid, text, text) to authenticated;
+revoke execute on function public.admin_remove_portfolio_item(uuid, text, boolean) from public, anon;
+revoke execute on function public.admin_replace_portfolio_image(uuid, text, text, text, boolean) from public, anon;
+revoke execute on function public.admin_replace_avatar(uuid, text, text, boolean) from public, anon;
+grant execute on function public.admin_remove_portfolio_item(uuid, text, boolean) to authenticated;
+grant execute on function public.admin_replace_portfolio_image(uuid, text, text, text, boolean) to authenticated;
+grant execute on function public.admin_replace_avatar(uuid, text, text, boolean) to authenticated;
 
 
 -- ============================================================
