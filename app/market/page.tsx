@@ -24,13 +24,44 @@ type MenuStat = {
 // ジャンル/メニューごとに個人の価格が特定できてしまわないよう、2人以上のデータがある場合だけ集計対象にする
 const MIN_SAMPLE_SIZE = 2
 
+// 漢数字の表記ゆれ（「一枚絵」と「1枚絵」など）を吸収する。NFKC正規化は全角/半角の
+// 変換はできても漢数字はアラビア数字にしてくれないため、ここだけは個別に変換する。
+// 単純な1文字置換なので「十二」のような2桁の組み合わせは正しく変換できないが、
+// メニュー名（一枚絵・二頭身など）で使われる範囲では十分。
+const KANJI_DIGITS: Record<string, string> = {
+  '〇': '0', '零': '0', '一': '1', '二': '2', '三': '3', '四': '4', '五': '5',
+  '六': '6', '七': '7', '八': '8', '九': '9', '十': '10',
+}
+function convertKanjiNumerals(s: string): string {
+  return s.replace(/[〇零一二三四五六七八九十]/gu, (ch) => KANJI_DIGITS[ch] ?? ch)
+}
+
 // 「アイコン制作」→「アイコン」、「一枚絵制作」→「一枚絵」のように、装飾的な接尾辞の
 // 有無だけの表記ゆれを吸収する。「一枚絵・胸上」のように部位まで指定されたものは
 // 接尾辞が付いていないのでそのまま残り、価格帯の異なる項目として区別される。
 const MENU_TITLE_SUFFIXES = /(制作|作成|描画|イラスト)$/u
+// 「全身」は「立ち絵」等にとって省略可能な決まり文句（立ち絵は通常すでに全身を指すため）と考え、
+// 先頭に付いているだけの場合は取り除く。「バストアップ」のように描画範囲そのものを表す接頭辞は
+// 価格帯が変わるため、ここでは対象にしない。
+const MENU_TITLE_PREFIXES = /^(全身)/u
+
+// 呼び方が違うだけで実質同じ意味の言葉を1つの表記にまとめる（同義語 → 代表語）。
+// \b（単語境界）は日本語の文字には効かない（アルファベット・数字・アンダースコアしか
+// 「単語」とみなさないため）ので使わず、単純な部分一致で置換する。対象がどれも
+// 短く特徴的な語のため、無関係な語に誤って混ざる可能性は低いと判断している。
+// 「デフォルメ」はこのサイトの見積もりフォームのテンプレートで、ミニキャラより高い別料金帯の
+// 選択肢として使われているため、ここには含めない（まとめると価格帯の異なる項目が混ざってしまう）。
+// 気づいたものはこの配列に追記していく。
+const MENU_TITLE_SYNONYMS: { pattern: RegExp; canonical: string }[] = [
+  { pattern: /SD|ちびキャラ/gi, canonical: 'ミニキャラ' },
+]
+function applySynonyms(s: string): string {
+  return MENU_TITLE_SYNONYMS.reduce((acc, { pattern, canonical }) => acc.replace(pattern, canonical), s)
+}
+
 function normalizeMenuTitle(raw: string): string {
-  const unified = raw.normalize('NFKC').trim().replace(/\s+/g, '')
-  const stripped = unified.replace(MENU_TITLE_SUFFIXES, '')
+  const unified = convertKanjiNumerals(raw.normalize('NFKC').trim().replace(/\s+/g, ''))
+  const stripped = applySynonyms(unified.replace(MENU_TITLE_SUFFIXES, '').replace(MENU_TITLE_PREFIXES, ''))
   return stripped || unified
 }
 
