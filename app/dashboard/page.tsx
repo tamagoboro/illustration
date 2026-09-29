@@ -827,9 +827,6 @@ export default function Dashboard() {
 
       if (error) {
         console.error('保存エラー詳細:', JSON.stringify(error, null, 2))
-        // 「invalid input syntax for type integer」のような型エラーが再発した場合に、
-        // どの項目が原因か一目で分かるよう、送信直前のペイロードも一緒に出しておく
-        console.error('送信データ:', JSON.stringify(profilePayload, null, 2))
         alert('保存に失敗しました。通信環境をご確認のうえ、もう一度お試しください。入力内容は消えていませんので、そのまま再度保存ボタンを押してみてください。')
       } else {
         // 保存が成功し、アイコン画像が差し替えられた場合だけ、もう使われなくなった
