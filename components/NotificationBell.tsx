@@ -133,6 +133,14 @@ export default function NotificationBell() {
               ))
             )}
           </div>
+
+          <Link
+            href="/notifications"
+            onClick={() => setIsOpen(false)}
+            className="block px-4 py-2.5 text-center text-[11px] font-bold text-sky-600 hover:bg-sky-50 transition-colors border-t border-slate-100"
+          >
+            すべての通知を見る →
+          </Link>
         </div>
       )}
     </div>

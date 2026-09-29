@@ -172,6 +172,11 @@ export default function Dashboard() {
     Array.from({ length: 4 }, () => ({ x: 50, y: 50 }))
   )
 
+  // 初回の作品読み込みが失敗したかどうか。falseのまま保存を許可してしまうと、
+  // 「取得エラーで空欄に見えているだけの状態」で保存され、実際にDBにある作品が
+  // 全削除→空で入れ直しになって消えてしまう事故につながるため、保存前にガードする。
+  const [portfolioLoadFailed, setPortfolioLoadFailed] = useState(false)
+
   // DBに実際に保存されている（＝公開中の）URLを覚えておき、保存が成功した後にだけ
   // 「もう使われなくなった古いファイル」をストレージから削除するために使う。
   // 保存前（isDirtyな状態）に削除してしまうと、保存せずに離脱した場合に
@@ -336,6 +341,10 @@ export default function Dashboard() {
 
         if (portfolioError) {
           console.error('ポートフォリオ取得エラー:', portfolioError)
+          // ここで黙って空欄のフォームを表示すると、実際にはDBに作品が残っているのに
+          // 「登録されていない」ように見えてしまい、そのまま保存すると全削除される事故になる。
+          // 保存できないようにブロックし、ユーザーに再読み込みを促す。
+          setPortfolioLoadFailed(true)
         }
 
         if (portfolioData && portfolioData.length > 0) {
@@ -847,6 +856,12 @@ export default function Dashboard() {
   const handleSavePortfolio = async (e: FormEvent) => {
     e.preventDefault()
     if (!user) return
+    if (portfolioLoadFailed) {
+      alert(
+        '作品データの読み込みに失敗した状態のため、このまま保存すると既存の作品が消えてしまう恐れがあります。ページを再読み込みしてからもう一度お試しください。'
+      )
+      return
+    }
     setSaving(true)
 
     try {
@@ -891,12 +906,18 @@ export default function Dashboard() {
         }
       }
 
-      // 保存が成功した枠だけ、差し替えで使われなくなった古い画像ファイルを削除する
-      // （保存前に消すと、保存せず離脱した場合に公開中の画像を消してしまうためここで行う）
+      // 保存が成功した後、差し替え・削除で使われなくなった古い画像ファイルを削除する
+      // （保存前に消すと、保存せず離脱した場合に公開中の画像を消してしまうためここで行う）。
+      // 「同じ枠（添字）で比べてURLが変わったか」で判定すると、並び替え（↑前へ／↓次へ）で
+      // 2枚の位置を入れ替えただけなのに、両方とも「別の画像に変わった」と誤判定され、
+      // まだ使っている画像ファイルを消してしまう事故になっていた。位置ではなく、
+      // 「新しい4枚のどこにも存在しないURLか」で判定する。
       const newNormalizedUrls = portfolioUrls.map((url) => normalizeStorageUrl(url))
       const oldUrls = savedPortfolioUrlsRef.current
+      const newUrlSet = new Set(newNormalizedUrls.filter((u) => u))
       const pathsToRemove = oldUrls
-        .map((oldUrl, idx) => (oldUrl && oldUrl !== newNormalizedUrls[idx] ? extractStoragePath(oldUrl) : null))
+        .filter((oldUrl) => oldUrl && !newUrlSet.has(oldUrl))
+        .map((oldUrl) => extractStoragePath(oldUrl))
         .filter((path): path is string => !!path)
       if (pathsToRemove.length > 0) {
         supabase.storage
@@ -2189,6 +2210,12 @@ export default function Dashboard() {
               <p className="text-xs text-slate-400 mt-1">最大4枚まで登録可能です。1枚目の画像がTwitter OGP・カード一覧の代表画像になります。</p>
             </div>
 
+            {portfolioLoadFailed && (
+              <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-700">
+                作品データの読み込みに失敗しました。このままでは、既に登録されている作品が保存時に消えてしまう恐れがあるため、保存できないようにしています。ページを再読み込みしてください。
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               {portfolioUrls.map((url, idx) => (
                 <div key={idx} className="space-y-3 p-4 rounded-2xl border border-slate-200/80 bg-slate-50/40 hover:bg-slate-50 transition-all">
@@ -2347,10 +2374,10 @@ export default function Dashboard() {
 
             <button
               type="submit"
-              disabled={saving || uploadingIndex !== null}
+              disabled={saving || uploadingIndex !== null || portfolioLoadFailed}
               className={`w-full py-3.5 ${currentThemeObj.bg} hover:opacity-90 active:scale-[0.99] text-white font-extrabold rounded-2xl text-xs transition-all duration-200 shadow-md cursor-pointer disabled:opacity-50`}
             >
-              {saving ? '保存中...' : '作品ポートフォリオを保存'}
+              {saving ? '保存中...' : portfolioLoadFailed ? '読み込みエラーのため保存できません' : '作品ポートフォリオを保存'}
             </button>
           </form>
         )}
