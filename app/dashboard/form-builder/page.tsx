@@ -540,10 +540,15 @@ export default function FormBuilderPage() {
       }
     })
 
+    // %指定のオプション（商用利用の割増など）は、固定料金（基本料金＋各オプションの円指定分）に対して
+    // 加算する。field.price（フィールド自体への固定料金）を基準にしていると、多くのフォームではそれが
+    // 常に0のため「%オプションを選んでも合計に反映されない」ことになっていた（プレビューも実際の
+    // クリエイターページのCreatorClient.tsxと同じ式に揃えている）。
+    const fixedBase = baseSum + fixedAdditions
+    const fixedBaseOriginal = baseSumOriginal + fixedAdditionsOriginal
     return {
-      previewTotal: baseSum + fixedAdditions + Math.round(baseSum * (percentAdditions / 100)),
-      previewOriginalTotal:
-        baseSumOriginal + fixedAdditionsOriginal + Math.round(baseSumOriginal * (percentAdditionsOriginal / 100)),
+      previewTotal: fixedBase + Math.round(fixedBase * (percentAdditions / 100)),
+      previewOriginalTotal: fixedBaseOriginal + Math.round(fixedBaseOriginal * (percentAdditionsOriginal / 100)),
     }
   }, [config, previewAnswers, campaign])
 

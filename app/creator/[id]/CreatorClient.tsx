@@ -743,10 +743,13 @@ const themeColor = useMemo(() => {
       }
     })
 
-    const calculatedTotal =
-      baseSum + extraFixedPrice + Math.round(baseSum * (percentSum / 100))
-    const calculatedOriginalTotal =
-      baseSumOriginal + extraFixedPriceOriginal + Math.round(baseSumOriginal * (percentSumOriginal / 100))
+    // %指定のオプション（商用利用の割増など）は、固定料金（基本料金＋描画範囲などの円指定オプション）に
+    // 対して加算する。field.price（フィールド自体への固定料金）を基準にしていると、多くのフォームでは
+    // それが常に0のため「%オプションを選んでも合計に反映されない」ことになっていた。
+    const fixedBase = baseSum + extraFixedPrice
+    const fixedBaseOriginal = baseSumOriginal + extraFixedPriceOriginal
+    const calculatedTotal = fixedBase + Math.round(fixedBase * (percentSum / 100))
+    const calculatedOriginalTotal = fixedBaseOriginal + Math.round(fixedBaseOriginal * (percentSumOriginal / 100))
 
     return { basePriceTotal: baseSum, totalPrice: calculatedTotal, originalTotalPrice: calculatedOriginalTotal }
   }, [formAnswers, activeFormConfig, campaign])
