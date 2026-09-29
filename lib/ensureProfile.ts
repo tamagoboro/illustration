@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { User } from '@supabase/supabase-js'
+import type { SupabaseClient, User } from '@supabase/supabase-js'
 
 // 新規登録フォームで決めた表示名・アイコンをprofilesテーブルへ反映する。
 // メール確認が必須な設定の場合、signUp直後はまだセッションが無くDBへ書き込めないため、
@@ -46,4 +46,37 @@ export async function ensureProfileFromSignupMetadata(user: User) {
     },
     { onConflict: 'user_id' }
   )
+}
+
+// Google等のOAuthログインでは、auth.usersへのINSERT時点でDBトリガー（handle_new_user）が
+// display_name空欄のままprofilesの行を自動作成してしまう（このトリガーはraw_user_meta_data->>'display_name'
+// しか見ないため、GoogleがくれるフルネームやアイコンURLは反映されない）。
+// そのため、こちらはメール登録の ensureProfileFromSignupMetadata とは別に、
+// 「行はすでにあるが表示名が空」のケースをOAuthのuser_metadataから埋める。
+// 呼び出し元（サーバー側/ブラウザ側）でSupabaseクライアントのインスタンスが異なるため引数で受け取る。
+export async function fillProfileFromOAuthMetadata(client: SupabaseClient, user: User) {
+  const { data: existing } = await client
+    .from('profiles')
+    .select('display_name, avatar_url')
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  if (!existing) return
+  if (existing.display_name && existing.display_name.trim()) return
+
+  const meta = user.user_metadata || {}
+  const displayName =
+    (typeof meta.full_name === 'string' && meta.full_name.trim()) ||
+    (typeof meta.name === 'string' && meta.name.trim()) ||
+    (typeof user.email === 'string' && user.email.split('@')[0]) ||
+    'ユーザー'
+  const avatarUrl =
+    existing.avatar_url ||
+    (typeof meta.avatar_url === 'string' ? meta.avatar_url : null) ||
+    (typeof meta.picture === 'string' ? meta.picture : null)
+
+  await client
+    .from('profiles')
+    .update({ display_name: displayName, avatar_url: avatarUrl, updated_at: new Date().toISOString() })
+    .eq('user_id', user.id)
 }
