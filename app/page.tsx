@@ -8,6 +8,7 @@ import { loadFavorites, toggleFavoriteRecord } from '@/lib/favorites'
 import { SlidersHorizontal, RotateCcw, Search, Wallet, Clock, Tag } from 'lucide-react'
 import AvatarRing from '@/components/AvatarRing'
 import ProtectedImage from '@/components/ProtectedImage'
+import CreatorThumbnailSlideshow, { ThumbnailSlide } from '@/components/CreatorThumbnailSlideshow'
 import NotificationBell from '@/components/NotificationBell'
 import RecentlyViewedCreators from '@/components/RecentlyViewedCreators'
 import { isCampaignActive, applyDiscount, formatDiscountBadge, Campaign } from '@/lib/discount'
@@ -24,6 +25,8 @@ const HIDDEN_TASTES = new Set(['IRIAMライバー向け'])
 // 拡張型定義（追加された制作条件フィールドを反映）
 type ProfileWithImage = Profile & {
   thumbnail_url?: string | null
+  // カードの自動スライド用（最大3枚、focal_x/yはダッシュボードで指定したサムネイル位置）
+  thumbnail_slides?: ThumbnailSlide[]
   likes_count?: number
   menu_items?: MenuItem[] | null
   ai_usage?: string | null
@@ -141,28 +144,38 @@ export default function Home() {
         if (profileData && isMounted) {
           const userIds = profileData.map((p) => p.user_id)
 
-          // クリエイターごとの先頭1枚だけをDB側(first_portfolio_thumbnails)で絞り込んで取得。
-          // 以前は全クリエイターの全作品を取得してからJS側で絞っていたため、
-          // 作品数が増えるほどホームページが重くなっていた。
+          // クリエイターごとに、先頭から最大3枚だけをDB側で絞り込んで取得する
+          // （sort_orderにインデックスがあるため、全作品を取ってからJS側で絞るより軽い）。
+          // カードで複数枚を自動スライド表示するための材料。1枚しか無いクリエイターは
+          // 結果的に1枚だけ返るので、その場合はスライドせず今までどおり静止画になる。
           const { data: portfolioData } = await supabase
-            .from('first_portfolio_thumbnails')
-            .select('user_id, image_url')
+            .from('portfolio_items')
+            .select('user_id, image_url, focal_x, focal_y, sort_order')
             .in('user_id', userIds)
+            .lt('sort_order', 3)
+            .order('sort_order', { ascending: true })
 
-          const imageMap: Record<string, string> = {}
+          const slidesMap: Record<string, ThumbnailSlide[]> = {}
           if (portfolioData) {
             portfolioData.forEach((item) => {
-              if (item.image_url) imageMap[item.user_id] = item.image_url
+              if (!item.image_url) return
+              if (!slidesMap[item.user_id]) slidesMap[item.user_id] = []
+              slidesMap[item.user_id].push({
+                url: item.image_url,
+                focalX: item.focal_x ?? 50,
+                focalY: item.focal_y ?? 50,
+              })
             })
           }
 
           // 作品を1枚も登録していないクリエイターは一覧に出しても価値が低いため非表示にする
           // （アバターだけの空っぽなカードが並ぶのを防ぐ）
           const combined: ProfileWithImage[] = profileData
-            .filter((p) => !!imageMap[p.user_id])
+            .filter((p) => !!slidesMap[p.user_id]?.length)
             .map((p) => ({
               ...p,
-              thumbnail_url: imageMap[p.user_id],
+              thumbnail_url: slidesMap[p.user_id][0].url,
+              thumbnail_slides: slidesMap[p.user_id],
               likes_count: p.likes_count ?? 0,
               menu_items: Array.isArray(p.menu_items) ? p.menu_items : null
             }))
@@ -939,13 +952,25 @@ export default function Home() {
                     >
                       {/* イラスト画像エリア */}
                       <div className="relative w-full aspect-square bg-sky-50/50 overflow-hidden">
-                        {profile.thumbnail_url ? (
+                        {profile.thumbnail_slides && profile.thumbnail_slides.length > 1 ? (
+                          <CreatorThumbnailSlideshow
+                            slides={profile.thumbnail_slides}
+                            alt={profile.display_name}
+                            watermarkText={profile.display_name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : profile.thumbnail_url ? (
                           <ProtectedImage
                             src={profile.thumbnail_url}
                             alt={profile.display_name}
                             watermarkText={profile.display_name}
                             loading="lazy"
                             decoding="async"
+                            style={{
+                              objectPosition: `${profile.thumbnail_slides?.[0]?.focalX ?? 50}% ${
+                                profile.thumbnail_slides?.[0]?.focalY ?? 50
+                              }%`,
+                            }}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                           />
                         ) : (
