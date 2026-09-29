@@ -61,8 +61,13 @@ function applySynonyms(s: string): string {
 
 function normalizeMenuTitle(raw: string): string {
   const unified = convertKanjiNumerals(raw.normalize('NFKC').trim().replace(/\s+/g, ''))
-  const stripped = applySynonyms(unified.replace(MENU_TITLE_SUFFIXES, '').replace(MENU_TITLE_PREFIXES, ''))
-  return stripped || unified
+  // 接尾辞・接頭辞は別々に「取れなければ直前の結果に戻す」ようにする。まとめて置換すると、
+  // 例えば「全身イラスト」で接尾辞「イラスト」を取った「全身」から、さらに接頭辞「全身」も
+  // 取れてしまい空文字列になり、最後の `|| unified` で未加工の「全身イラスト」に丸ごと戻って
+  // しまう（＝せっかくの接尾辞除去が無かったことになる）ため。
+  const afterSuffix = unified.replace(MENU_TITLE_SUFFIXES, '') || unified
+  const afterPrefix = afterSuffix.replace(MENU_TITLE_PREFIXES, '') || afterSuffix
+  return applySynonyms(afterPrefix)
 }
 
 async function getStats(): Promise<{ genreStats: GenreStat[]; menuStats: MenuStat[] }> {
