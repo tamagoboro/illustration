@@ -100,6 +100,35 @@ export default function LoginPage() {
   const [resetSending, setResetSending] = useState(false)
   const [resetSent, setResetSent] = useState(false)
 
+  // すでにログイン中かどうか。これを確認せずに新規登録フォームを送信できてしまうと、
+  // 間違って送信したときにブラウザのログイン状態が新しい空のアカウントへ黙って切り替わり、
+  // 「自分のデータが消えた（上書きされた）」ように見えてしまう事故が起きるため、先に確認する。
+  const [currentUser, setCurrentUser] = useState<{ id: string; displayName: string | null } | null>(null)
+  const [checkingSession, setCheckingSession] = useState(true)
+
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data } = await supabase.auth.getUser()
+      if (data.user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('display_name')
+          .eq('user_id', data.user.id)
+          .maybeSingle()
+        setCurrentUser({ id: data.user.id, displayName: profile?.display_name || null })
+      }
+      setCheckingSession(false)
+    }
+    checkSession()
+  }, [])
+
+  const handleLogoutToSwitchAccount = async () => {
+    setCheckingSession(true)
+    await supabase.auth.signOut()
+    setCurrentUser(null)
+    setCheckingSession(false)
+  }
+
   // 招待リンク（/login?ref=紹介者のuser_id）経由で来た場合、紹介者IDを覚えておく。
   // useSearchParams はSuspense境界が必要になるため、素朴にlocationから読む。
   useEffect(() => {
@@ -111,6 +140,10 @@ export default function LoginPage() {
     }
     if (params.get('error') === 'oauth') {
       setErrorMsg('Googleログインに失敗しました。もう一度お試しください。')
+    }
+    if (params.get('error') === 'not_registered') {
+      setErrorMsg('このGoogleアカウントはまだ登録されていません。「新規アカウント作成」からご登録ください。')
+      setIsSignUp(true)
     }
   }, [])
 
@@ -153,10 +186,14 @@ export default function LoginPage() {
     }
     setErrorMsg('')
     setGoogleLoading(true)
+    // mode をコールバック（app/auth/callback/route.ts）に渡す。「ログイン」を選んだ状態で
+    // 押した場合は、そのGoogleアカウントでの登録がまだ無ければ弾く（新規登録は自己申告なので、
+    // ボタンの選択だけで「登録済みのつもりで押した」を判定するしかない）。
+    const mode = isSignUp ? 'signup' : 'login'
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback?mode=${mode}`,
       },
     })
     if (error) {
@@ -279,6 +316,65 @@ export default function LoginPage() {
     setResetSent(true)
   }
 
+  // ログイン確認中は、フォームを一瞬でも表示してしまうと二重ログインの誤操作につながるので、
+  // 確認が終わるまで何も出さない
+  if (checkingSession) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center p-6 font-sans antialiased relative bg-cover bg-center"
+        style={{ backgroundImage: `url(${BACKGROUND_IMAGE_URL})` }}
+      >
+        <div className="absolute inset-0 bg-gradient-to-b from-sky-400/20 via-sky-100/10 to-sky-900/20 backdrop-blur-[2px] pointer-events-none -z-10" />
+      </div>
+    )
+  }
+
+  // すでにログイン中の場合は、新規登録/ログインのフォームを出さない
+  // （誤って送信すると、別の空アカウントにログイン状態が切り替わってしまうため）
+  if (currentUser) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center p-6 font-sans antialiased relative bg-cover bg-center"
+        style={{ backgroundImage: `url(${BACKGROUND_IMAGE_URL})` }}
+      >
+        <div className="absolute inset-0 bg-gradient-to-b from-sky-400/20 via-sky-100/10 to-sky-900/20 backdrop-blur-[2px] pointer-events-none -z-10" />
+        <div className="bg-white/85 backdrop-blur-md p-8 rounded-3xl shadow-lg border border-sky-100 w-full max-w-md space-y-5 text-center">
+          <div className="flex flex-col items-center gap-2">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-sky-400 via-sky-300 to-cyan-300 flex items-center justify-center text-white font-black text-xl shadow-sm">
+              ☁
+            </div>
+            <p className="text-sm font-bold text-slate-700">
+              {currentUser.displayName ? `${currentUser.displayName} さんとしてログイン中です` : 'ログイン中です'}
+            </p>
+            <p className="text-xs text-slate-400">
+              このまま新規登録すると、今のアカウントとは別の空のアカウントに切り替わります。
+            </p>
+          </div>
+          <div className="space-y-2">
+            <button
+              onClick={() => router.push('/dashboard')}
+              className="w-full py-3 bg-gradient-to-r from-sky-400 to-cyan-400 hover:brightness-105 text-white font-black rounded-2xl transition text-sm shadow-sm cursor-pointer active:scale-95"
+            >
+              マイページへ
+            </button>
+            <Link
+              href="/"
+              className="block w-full py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold rounded-2xl transition text-sm shadow-sm cursor-pointer active:scale-95"
+            >
+              サイトトップへ
+            </Link>
+            <button
+              onClick={handleLogoutToSwitchAccount}
+              className="w-full py-2.5 text-slate-400 hover:text-rose-500 font-bold text-xs transition cursor-pointer"
+            >
+              ログアウトして別のアカウントを使う
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div
       className="min-h-screen flex items-center justify-center p-6 font-sans antialiased relative bg-cover bg-center"
@@ -389,6 +485,65 @@ export default function LoginPage() {
           )
         ) : (
         <form onSubmit={handleAuth} className="space-y-4">
+          {/* 利用規約同意チェックボックス ＆ リンク（Googleボタンをすぐ押せるよう、フォームの先頭に置く） */}
+          <div>
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                required
+                checked={agreedTerms}
+                onChange={(e) => setAgreedTerms(e.target.checked)}
+                className="mt-0.5 rounded border-sky-200 text-sky-500 accent-sky-500 focus:ring-sky-400 w-4 h-4 cursor-pointer"
+              />
+              <span className="text-xs text-slate-600 leading-normal font-medium">
+                <Link
+                  href="/terms"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-bold text-sky-600 hover:underline"
+                >
+                  利用規約
+                </Link>
+                ・
+                <Link
+                  href="/privacy"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-bold text-sky-600 hover:underline"
+                >
+                  プライバシーポリシー
+                </Link>
+                に同意する
+              </span>
+            </label>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            disabled={googleLoading || !agreedTerms}
+            className="w-full py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold rounded-2xl transition text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer active:scale-95 flex items-center justify-center gap-2.5"
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+              <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.9c1.7-1.57 2.7-3.87 2.7-6.62z" />
+              <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.9-2.26c-.8.54-1.84.86-3.06.86-2.35 0-4.34-1.59-5.05-3.72H.96v2.33A9 9 0 0 0 9 18z" />
+              <path fill="#FBBC05" d="M3.95 10.7A5.4 5.4 0 0 1 3.67 9c0-.59.1-1.17.28-1.7V4.97H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.03l2.99-2.33z" />
+              <path fill="#EA4335" d="M9 3.58c1.32 0 2.51.46 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.97l2.99 2.33C4.66 5.17 6.65 3.58 9 3.58z" />
+            </svg>
+            {googleLoading ? '処理中...' : isSignUp ? 'Googleで登録する' : 'Googleでログイン'}
+          </button>
+          {!agreedTerms && (
+            <p className="text-[10px] text-slate-400 text-center -mt-2">
+              Googleを使う場合も、上のチェックが必要です。
+            </p>
+          )}
+
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-sky-100" />
+            <span className="text-[10px] font-bold text-slate-400">または</span>
+            <div className="flex-1 h-px bg-sky-100" />
+          </div>
+
           <div>
             <label className="block text-[11px] font-bold text-slate-700 mb-1">メールアドレス</label>
             <input
@@ -520,39 +675,6 @@ export default function LoginPage() {
             </>
           )}
 
-          {/* 利用規約同意チェックボックス ＆ リンク */}
-          <div className="pt-1">
-            <label className="flex items-start gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                required
-                checked={agreedTerms}
-                onChange={(e) => setAgreedTerms(e.target.checked)}
-                className="mt-0.5 rounded border-sky-200 text-sky-500 accent-sky-500 focus:ring-sky-400 w-4 h-4 cursor-pointer"
-              />
-              <span className="text-xs text-slate-600 leading-normal font-medium">
-                <Link
-                  href="/terms"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-bold text-sky-600 hover:underline"
-                >
-                  利用規約
-                </Link>
-                ・
-                <Link
-                  href="/privacy"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-bold text-sky-600 hover:underline"
-                >
-                  プライバシーポリシー
-                </Link>
-                に同意する
-              </span>
-            </label>
-          </div>
-
           <button
             type="submit"
             disabled={loading || !agreedTerms}
@@ -560,32 +682,6 @@ export default function LoginPage() {
           >
             {loading ? '処理中...' : isSignUp ? 'アカウントを作成する' : 'ログインする'}
           </button>
-
-          <div className="flex items-center gap-3 pt-1">
-            <div className="flex-1 h-px bg-sky-100" />
-            <span className="text-[10px] font-bold text-slate-400">または</span>
-            <div className="flex-1 h-px bg-sky-100" />
-          </div>
-
-          <button
-            type="button"
-            onClick={handleGoogleLogin}
-            disabled={googleLoading || !agreedTerms}
-            className="w-full py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold rounded-2xl transition text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer active:scale-95 flex items-center justify-center gap-2.5"
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-              <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.9c1.7-1.57 2.7-3.87 2.7-6.62z" />
-              <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.9-2.26c-.8.54-1.84.86-3.06.86-2.35 0-4.34-1.59-5.05-3.72H.96v2.33A9 9 0 0 0 9 18z" />
-              <path fill="#FBBC05" d="M3.95 10.7A5.4 5.4 0 0 1 3.67 9c0-.59.1-1.17.28-1.7V4.97H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.03l2.99-2.33z" />
-              <path fill="#EA4335" d="M9 3.58c1.32 0 2.51.46 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.97l2.99 2.33C4.66 5.17 6.65 3.58 9 3.58z" />
-            </svg>
-            {googleLoading ? '処理中...' : 'Googleでログイン'}
-          </button>
-          {!agreedTerms && (
-            <p className="text-[10px] text-slate-400 text-center">
-              Googleでログインする場合も、上の利用規約への同意が必要です。
-            </p>
-          )}
         </form>
         )}
 
