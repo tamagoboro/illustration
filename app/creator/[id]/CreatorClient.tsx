@@ -2061,6 +2061,9 @@ const themeColor = useMemo(() => {
                         <span className="text-xs font-normal text-sky-500">(税込)</span>
                       </span>
                     )}
+                    <p className="text-[9px] text-sky-300 mt-0.5">
+                      ※簡易見積もりのため、実際の金額とは多少異なる場合があります
+                    </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
