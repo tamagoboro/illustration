@@ -51,6 +51,7 @@ export default function ProtectedImage({
   src,
   watermarkText = 'drawker.com',
   wrapperClassName = 'relative w-full h-full',
+  style,
   ...rest
 }: ImgHTMLAttributes<HTMLImageElement> & { watermarkText?: string; wrapperClassName?: string }) {
   const [showDecoy, setShowDecoy] = useState(false)
@@ -109,6 +110,17 @@ export default function ProtectedImage({
         }}
         onTouchEnd={cancelLongPress}
         onTouchMove={cancelLongPress}
+        style={{
+          ...style,
+          // iOSは長押しで「写真に保存」ネイティブメニューを出すが、これはJSのタイマーより
+          // 先に本物の画像を掴んで表示することがあり、下のonTouchStartの差し替えが間に合う
+          // かどうかは端末やタイミング次第でブレる（「保存できるときとできないときがある」の原因）。
+          // -webkit-touch-callout: none で、そのネイティブメニュー自体を出さないようにする
+          // （Safari/iOS専用のプロパティ。これで長押し時の保存メニューが確実に出なくなる）。
+          WebkitTouchCallout: 'none',
+          WebkitUserSelect: 'none',
+          userSelect: 'none',
+        }}
       />
       {!showDecoy && (
         <div
