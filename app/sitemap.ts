@@ -1,5 +1,15 @@
 import { MetadataRoute } from 'next'
-import { supabase } from '@/lib/supabase'
+import { createClient } from '@supabase/supabase-js'
+
+// lib/supabase.ts の createBrowserClient はCookie/セッション管理を前提にしており、
+// サーバー専用のこのファイル（ビルド時/リクエスト時にNode環境で実行される）で使う意味がない。
+// 今は公開データ（is_public=true）しか読んでいないので実害は無いが、将来ログイン前提の
+// クエリを足したときに「セッションが無いので黙って空配列が返る」という気づきにくい不具合の
+// 元になるため、ここではセッション機構を持たないプレーンなクライアントを使う。
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // 環境変数がない場合は本番URLを直接使用

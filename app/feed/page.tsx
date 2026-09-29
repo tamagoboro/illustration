@@ -39,6 +39,8 @@ const FEED_PAGE_SIZE = 30
 
 export default function FeedPage() {
   const [currentUser, setCurrentUser] = useState<any>(null)
+  // いいねの連打で二重送信になったり、失敗時に表示だけ変わってDBと食い違ったりするのを防ぐ
+  const [likingPostIds, setLikingPostIds] = useState<Set<string>>(new Set())
   const [posts, setPosts] = useState<PostWithAuthor[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -246,17 +248,24 @@ export default function FeedPage() {
   // いいね機能
   const toggleLike = async (post: PostWithAuthor) => {
     if (!currentUser) return alert('いいねをするにはログインが必要です')
+    if (likingPostIds.has(post.id)) return // 連打防止（前の処理が終わるまで二重送信しない）
 
-    if (post.is_liked_by_me) {
-      await supabase
-        .from('post_likes')
-        .delete()
-        .eq('post_id', post.id)
-        .eq('user_id', currentUser.id)
-    } else {
-      await supabase
-        .from('post_likes')
-        .insert({ post_id: post.id, user_id: currentUser.id })
+    setLikingPostIds((prev) => new Set(prev).add(post.id))
+
+    const wasLiked = post.is_liked_by_me
+    const { error } = wasLiked
+      ? await supabase.from('post_likes').delete().eq('post_id', post.id).eq('user_id', currentUser.id)
+      : await supabase.from('post_likes').insert({ post_id: post.id, user_id: currentUser.id })
+
+    setLikingPostIds((prev) => {
+      const next = new Set(prev)
+      next.delete(post.id)
+      return next
+    })
+
+    if (error) {
+      console.error('いいねの更新エラー:', error)
+      return // 失敗時は表示を変えない（DBの状態と食い違わせない）
     }
 
     setPosts((prev) =>
@@ -264,8 +273,8 @@ export default function FeedPage() {
         if (p.id === post.id) {
           return {
             ...p,
-            is_liked_by_me: !p.is_liked_by_me,
-            likes_count: (p.likes_count || 0) + (p.is_liked_by_me ? -1 : 1),
+            is_liked_by_me: !wasLiked,
+            likes_count: (p.likes_count || 0) + (wasLiked ? -1 : 1),
           }
         }
         return p
@@ -546,7 +555,8 @@ export default function FeedPage() {
                   <div className="flex items-center gap-4 pt-2 border-t border-slate-100/80">
                     <button
                       onClick={() => toggleLike(post)}
-                      className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full transition cursor-pointer ${
+                      disabled={likingPostIds.has(post.id)}
+                      className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                         post.is_liked_by_me
                           ? 'text-rose-500 bg-rose-50'
                           : 'text-slate-400 hover:text-rose-500 hover:bg-slate-50'

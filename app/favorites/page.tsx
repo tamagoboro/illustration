@@ -54,8 +54,12 @@ export default function FavoritesPage() {
   }, [])
 
   const handleRemove = async (creatorId: string) => {
-    setProfiles((prev) => prev.filter((p) => p.user_id !== creatorId))
-    await toggleFavoriteRecord(userId, creatorId, true)
+    // toggleFavoriteRecordの戻り値は解除後の状態。失敗時はtrue（＝まだお気に入りのまま）が
+    // 返るので、その場合は一覧から消さない（DBでは残っているのに画面だけ消えるのを防ぐ）
+    const stillFavorite = await toggleFavoriteRecord(userId, creatorId, true)
+    if (!stillFavorite) {
+      setProfiles((prev) => prev.filter((p) => p.user_id !== creatorId))
+    }
   }
 
   return (

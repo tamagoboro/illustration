@@ -728,12 +728,14 @@ export default function Dashboard() {
     setSaving(true)
 
     try {
+      // 料金・納期日数はマイナスを許容する意味がなく、そのまま保存すると公開ページに
+      // 「-5000円」のような表示が出てしまうため、0未満は0に切り上げる
       const cleanInteger = (val: any): number | null => {
         if (val === null || val === undefined || typeof val === 'object') return null
         const str = String(val).replace(/[{}]/g, '').trim()
         if (str === '' || str === 'null' || str === 'undefined') return null
         const parsed = parseInt(str, 10)
-        return isNaN(parsed) ? null : parsed
+        return isNaN(parsed) ? null : Math.max(0, parsed)
       }
 
       const finalPriceMin = cleanInteger(priceMin)
@@ -855,18 +857,8 @@ export default function Dashboard() {
         .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id)
 
-      const { error: deleteError } = await supabase
-        .from('portfolio_items')
-        .delete()
-        .eq('user_id', user.id)
-
-      if (deleteError) {
-        throw deleteError
-      }
-
       const itemsToInsert = portfolioUrls
         .map((url, idx) => ({
-          user_id: user.id,
           image_url: normalizeStorageUrl(url),
           sort_order: idx,
           title: portfolioTitles[idx]?.trim() || null,
@@ -875,14 +867,14 @@ export default function Dashboard() {
         }))
         .filter((item) => item.image_url.length > 0)
 
-      if (itemsToInsert.length > 0) {
-        const { error: insertError } = await supabase
-          .from('portfolio_items')
-          .insert(itemsToInsert)
+      // 「全削除→挿入」を1つのDB関数にまとめて、途中で失敗しても全消しのまま
+      // 残らないようにする（削除だけ成功して挿入が失敗すると、保存前は表示されていた
+      // 作品が消えたままになってしまうため）。管理者が設定したビフォー画像も
+      // このRPC内でsort_order単位で保持される（supabase/fix_review_bugs.sql参照）。
+      const { error: saveError } = await supabase.rpc('save_portfolio_items', { p_items: itemsToInsert })
 
-        if (insertError) {
-          throw insertError
-        }
+      if (saveError) {
+        throw saveError
       }
 
       if ((previousCount || 0) === 0 && itemsToInsert.length > 0) {

@@ -1,4 +1,9 @@
--- 実績バッジ（閲覧数急上昇・問い合わせ多数・応答率・平均返信時間）を返すRPC。
+-- 実績バッジ（閲覧数急上昇・問い合わせ多数・応答率・平均返信時間・返信の速さ）を返すRPC。
+--
+-- 追記: app/page.tsx は以前から is_fast_responder（⚡返信はやいバッジ）を読んでいたが、
+-- この関数がその列を返していなかったため、バッジが常に出ない状態になっていた。
+-- avg_response_hours と同じ「回答実績が3件以上」のときだけ判定し、平均3時間以内を「速い」とする
+-- （しきい値は暫定値。運用に合わせて調整すること）。
 --
 -- 背景: アプリは get_public_creator_badges() を引数なし（トップ・ランキング＝全員分）と
 -- get_public_creator_badges(p_user_id => ...)（クリエイターページ＝1人分）の両方で呼ぶが、
@@ -28,7 +33,8 @@ returns table(
   is_trending boolean,
   is_popular_inquiries boolean,
   response_rate integer,
-  avg_response_hours numeric
+  avg_response_hours numeric,
+  is_fast_responder boolean
 )
 language sql
 stable
@@ -68,7 +74,8 @@ as $$
     case when coalesce(req.answerable, 0) >= 3
       then round(100.0 * req.responded / req.answerable)::integer
     end as response_rate,
-    round(req.avg_hours::numeric, 1) as avg_response_hours
+    round(req.avg_hours::numeric, 1) as avg_response_hours,
+    coalesce(req.answerable, 0) >= 3 and req.avg_hours is not null and req.avg_hours <= 3 as is_fast_responder
   from profiles p
   left join pv  on pv.creator_id  = p.user_id
   left join req on req.creator_id = p.user_id
@@ -83,7 +90,8 @@ returns table(
   is_trending boolean,
   is_popular_inquiries boolean,
   response_rate integer,
-  avg_response_hours numeric
+  avg_response_hours numeric,
+  is_fast_responder boolean
 )
 language sql
 stable
