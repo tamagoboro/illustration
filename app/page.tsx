@@ -9,6 +9,7 @@ import { SlidersHorizontal, RotateCcw, Search, Wallet, Clock, Tag } from 'lucide
 import AvatarRing from '@/components/AvatarRing'
 import ProtectedImage from '@/components/ProtectedImage'
 import CreatorThumbnailSlideshow, { ThumbnailSlide } from '@/components/CreatorThumbnailSlideshow'
+import { MODERATED_PLACEHOLDER_URL } from '@/lib/storageUtils'
 import NotificationBell from '@/components/NotificationBell'
 import RecentlyViewedCreators from '@/components/RecentlyViewedCreators'
 import { isCampaignActive, applyDiscount, formatDiscountBadge, Campaign } from '@/lib/discount'
@@ -158,7 +159,8 @@ export default function Home() {
           const slidesMap: Record<string, ThumbnailSlide[]> = {}
           if (portfolioData) {
             portfolioData.forEach((item) => {
-              if (!item.image_url) return
+              // 管理者に非表示にされた作品（代替画像）は、カードの掲載候補から外す
+              if (!item.image_url || item.image_url === MODERATED_PLACEHOLDER_URL) return
               if (!slidesMap[item.user_id]) slidesMap[item.user_id] = []
               slidesMap[item.user_id].push({
                 url: item.image_url,
@@ -958,6 +960,12 @@ export default function Home() {
                             alt={profile.display_name}
                             watermarkText={profile.display_name}
                             className="w-full h-full object-cover"
+                            // すべての候補が読み込みエラーになった場合（稀）の代わりの表示
+                            fallback={
+                              <div className="w-full h-full flex flex-col items-center justify-center bg-sky-50/80 text-sky-300">
+                                <span className="text-[10px] font-black tracking-widest">NO PORTFOLIO</span>
+                              </div>
+                            }
                           />
                         ) : profile.thumbnail_url ? (
                           <ProtectedImage

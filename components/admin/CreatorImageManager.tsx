@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { convertToWebp } from '@/lib/imageUtils'
-import { extractStoragePath } from '@/lib/storageUtils'
+import { extractStoragePath, MODERATED_PLACEHOLDER_URL } from '@/lib/storageUtils'
 
 // 管理者がクリエイターの画像（アイコン・作品）を削除・差し替えするパネル。
 // 「ユーザー管理」の一覧（名前をクリックして開く）と「画像管理」ページの両方で使う。
@@ -29,7 +29,6 @@ type PendingUpload =
   | { kind: 'work'; itemId: string; field: 'image' | 'before' }
   | { kind: 'avatar' }
 
-const PLACEHOLDER_URL = '/moderated-placeholder.svg'
 const REASON_PRESETS = ['著作権侵害の疑い', '不適切な内容', '規約違反', '本人の依頼']
 const publicUrlOf = (path: string) => `/storage/v1/object/public/portfolios/${path}`
 
@@ -335,7 +334,7 @@ export default function CreatorImageManager({
                     onClick={() => {
                       if (!requireReason()) return
                       if (confirm('この画像を「非表示」の代替画像に差し替えます。よろしいですか？')) {
-                        replaceWork(w, 'image', PLACEHOLDER_URL)
+                        replaceWork(w, 'image', MODERATED_PLACEHOLDER_URL)
                       }
                     }}
                     disabled={busy}
