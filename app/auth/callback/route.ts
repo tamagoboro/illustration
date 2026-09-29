@@ -6,7 +6,7 @@ import { fillProfileFromOAuthMetadata } from '@/lib/ensureProfile'
 // Supabaseはユーザーの初回サインインかどうかを直接は教えてくれないため、
 // created_at（アカウント作成時刻）と last_sign_in_at（今回のサインイン時刻）がほぼ同時なら
 // 「たった今この場で作られたアカウント＝初回」とみなす（数秒のズレは許容する）。
-function isBrandNewUser(user: { created_at: string; last_sign_in_at: string | null }): boolean {
+function isBrandNewUser(user: { created_at: string; last_sign_in_at?: string | null }): boolean {
   if (!user.last_sign_in_at) return true
   const createdAt = new Date(user.created_at).getTime()
   const signedInAt = new Date(user.last_sign_in_at).getTime()
