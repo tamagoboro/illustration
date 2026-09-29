@@ -50,6 +50,9 @@ export type PortfolioItem = {
   is_pinned?: boolean
   sort_order: number
   created_at?: string
+  // サムネイルで常に見せたい位置（0〜100%、object-positionにそのまま使う）。未設定なら中央(50/50)扱い
+  focal_x?: number | null
+  focal_y?: number | null
 }
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!

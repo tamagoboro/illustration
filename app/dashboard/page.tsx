@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef, ChangeEvent, FormEvent, KeyboardEvent } from 'react'
+import { useState, useEffect, useMemo, useRef, ChangeEvent, FormEvent, KeyboardEvent, MouseEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { User } from '@supabase/supabase-js'
@@ -167,6 +167,10 @@ export default function Dashboard() {
 
   const [portfolioUrls, setPortfolioUrls] = useState<string[]>(['', '', '', ''])
   const [portfolioTitles, setPortfolioTitles] = useState<string[]>(['', '', '', ''])
+  // サムネイルで常に見せたい位置（0〜100%）。デフォルトは中央（従来と同じ見た目）
+  const [portfolioFocal, setPortfolioFocal] = useState<{ x: number; y: number }[]>(
+    Array.from({ length: 4 }, () => ({ x: 50, y: 50 }))
+  )
 
   // DBに実際に保存されている（＝公開中の）URLを覚えておき、保存が成功した後にだけ
   // 「もう使われなくなった古いファイル」をストレージから削除するために使う。
@@ -326,7 +330,7 @@ export default function Dashboard() {
 
         const { data: portfolioData, error: portfolioError } = await supabase
           .from('portfolio_items')
-          .select('image_url, sort_order, title')
+          .select('image_url, sort_order, title, focal_x, focal_y')
           .eq('user_id', user.id)
           .order('sort_order', { ascending: true })
 
@@ -337,14 +341,17 @@ export default function Dashboard() {
         if (portfolioData && portfolioData.length > 0) {
           const urls = ['', '', '', '']
           const titles = ['', '', '', '']
+          const focal = Array.from({ length: 4 }, () => ({ x: 50, y: 50 }))
           portfolioData.forEach((item) => {
             if (item.sort_order < 4) {
               urls[item.sort_order] = normalizeStorageUrl(item.image_url || '')
               titles[item.sort_order] = item.title || ''
+              focal[item.sort_order] = { x: item.focal_x ?? 50, y: item.focal_y ?? 50 }
             }
           })
           setPortfolioUrls(urls)
           setPortfolioTitles(titles)
+          setPortfolioFocal(focal)
           savedPortfolioUrlsRef.current = urls
         }
 
@@ -538,8 +545,25 @@ export default function Dashboard() {
     newTitles[index] = newTitles[targetIndex]
     newTitles[targetIndex] = tempTitle
 
+    const newFocal = [...portfolioFocal]
+    const tempFocal = newFocal[index]
+    newFocal[index] = newFocal[targetIndex]
+    newFocal[targetIndex] = tempFocal
+
     setPortfolioUrls(newUrls)
     setPortfolioTitles(newTitles)
+    setPortfolioFocal(newFocal)
+    setIsDirty(true)
+  }
+
+  // サムネイルプレビューをクリック/タップした位置を「見せたい位置」として保存する
+  const handleSetFocalPoint = (idx: number, e: MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = Math.round(Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100)))
+    const y = Math.round(Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100)))
+    const next = [...portfolioFocal]
+    next[idx] = { x, y }
+    setPortfolioFocal(next)
     setIsDirty(true)
   }
 
@@ -846,6 +870,8 @@ export default function Dashboard() {
           image_url: normalizeStorageUrl(url),
           sort_order: idx,
           title: portfolioTitles[idx]?.trim() || null,
+          focal_x: portfolioFocal[idx]?.x ?? 50,
+          focal_y: portfolioFocal[idx]?.y ?? 50,
         }))
         .filter((item) => item.image_url.length > 0)
 
@@ -2216,6 +2242,9 @@ export default function Dashboard() {
                             const nextTitles = [...portfolioTitles]
                             nextTitles[idx] = ''
                             setPortfolioTitles(nextTitles)
+                            const nextFocal = [...portfolioFocal]
+                            nextFocal[idx] = { x: 50, y: 50 }
+                            setPortfolioFocal(nextFocal)
                             setIsDirty(true)
                           }}
                           className="text-[11px] text-rose-500 font-bold hover:underline cursor-pointer ml-1"
@@ -2226,18 +2255,34 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="w-full aspect-[4/3] rounded-xl border border-slate-200 bg-white overflow-hidden flex items-center justify-center relative shadow-xs">
+                  <div
+                    onClick={url && uploadingIndex !== idx ? (e) => handleSetFocalPoint(idx, e) : undefined}
+                    className={`w-full aspect-[4/3] rounded-xl border border-slate-200 bg-white overflow-hidden flex items-center justify-center relative shadow-xs ${
+                      url && uploadingIndex !== idx ? 'cursor-crosshair' : ''
+                    }`}
+                  >
                     {uploadingIndex === idx ? (
                       <div className={`flex flex-col items-center gap-2 text-xs font-bold ${currentThemeObj.text}`}>
                         <div className={`w-6 h-6 border-2 ${currentThemeObj.text} border-t-transparent rounded-full animate-spin`}></div>
                         圧縮＆アップロード中...
                       </div>
                     ) : url ? (
-                      <img
-                        src={url}
-                        alt={`プレビュー ${idx + 1}`}
-                        className="w-full h-full object-cover"
-                      />
+                      <>
+                        <img
+                          src={url}
+                          alt={`プレビュー ${idx + 1}`}
+                          className="w-full h-full object-cover pointer-events-none"
+                          style={{ objectPosition: `${portfolioFocal[idx]?.x ?? 50}% ${portfolioFocal[idx]?.y ?? 50}%` }}
+                        />
+                        {/* サムネイルで常に見せている位置の目印。クリックで動かせる */}
+                        <div
+                          className="absolute w-5 h-5 rounded-full border-2 border-white bg-indigo-500/80 shadow-md pointer-events-none -translate-x-1/2 -translate-y-1/2"
+                          style={{
+                            left: `${portfolioFocal[idx]?.x ?? 50}%`,
+                            top: `${portfolioFocal[idx]?.y ?? 50}%`,
+                          }}
+                        />
+                      </>
                     ) : (
                       <div className="flex flex-col items-center gap-1 text-slate-300">
                         <svg className="w-8 h-8 stroke-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2247,6 +2292,11 @@ export default function Dashboard() {
                       </div>
                     )}
                   </div>
+                  {url && (
+                    <p className="text-[10px] text-slate-400 -mt-0.5">
+                      🎯 画像をクリックすると、一覧などで常に見えるようにしたい位置を指定できます
+                    </p>
+                  )}
 
                   <div className="space-y-2 pt-1">
                     <label className="block">
