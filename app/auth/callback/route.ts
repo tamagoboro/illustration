@@ -18,7 +18,6 @@ function isBrandNewUser(user: { created_at: string; last_sign_in_at?: string | n
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
-  const mode = searchParams.get('mode') === 'signup' ? 'signup' : 'login'
   // オープンリダイレクト対策: サイト内の相対パスのみ許可する
   const rawNext = searchParams.get('next') || '/'
   const next = rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/'
@@ -28,11 +27,12 @@ export async function GET(request: Request) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error && data.user) {
-      // 「ログイン」ボタンから来たのに、このGoogleアカウントでの登録が無い（＝たった今
-      // 初めて作られた）場合は、そのまま入れずに一旦サインアウトし、新規登録に案内する。
-      // Supabase Auth側にはもうこのアカウントが作られてしまっているが、次に「新規登録」から
-      // 同じGoogleアカウントで入り直せば、そのまま既存アカウントとして使える。
-      if (mode === 'login' && isBrandNewUser(data.user)) {
+      // Googleでの新規登録は許可しない方針（新しいアカウントはメールでのみ作成できる）。
+      // このGoogleアカウントでの登録がまだ無い（＝たった今初めて作られた）場合は、
+      // そのまま入れずに一旦サインアウトする。
+      // Supabase Auth側にはもうこのアカウントが作られてしまっているが、実害はない
+      // （メールでの登録が別途必要で、このGoogleアカウント自体を使い道にする手段が無い）。
+      if (isBrandNewUser(data.user)) {
         await supabase.auth.signOut()
         return NextResponse.redirect(`${origin}/login?error=not_registered`)
       }
