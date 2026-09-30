@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { after } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { serializeJsonLd } from '@/lib/safeUrl'
+import { getOgCardVersion } from '@/lib/ogCard'
 import CreatorClient from './CreatorClient'
 
 type Props = {
@@ -12,10 +13,9 @@ type Props = {
 const SITE_NAME = 'Drawker（ドローカー）'
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://drawker.com'
 
-// シェア用カード画像のURL。X等はカード画像をURL単位で長くキャッシュするため、プロフィール更新日時を付けて
-// 料金や受付状況を変えたら新しい画像として取り直されるようにする。
+// シェア用カード画像のURL。プロフィール更新やカードのデザイン変更で v が変わり、新しい画像として取り直される（lib/ogCard.ts）
 const getOgImageUrl = (id: string, updatedAt?: string | null) =>
-  `${BASE_URL}/api/og/creator/${id}?v=${updatedAt ? new Date(updatedAt).getTime() : 0}`
+  `${BASE_URL}/api/og/creator/${id}?v=${getOgCardVersion(updatedAt)}`
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params

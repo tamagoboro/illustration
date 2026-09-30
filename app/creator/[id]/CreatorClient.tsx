@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { supabase, Profile, PortfolioItem } from '@/lib/supabase'
 import { loadFavorites, toggleFavoriteRecord } from '@/lib/favorites'
 import FollowButton from '@/components/FollowButton'
+import { getCreatorShareUrl } from '@/lib/ogCard'
 import { convertToWebp } from '@/lib/imageUtils'
 import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft'
 import { recordRecentlyViewed } from '@/lib/recentlyViewed'
@@ -994,7 +995,9 @@ const themeColor = useMemo(() => {
     await refreshReviews()
   }
 
-  const sharePageUrl = typeof window !== 'undefined' ? window.location.href : ''
+  // シェア用URL。カードが変わるたびに ?s= が変わり、Xに古いカードが残らない（lib/ogCard.ts）
+  const sharePageUrl =
+    typeof window !== 'undefined' ? getCreatorShareUrl(window.location.origin, id, profile?.updated_at) : ''
   const shareText = `${profile?.display_name || 'クリエイター'}さんのポートフォリオ・見積もりページ`
 
   const handleCopyShareUrl = () => {
