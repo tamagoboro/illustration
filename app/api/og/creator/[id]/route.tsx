@@ -30,6 +30,8 @@ const MODERATED_PLACEHOLDER_URL = '/moderated-placeholder.svg'
 // 作品カードの大きさ（白枠込み）
 const MAIN = { width: 392, height: 542 }
 const SUB = { width: 222, height: 263 }
+// 作品が2枚だけのときは、2枚目も縦長にして大きい1枚目と高さをそろえる（空白が出ないように）
+const SUB_TALL = { width: 222, height: 542 }
 
 // アイコンの枠・料金・タグの色。どの作品の上でも読みやすいサイトの水色に固定
 const ACCENT = '#0284c7'
@@ -39,18 +41,30 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env
 type OgFont = { name: string; data: ArrayBuffer; weight: 700 | 900; style: 'normal' }
 type Placed = { image: Buffer; left: number; top: number; width: number; height: number }
 
-// 画像を取得し、指定サイズに切り抜く（失敗時はnull）
-async function fetchAndResize(url: string, width: number, height: number) {
+// 画像を取得する（失敗時はnull）
+async function fetchImage(url: string) {
   try {
     const res = await fetch(url)
     if (!res.ok) return null
-    const input = Buffer.from(await res.arrayBuffer())
-    return await sharp(input)
-      .resize(width, height, { fit: 'cover', position: sharp.strategy.attention })
-      .png()
-      .toBuffer()
+    return Buffer.from(await res.arrayBuffer())
   } catch (e) {
-    console.error('OGP画像の取得・変換エラー:', url, e)
+    console.error('OGP画像の取得エラー:', url, e)
+    return null
+  }
+}
+
+// 画像を指定サイズに切り抜く（絵の目立つ部分が残るように位置を自動で選ぶ）
+const cropTo = (input: Buffer, width: number, height: number) =>
+  sharp(input).resize(width, height, { fit: 'cover', position: sharp.strategy.attention }).png().toBuffer()
+
+// 画像を取得し、指定サイズに切り抜く（失敗時はnull）
+async function fetchAndResize(url: string, width: number, height: number) {
+  const input = await fetchImage(url)
+  if (!input) return null
+  try {
+    return await cropTo(input, width, height)
+  } catch (e) {
+    console.error('OGP画像の変換エラー:', url, e)
     return null
   }
 }
@@ -252,26 +266,36 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     loadJapaneseFont(allText, 900),
     workUrls[0] ? fetchAndResize(workUrls[0], ...inner(MAIN)) : Promise.resolve(null),
     isPublic && profile.avatar_url ? fetchAndResize(profile.avatar_url, 184, 184) : Promise.resolve(null),
-    ...workUrls.slice(1).map((u) => fetchAndResize(u, ...inner(SUB))),
+    // 小さい作品は、取得できた枚数で大きさが決まるので元画像のまま取得し、後で切り抜く
+    ...workUrls.slice(1).map((u) => fetchImage(u)),
   ])
   const fonts = [
     boldFont && { name: 'NotoSansJP', data: boldFont, weight: 700 as const, style: 'normal' as const },
     blackFont && { name: 'NotoSansJP', data: blackFont, weight: 900 as const, style: 'normal' as const },
   ].filter(Boolean) as OgFont[]
 
-  // 作品の配置: 大1枚＋小2枚（小が1枚なら縦中央）。作品が無ければ情報カードを全幅にする
+  // 作品の配置: 大1枚＋小2枚（小が1枚なら縦長1枚）。作品が無ければ情報カードを全幅にする
   const tile = mainRaw ? await renderWatermarkTile(watermark, fonts) : null
   const validSubs = subRaws.filter(Boolean) as Buffer[]
   const placed: Placed[] = []
   if (mainRaw && tile) {
     const [mw, mh] = inner(MAIN)
     placed.push({ image: await burnWatermark(mainRaw, mw, mh, tile), left: PADDING, top: PADDING, ...MAIN })
-    const [sw, sh] = inner(SUB)
+    const subSize = validSubs.length >= 2 ? SUB : SUB_TALL
+    const [sw, sh] = inner(subSize)
     const subLeft = PADDING + MAIN.width + GAP
-    const subTops =
-      validSubs.length >= 2 ? [PADDING, HEIGHT - PADDING - SUB.height] : [(HEIGHT - SUB.height) / 2]
-    const burned = await Promise.all(validSubs.slice(0, 2).map((raw) => burnWatermark(raw, sw, sh, tile)))
-    burned.forEach((image, i) => placed.push({ image, left: subLeft, top: Math.round(subTops[i]), ...SUB }))
+    const subTops = validSubs.length >= 2 ? [PADDING, HEIGHT - PADDING - SUB.height] : [PADDING]
+    const burned = await Promise.all(
+      validSubs.slice(0, 2).map(async (original) => {
+        try {
+          return await burnWatermark(await cropTo(original, sw, sh), sw, sh, tile)
+        } catch (e) {
+          console.error('OGP画像の変換エラー（小さい作品）:', e)
+          return null
+        }
+      })
+    )
+    burned.forEach((image, i) => image && placed.push({ image, left: subLeft, top: subTops[i], ...subSize }))
   }
   const worksRight = placed.length > 0 ? Math.max(...placed.map((p) => p.left + p.width)) : PADDING - 36
   const infoLeft = worksRight + 36
