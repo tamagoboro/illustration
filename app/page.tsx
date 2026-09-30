@@ -14,6 +14,7 @@ import NotificationBell from '@/components/NotificationBell'
 import RecentlyViewedCreators from '@/components/RecentlyViewedCreators'
 import { isCampaignActive, applyDiscount, formatDiscountBadge, Campaign } from '@/lib/discount'
 import { UPDATES } from '@/lib/updates'
+import { TOP_BANNER } from '@/lib/banner'
 
 // メニュー項目の型定義
 type MenuItem = {
@@ -659,6 +660,23 @@ export default function Home() {
       <section className="max-w-7xl mx-auto px-4 sm:px-6 mb-8">
         <RecentlyViewedCreators />
       </section>
+
+      {/* 画像バナー（画像・リンク先は lib/banner.ts で設定） */}
+      {TOP_BANNER.enabled && (
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 mb-8">
+          <a
+            href={TOP_BANNER.href}
+            {...(TOP_BANNER.href.startsWith('http') ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+            className="block overflow-hidden border border-white/40 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
+          >
+            <img
+              src={TOP_BANNER.imageUrl}
+              alt={TOP_BANNER.alt}
+              className="w-full aspect-[3/1] object-cover bg-white"
+            />
+          </a>
+        </section>
+      )}
 
       {!isLoggedIn && (
         <section className="max-w-7xl mx-auto px-4 sm:px-6 mb-8">
