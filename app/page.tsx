@@ -13,6 +13,7 @@ import { MODERATED_PLACEHOLDER_URL } from '@/lib/storageUtils'
 import NotificationBell from '@/components/NotificationBell'
 import RecentlyViewedCreators from '@/components/RecentlyViewedCreators'
 import { isCampaignActive, applyDiscount, formatDiscountBadge, Campaign } from '@/lib/discount'
+import { UPDATES } from '@/lib/updates'
 
 // メニュー項目の型定義
 type MenuItem = {
@@ -47,6 +48,23 @@ type ProfileWithImage = Profile & {
 // 指定の背景画像URL
 const BACKGROUND_IMAGE_URL =
   'https://qcklfkslqtjnxufqcqyi.supabase.co/storage/v1/object/public/portfolios/bg.png'
+
+// ヘッダーのナビゲーション（# 始まりはトップページ内の見出しへジャンプ）
+const NAV_LINKS = [
+  { href: '#news', label: '最新情報' },
+  { href: '#pickup', label: 'イラストレーター紹介' },
+  { href: '#search', label: 'クリエイターを探す' },
+  { href: '/ranking', label: '注目クリエイター' },
+  { href: '/feed', label: 'フィード' },
+]
+
+// 「イラストレーター紹介」に表示する人数
+const PICKUP_COUNT = 4
+
+// 最新情報として表示するお知らせ（日付つきで新しい順に平坦化）
+const LATEST_NEWS = UPDATES.flatMap((entry) =>
+  entry.items.map((item) => ({ date: entry.date.replace(/-/g, '.'), text: item }))
+).slice(0, 5)
 
 // 24時間以内に作成・更新されたか判定する関数
 const isRecentlyUpdated = (updatedAt?: string | null) => {
@@ -411,6 +429,22 @@ export default function Home() {
     [filteredProfiles, visibleCount]
   )
 
+  // イラストレーター紹介：いいねが多い順（取得時にシャッフル済みなので同数はランダム）
+  const pickupProfiles = useMemo(() => {
+    return [...profiles]
+      .filter((p) => p.thumbnail_url)
+      .sort((a, b) => (b.likes_count ?? 0) - (a.likes_count ?? 0))
+      .slice(0, PICKUP_COUNT)
+  }, [profiles])
+
+  // 新着クリエイター：登録日が新しい順
+  const newcomerProfiles = useMemo(() => {
+    return profiles
+      .filter((p) => p.created_at)
+      .sort((a, b) => new Date(b.created_at!).getTime() - new Date(a.created_at!).getTime())
+      .slice(0, 3)
+  }, [profiles])
+
   const displayedTastes = useMemo(() => {
     return Array.from(new Set(profiles.flatMap((p) => p.tastes || [])))
       .filter((taste: string) => !HIDDEN_TASTES.has(taste))
@@ -449,6 +483,19 @@ export default function Home() {
               </span>
             </div>
           </Link>
+
+          {/* ナビゲーション（PC） */}
+          <nav className="hidden xl:flex items-center gap-1 text-xs font-bold text-slate-600">
+            {NAV_LINKS.map((nav) => (
+              <a
+                key={nav.href}
+                href={nav.href}
+                className="px-3 py-2 rounded-xl hover:bg-sky-50 hover:text-sky-600 transition-colors whitespace-nowrap"
+              >
+                {nav.label}
+              </a>
+            ))}
+          </nav>
 
           {/* アクションボタンエリア */}
           <div className="flex items-center gap-2.5">
@@ -531,7 +578,36 @@ export default function Home() {
 
           </div>
         </div>
+
+        {/* ナビゲーション（スマホ・タブレット） */}
+        <nav className="xl:hidden max-w-7xl mx-auto flex gap-1.5 overflow-x-auto pt-2 -mb-1 text-[11px] font-bold text-slate-600">
+          {NAV_LINKS.map((nav) => (
+            <a
+              key={nav.href}
+              href={nav.href}
+              className="px-3 py-1 rounded-full bg-sky-50/80 hover:text-sky-600 whitespace-nowrap"
+            >
+              {nav.label}
+            </a>
+          ))}
+        </nav>
       </header>
+
+      {/* 最新情報ティッカー */}
+      {LATEST_NEWS.length > 0 && (
+        <div className="bg-slate-900/80 backdrop-blur-md text-white">
+          <Link
+            href="/updates"
+            className="max-w-7xl mx-auto px-4 sm:px-8 py-2 flex items-center gap-3 text-[11px] font-bold hover:text-sky-200 transition-colors"
+          >
+            <span className="shrink-0 px-2 py-0.5 rounded-full bg-sky-500 text-[10px] font-black tracking-wider">
+              NEWS
+            </span>
+            <span className="shrink-0 text-slate-400">{LATEST_NEWS[0].date}</span>
+            <span className="truncate">{LATEST_NEWS[0].text}</span>
+          </Link>
+        </div>
+      )}
 
       {/* ヒーロー */}
       <section className="text-center py-12 px-4 max-w-4xl mx-auto space-y-3">
@@ -613,8 +689,112 @@ export default function Home() {
         </section>
       )}
 
+      {/* 最新情報 & イラストレーター紹介 */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 mb-8 grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        {/* 最新情報 */}
+        <div id="news" className="scroll-mt-32 bg-white/80 backdrop-blur-md p-5 rounded-3xl border border-sky-100 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-black text-xs tracking-wider text-sky-700">NEWS / 最新情報</h2>
+            <Link href="/updates" className="text-[11px] text-sky-600 hover:text-sky-800 font-bold hover:underline">
+              一覧 →
+            </Link>
+          </div>
+
+          <ul className="divide-y divide-sky-100">
+            {LATEST_NEWS.map((news) => (
+              <li key={news.text} className="py-2.5 first:pt-0 last:pb-0 space-y-1">
+                <span className="text-[10px] font-bold text-slate-400">{news.date}</span>
+                <p className="text-[11px] font-bold text-slate-700 leading-relaxed">{news.text}</p>
+              </li>
+            ))}
+          </ul>
+
+          {/* 新着クリエイター */}
+          {newcomerProfiles.length > 0 && (
+            <div className="pt-3 border-t border-sky-100 space-y-2">
+              <span className="text-[10px] font-black text-slate-600 block">新着クリエイター</span>
+              {newcomerProfiles.map((p) => (
+                <Link
+                  key={p.user_id}
+                  href={`/creator/${p.user_id}`}
+                  className="flex items-center gap-2.5 p-1.5 -mx-1.5 rounded-xl hover:bg-sky-50 transition-colors"
+                >
+                  <div className="w-8 h-8 rounded-full bg-sky-100 overflow-hidden shrink-0">
+                    {p.avatar_url && (
+                      <img src={p.avatar_url} alt={p.display_name} className="w-full h-full object-cover" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-bold text-slate-800 truncate">{p.display_name}</p>
+                    <p className="text-[9px] font-bold text-slate-400">
+                      {p.created_at!.slice(0, 10).replace(/-/g, '.')} に登録
+                    </p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* イラストレーター紹介 */}
+        <div id="pickup" className="scroll-mt-32 lg:col-span-2 bg-white/80 backdrop-blur-md p-5 rounded-3xl border border-sky-100 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-black text-xs tracking-wider text-sky-700">PICK UP / イラストレーター紹介</h2>
+            <Link href="/ranking" className="text-[11px] text-sky-600 hover:text-sky-800 font-bold hover:underline">
+              注目クリエイター →
+            </Link>
+          </div>
+
+          {loading ? (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {Array.from({ length: PICKUP_COUNT }).map((_, n) => (
+                <div key={n} className="aspect-[3/4] bg-sky-100/60 rounded-2xl animate-pulse" />
+              ))}
+            </div>
+          ) : pickupProfiles.length === 0 ? (
+            <p className="text-[11px] font-bold text-slate-400 py-8 text-center">
+              紹介できるイラストレーターがまだいません
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {pickupProfiles.map((p) => (
+                <Link
+                  key={p.user_id}
+                  href={`/creator/${p.user_id}`}
+                  className="group relative aspect-[3/4] rounded-2xl overflow-hidden bg-sky-50 border border-sky-100 shadow-2xs"
+                >
+                  <ProtectedImage
+                    src={p.thumbnail_url!}
+                    alt={p.display_name}
+                    watermarkText={p.display_name}
+                    loading="lazy"
+                    decoding="async"
+                    style={{
+                      objectPosition: `${p.thumbnail_slides?.[0]?.focalX ?? 50}% ${p.thumbnail_slides?.[0]?.focalY ?? 50}%`,
+                    }}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  />
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-900/85 via-slate-900/40 to-transparent p-2.5 pt-8 space-y-1 pointer-events-none">
+                    <p className="text-white text-xs font-black truncate">{p.display_name}</p>
+                    <p className="text-[9px] text-sky-100 font-medium line-clamp-2 leading-relaxed">
+                      {p.status_comment || p.tastes?.map((t) => `#${t}`).join(' ')}
+                    </p>
+                    <div className="flex items-center justify-between text-[10px] font-black">
+                      <span className="text-white">
+                        {p.price_min ? `¥${p.price_min.toLocaleString()}〜` : '応相談'}
+                      </span>
+                      <span className="text-rose-300">♥ {p.likes_count ?? 0}</span>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
       {/* メインコンテンツ */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6">
+      <main id="search" className="scroll-mt-32 max-w-7xl mx-auto px-4 sm:px-6">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
           {/* サイドバー */}
           <aside className="lg:col-span-1 space-y-6">
