@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
+import { after } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { serializeJsonLd } from '@/lib/safeUrl'
 import CreatorClient from './CreatorClient'
@@ -10,6 +11,11 @@ type Props = {
 
 const SITE_NAME = 'Drawker（ドローカー）'
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://drawker.com'
+
+// シェア用カード画像のURL。X等はカード画像をURL単位で長くキャッシュするため、プロフィール更新日時を付けて
+// 料金や受付状況を変えたら新しい画像として取り直されるようにする。
+const getOgImageUrl = (id: string, updatedAt?: string | null) =>
+  `${BASE_URL}/api/og/creator/${id}?v=${updatedAt ? new Date(updatedAt).getTime() : 0}`
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params
@@ -46,11 +52,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const shareTitle = `Drawker｜${profile.display_name}`
   const shareDescription = `${priceText} ／ ${profileText}`
 
-  // 作品・名前・最安料金・受付状況・タグを1枚にまとめた動的カード（app/api/og/creator/[id]）を使う。
-  // X等はカード画像をURL単位で長くキャッシュするため、プロフィール更新日時を付けて
-  // 料金や受付状況を変えたら新しい画像として取り直されるようにする。
-  const ogVersion = profile.updated_at ? new Date(profile.updated_at).getTime() : 0
-  const ogImage = `${BASE_URL}/api/og/creator/${id}?v=${ogVersion}`
+  // 作品・名前・最安料金・受付状況・★評価・タグを1枚にまとめた動的カード（app/api/og/creator/[id]）
+  const ogImage = getOgImageUrl(id, profile.updated_at)
   const canonicalUrl = `${BASE_URL}/creator/${id}`
 
   // Twitter URLの末尾スラッシュを除去してからユーザー名を抽出
@@ -186,6 +189,17 @@ export default async function Page({ params }: Props) {
   }))
 
   const creatorRingId = creatorRingRow?.equipped_ring_id || null
+
+  // シェア用カード画像を先に作ってCDNにキャッシュさせておく（ページの応答を返した後に実行）。
+  // カード画像の生成には数秒かかるため、Xのクローラーが初めて取りに来た時に生成が間に合わず
+  // カードが出ない、ということを防ぐ。キャッシュ済みなら一瞬で返るので負荷はほぼ無い。
+  after(async () => {
+    try {
+      await fetch(getOgImageUrl(id, profile.updated_at), { cache: 'no-store' })
+    } catch {
+      // 失敗してもページ表示には影響しない
+    }
+  })
 
   const jsonLd = {
     '@context': 'https://schema.org',
