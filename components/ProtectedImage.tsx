@@ -52,12 +52,18 @@ export default function ProtectedImage({
   watermarkText = 'drawker.com',
   wrapperClassName = 'relative w-full h-full',
   style,
+  fallbackSrc,
   ...rest
-}: ImgHTMLAttributes<HTMLImageElement> & { watermarkText?: string; wrapperClassName?: string }) {
+}: ImgHTMLAttributes<HTMLImageElement> & { watermarkText?: string; wrapperClassName?: string; fallbackSrc?: string | null }) {
   const [showDecoy, setShowDecoy] = useState(false)
   // 画像ファイルが無い・URLが壊れているときに、alt文字が丸出しになるのを避けるための表示切り替え
   const [loadFailed, setLoadFailed] = useState(false)
-  useEffect(() => setLoadFailed(false), [src])
+  // 元画像が読めなかったときに1回だけ差し替える代替画像（アバターなど）
+  const [useFallback, setUseFallback] = useState(false)
+  useEffect(() => {
+    setLoadFailed(false)
+    setUseFallback(false)
+  }, [src])
   const restoreTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -94,10 +100,14 @@ export default function ProtectedImage({
       <img
         {...rest}
         onError={(e) => {
+          if (fallbackSrc && !useFallback) {
+            setUseFallback(true)
+            return
+          }
           setLoadFailed(true)
           rest.onError?.(e)
         }}
-        src={showDecoy ? DECOY_IMAGE_URL : src}
+        src={showDecoy ? DECOY_IMAGE_URL : useFallback ? fallbackSrc! : src}
         draggable={false}
         onDragStart={(e) => e.preventDefault()}
         onContextMenu={(e) => {
