@@ -32,13 +32,13 @@ const buildWatermarkTileUrl = (text: string) => {
   const safeText = escapeXml(text)
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160">
     <text x="80" y="70" font-size="15" font-family="sans-serif" font-weight="700"
-      text-anchor="middle" fill="#ffffff" fill-opacity="0.4" stroke="#000000" stroke-opacity="0.22" stroke-width="0.8"
+      text-anchor="middle" fill="#ffffff" fill-opacity="0.32" stroke="#000000" stroke-opacity="0.18" stroke-width="0.7"
       transform="rotate(-28 80 70)">${safeText}</text>
     <text x="0" y="150" font-size="15" font-family="sans-serif" font-weight="700"
-      text-anchor="middle" fill="#ffffff" fill-opacity="0.4" stroke="#000000" stroke-opacity="0.22" stroke-width="0.8"
+      text-anchor="middle" fill="#ffffff" fill-opacity="0.32" stroke="#000000" stroke-opacity="0.18" stroke-width="0.7"
       transform="rotate(-28 0 150)">${safeText}</text>
     <text x="160" y="150" font-size="15" font-family="sans-serif" font-weight="700"
-      text-anchor="middle" fill="#ffffff" fill-opacity="0.4" stroke="#000000" stroke-opacity="0.22" stroke-width="0.8"
+      text-anchor="middle" fill="#ffffff" fill-opacity="0.32" stroke="#000000" stroke-opacity="0.18" stroke-width="0.7"
       transform="rotate(-28 160 150)">${safeText}</text>
   </svg>`
   return `data:image/svg+xml,${encodeURIComponent(svg)}`
