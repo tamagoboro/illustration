@@ -47,6 +47,11 @@ DBを変更したら、この記録も更新すること。
 - created_at: timestamp with time zone not null default now()
 - updated_at: timestamp with time zone not null default now()
 
+## creator_follows
+- follower_id: uuid not null
+- creator_id: uuid not null
+- created_at: timestamp with time zone not null default now()
+
 ## favorite_creators
 - user_id: uuid not null
 - creator_id: uuid not null

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase, Profile, PortfolioItem } from '@/lib/supabase'
 import { loadFavorites, toggleFavoriteRecord } from '@/lib/favorites'
+import FollowButton from '@/components/FollowButton'
 import { convertToWebp } from '@/lib/imageUtils'
 import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft'
 import { recordRecentlyViewed } from '@/lib/recentlyViewed'
@@ -1447,6 +1448,8 @@ const themeColor = useMemo(() => {
                     {profile.likes_count != null && profile.likes_count > 0 && ` (${profile.likes_count})`}
                   </span>
                 </button>
+
+                <FollowButton creatorId={id} currentUserId={currentUserId} />
 
                 <button
                   onClick={() => openReportModal('profile', id)}

@@ -11,24 +11,6 @@ type Props = {
 const SITE_NAME = 'Drawker（ドローカー）'
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://drawker.com'
 
-// Supabase Storageの画像パスを完全なPublic URLに変換するヘルパー
-const getFullImageUrl = (url: string | null | undefined, fallbackUrl: string): string => {
-  if (!url || !url.trim()) return fallbackUrl
-  const trimmed = url.trim()
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-    if (trimmed.includes('/storage/v1/object/portfolios/')) {
-      return trimmed.replace('/storage/v1/object/portfolios/', '/storage/v1/object/public/portfolios/')
-    }
-    return trimmed
-  }
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-  if (supabaseUrl) {
-    const cleanPath = trimmed.startsWith('/') ? trimmed.slice(1) : trimmed
-    return `${supabaseUrl}/storage/v1/object/public/portfolios/${cleanPath}`
-  }
-  return fallbackUrl
-}
-
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params
 
@@ -44,15 +26,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       robots: { index: false, follow: false },
     }
   }
-
-  // 代表作品の画像を取得（アバター未設定時のOGP画像フォールバック用）
-  const { data: firstPortfolio } = await supabase
-    .from('portfolio_items')
-    .select('image_url')
-    .eq('user_id', id)
-    .order('sort_order', { ascending: true })
-    .limit(1)
-    .maybeSingle()
 
   const title = `${profile.display_name}のイラスト料金・ポートフォリオ依頼 | ${SITE_NAME}`
   const commercialText = profile.commercial_use_allowed ? '商用利用可' : '個人利用限定'
@@ -73,11 +46,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const shareTitle = `Drawker｜${profile.display_name}`
   const shareDescription = `${priceText} ／ ${profileText}`
 
-  // 最初のポートフォリオ画像（なければアバター）を、正規化した完全URLで使用
-  // どちらも無いクリエイターは、名前・アバター・代表作を合成した動的OGPカードにフォールバック
-  const fallbackOgUrl = `${BASE_URL}/api/og/creator/${id}`
-  const rawOgImage = firstPortfolio?.image_url || profile.avatar_url
-  const ogImage = getFullImageUrl(rawOgImage, fallbackOgUrl)
+  // 作品・名前・最安料金・受付状況・タグを1枚にまとめた動的カード（app/api/og/creator/[id]）を使う。
+  // X等はカード画像をURL単位で長くキャッシュするため、プロフィール更新日時を付けて
+  // 料金や受付状況を変えたら新しい画像として取り直されるようにする。
+  const ogVersion = profile.updated_at ? new Date(profile.updated_at).getTime() : 0
+  const ogImage = `${BASE_URL}/api/og/creator/${id}?v=${ogVersion}`
   const canonicalUrl = `${BASE_URL}/creator/${id}`
 
   // Twitter URLの末尾スラッシュを除去してからユーザー名を抽出
