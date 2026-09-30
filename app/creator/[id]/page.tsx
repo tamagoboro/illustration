@@ -76,11 +76,22 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     alternates: {
       canonical: canonicalUrl,
     },
+    // ページ自体は検索に出すが、作品・アイコン画像は画像検索に載せない（無断転載・画像の一人歩き対策）。
+    // 画像はSupabase Storage（別ドメイン）にあり画像側にヘッダーを付けられないため、
+    // 画像を載せているこのページ側で noimageindex を指定する。
     robots: {
       index: true,
       follow: true,
-      'max-image-preview': 'large',
+      noimageindex: true,
+      'max-image-preview': 'none',
       'max-snippet': -1,
+      googleBot: {
+        index: true,
+        follow: true,
+        noimageindex: true,
+        'max-image-preview': 'none',
+        'max-snippet': -1,
+      },
     },
     other: {
       robots: 'noai, noimageai',
@@ -181,7 +192,7 @@ export default async function Page({ params }: Props) {
     '@type': 'Person',
     name: profile.display_name,
     description: profile.status_comment || `${profile.display_name}のイラスト制作ポートフォリオ`,
-    image: profile.avatar_url,
+    // image（アイコン）は載せない。構造化データに画像URLがあると画像検索の対象になりやすいため
     jobTitle: 'Illustrator / Creator',
     url: `${BASE_URL}/creator/${id}`,
     knowsAbout: profile.tastes || ['Illustration', 'Design'],

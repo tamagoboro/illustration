@@ -7,11 +7,16 @@ export async function GET() {
   // 末尾スラッシュ付きの書き方(/login/など)だと実際のURL(/login)にはマッチせず
   // ブロックできていなかったため、末尾スラッシュなしに修正。
   // (この書き方でも配下のパス、例: /dashboard/form-builder も引き続きブロックされる)
+  // Googlebot-Image（Google画像検索のクローラー）は、drawker.com 上の画像（シェア用カード画像など）を一切取得しない。
+  // ※ 作品・アイコン画像は Supabase（別ドメイン）にあるためここでは止められず、各ページの noimageindex で対応している。
   const content = `User-agent: *
 Allow: /
 Disallow: /dashboard
 Disallow: /login
 Disallow: /admin
+
+User-agent: Googlebot-Image
+Disallow: /
 
 Sitemap: ${baseUrl}/sitemap.xml
 `

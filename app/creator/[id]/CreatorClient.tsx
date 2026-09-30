@@ -1434,6 +1434,13 @@ const themeColor = useMemo(() => {
                   <span>✉️</span> 直接相談・お問い合わせ
                 </button>
 
+                <Link
+                  href="/client-guidelines"
+                  className="block text-center text-[10px] font-bold text-slate-400 hover:text-sky-600 transition-colors"
+                >
+                  依頼の前に：著作権・支払い・マナーの注意事項 →
+                </Link>
+
                 <button
                   onClick={handleToggleFavorite}
                   className={`w-full py-2.5 text-xs font-bold rounded-xl border transition-all flex items-center justify-center gap-2 cursor-pointer ${

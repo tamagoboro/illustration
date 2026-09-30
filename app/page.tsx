@@ -67,6 +67,36 @@ const LATEST_NEWS = UPDATES.flatMap((entry) =>
   entry.items.map((item) => ({ date: entry.date.replace(/-/g, '.'), text: item }))
 ).slice(0, 5)
 
+// レビューの★表示（平均を0.5刻みで塗る）と件数。レビューが無いときは控えめに「レビューなし」
+function StarRating({ stats }: { stats?: { avg: number; count: number } }) {
+  if (!stats || stats.count === 0) {
+    return <p className="text-[10px] font-bold text-slate-300">★ レビューなし</p>
+  }
+  const rounded = Math.round(stats.avg * 2) / 2
+  return (
+    <div
+      className="flex items-center gap-1"
+      aria-label={`評価 5点中${stats.avg.toFixed(1)}点、レビュー${stats.count}件`}
+    >
+      <div className="flex text-[12px] leading-none">
+        {[1, 2, 3, 4, 5].map((i) => {
+          const fill = rounded >= i ? 100 : rounded >= i - 0.5 ? 50 : 0
+          return (
+            <span key={i} className="relative text-slate-200">
+              ★
+              <span className="absolute inset-0 overflow-hidden text-amber-400" style={{ width: `${fill}%` }}>
+                ★
+              </span>
+            </span>
+          )
+        })}
+      </div>
+      <span className="text-[11px] font-black text-slate-700">{stats.avg.toFixed(1)}</span>
+      <span className="text-[10px] font-bold text-slate-400">（{stats.count}件）</span>
+    </div>
+  )
+}
+
 // 24時間以内に作成・更新されたか判定する関数
 const isRecentlyUpdated = (updatedAt?: string | null) => {
   if (!updatedAt) return false
@@ -97,12 +127,14 @@ export default function Home() {
   const [handDrawnOnly, setHandDrawnOnly] = useState(false)
   const [copyrightTransferOnly, setCopyrightTransferOnly] = useState(false)
   const [freeRevisionOnly, setFreeRevisionOnly] = useState(false)
-  const [sortOption, setSortOption] = useState<'random' | 'price_asc' | 'price_desc' | 'likes_desc' | 'likes_asc'>('random')
+  const [sortOption, setSortOption] = useState<'random' | 'price_asc' | 'price_desc' | 'likes_desc' | 'likes_asc' | 'rating_desc'>('random')
   const [visibleCount, setVisibleCount] = useState(10)
 
   // お気に入りステート
   const [favorites, setFavorites] = useState<string[]>([])
   const [ringMap, setRingMap] = useState<Record<string, string | null>>({})
+  // クリエイターごとのレビュー平均（★）と件数
+  const [reviewStats, setReviewStats] = useState<Record<string, { avg: number; count: number }>>({})
   const [badgeMap, setBadgeMap] = useState<Record<string, { isTrending: boolean; isPopularInquiries: boolean; isFastResponder: boolean }>>({})
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false)
   const [isCompareOpen, setIsCompareOpen] = useState(false)
@@ -229,10 +261,23 @@ export default function Home() {
 
           // リング取得とバッジ取得は互いに独立しているので、直列にawaitせず並行実行して
           // 待ち時間を短縮する（バッジがキャッシュ済みならRPC自体を呼ばない）
-          const [ringsResult, badgeResult] = await Promise.all([
+          const [ringsResult, badgeResult, reviewsResult] = await Promise.all([
             supabase.from('public_equipped_rings').select('user_id, equipped_ring_id').in('user_id', userIds),
             cachedBadges ? Promise.resolve({ data: cachedBadges }) : supabase.rpc('get_public_creator_badges'),
+            supabase.from('reviews').select('creator_id, rating').in('creator_id', userIds),
           ])
+
+          const stats: Record<string, { sum: number; count: number }> = {}
+          ;(reviewsResult.data || []).forEach((r: { creator_id: string; rating: number }) => {
+            if (!stats[r.creator_id]) stats[r.creator_id] = { sum: 0, count: 0 }
+            stats[r.creator_id].sum += r.rating
+            stats[r.creator_id].count += 1
+          })
+          setReviewStats(
+            Object.fromEntries(
+              Object.entries(stats).map(([id, s]) => [id, { avg: s.sum / s.count, count: s.count }])
+            )
+          )
 
           const map: Record<string, string | null> = {}
           ;(ringsResult.data || []).forEach((r: any) => {
@@ -409,6 +454,12 @@ export default function Home() {
       if (sortOption === 'likes_asc') {
         return (a.likes_count ?? 0) - (b.likes_count ?? 0)
       }
+      if (sortOption === 'rating_desc') {
+        // 平均が同じなら件数が多い方を上に。レビューが無い人は一番下
+        const ra = reviewStats[a.user_id]
+        const rb = reviewStats[b.user_id]
+        return (rb?.avg ?? -1) - (ra?.avg ?? -1) || (rb?.count ?? 0) - (ra?.count ?? 0)
+      }
       if (sortOption === 'random') {
         // サンプル作品（またはアバター）が無いクリエイターは、おすすめ順で上位に来ないよう後ろに回す。
         // 同じグループ内の順序はフェッチ時にシャッフル済みのため、ここでは崩さずグループだけ入れ替える。
@@ -418,7 +469,7 @@ export default function Home() {
       }
       return 0
     })
-  }, [profiles, searchTerm, selectedTastes, statusFilter, maxLeadTime, maxPrice, commercialOnly, expressOnly, r18Only, handDrawnOnly, copyrightTransferOnly, freeRevisionOnly, showFavoritesOnly, favorites, sortOption])
+  }, [profiles, searchTerm, selectedTastes, statusFilter, maxLeadTime, maxPrice, commercialOnly, expressOnly, r18Only, handDrawnOnly, copyrightTransferOnly, freeRevisionOnly, showFavoritesOnly, favorites, sortOption, reviewStats])
 
   // 検索条件・並び順を変えたら表示件数を最初の10件に戻す
   useEffect(() => {
@@ -1078,6 +1129,7 @@ export default function Home() {
                   <option value="price_desc">価格が高い順</option>
                   <option value="likes_desc">いいねが多い順</option>
                   <option value="likes_asc">いいねが少ない順</option>
+                  <option value="rating_desc">評価が高い順</option>
                 </select>
               </div>
             </div>
@@ -1299,6 +1351,7 @@ export default function Home() {
                                 {profile.display_name}
                               </h3>
                             </div>
+                            <StarRating stats={reviewStats[profile.user_id]} />
                             <p className="text-[10px] text-slate-500 font-medium line-clamp-2 leading-relaxed">
                               {profile.status_comment || 'プロフィール文は設定されていません。'}
                             </p>
@@ -1405,6 +1458,9 @@ export default function Home() {
           </a>
           <Link href="/guide" className="hover:text-sky-600 transition-colors">
             使い方ガイド
+          </Link>
+          <Link href="/client-guidelines" className="hover:text-sky-600 transition-colors">
+            依頼者向けの注意事項
           </Link>
           <Link href="/faq" className="hover:text-sky-600 transition-colors">
             よくある質問

@@ -87,6 +87,11 @@ export default function GuidePage() {
           <ul className="text-xs text-amber-700/90 leading-relaxed list-disc list-inside space-y-1">
             <li>Drawkerは取引の当事者にならないため、報酬の支払いや納品物に関するトラブルは当事者間での解決となります。</li>
             <li>高額な前払いを一方的に求められる、連絡先を教えた直後に不審な要求をされる、といった場合は取引を見送ることも検討してください。</li>
+            <li>
+              著作権や利用範囲、支払い、やり取りのマナーは
+              <Link href="/client-guidelines" className="underline font-bold">依頼者向けの注意事項</Link>
+              にまとめています。依頼の前にご確認ください。
+            </li>
             <li>詳しい規約は<Link href="/terms" className="underline font-bold">利用規約</Link>をご確認ください。</li>
           </ul>
         </div>

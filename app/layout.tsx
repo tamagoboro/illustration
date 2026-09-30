@@ -30,6 +30,20 @@ export const metadata: Metadata = {
     'ポートフォリオ比較',
     'おすすめ'
   ],
+  // サイト内の作品・アイコン画像を画像検索に載せない（ページ自体は通常どおり検索対象）。
+  // 各ページで robots を上書きする場合も noimageindex を必ず付けること。
+  robots: {
+    index: true,
+    follow: true,
+    noimageindex: true,
+    'max-image-preview': 'none',
+    googleBot: {
+      index: true,
+      follow: true,
+      noimageindex: true,
+      'max-image-preview': 'none',
+    },
+  },
   verification: {
     google: 'ux6pHBdkGJujCh1iPf8N9sQ4-JiPnCTibobcaWsA2sE',
   },
