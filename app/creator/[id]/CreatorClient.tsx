@@ -16,8 +16,9 @@ import AvatarRing from '@/components/AvatarRing'
 import ProtectedImage from '@/components/ProtectedImage'
 import NotificationBell from '@/components/NotificationBell'
 import Reveal from '@/components/Reveal'
-import WorksMarquee from '@/components/portfolio/WorksMarquee'
-import MasonryGallery from '@/components/portfolio/MasonryGallery'
+import WorksShowcase from '@/components/portfolio/WorksShowcase'
+import PortfolioNav from '@/components/portfolio/PortfolioNav'
+import MobileActionBar from '@/components/portfolio/MobileActionBar'
 import YouTubeGallery from '@/components/portfolio/YouTubeGallery'
 import CreatorJoinCta from '@/components/portfolio/CreatorJoinCta'
 import { normalizeBackground, backgroundStyle, isDarkBackground, normalizeVideos } from '@/lib/portfolioDesign'
@@ -417,6 +418,31 @@ export default function CreatorClient({
 
   const BACKGROUND_IMAGE_URL =
     'https://qcklfkslqtjnxufqcqyi.supabase.co/storage/v1/object/public/portfolios/bg.png'
+
+  // 作品の拡大表示で、前後の作品へ移動する（最後の次は最初に戻る）
+  const showAdjacentWork = (dir: -1 | 1) => {
+    setSelectedWork((current) => {
+      if (!current || works.length < 2) return current
+      const index = works.findIndex((w) => w.id === current.id)
+      return works[(index + dir + works.length) % works.length]
+    })
+  }
+
+  // 拡大表示中は ← → キーで前後の作品、Esc で閉じる
+  useEffect(() => {
+    if (!selectedWork) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') showAdjacentWork(1)
+      if (e.key === 'ArrowLeft') showAdjacentWork(-1)
+      if (e.key === 'Escape') setSelectedWork(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedWork, works])
+
+  // スワイプで前後の作品へ（指を横に50px以上動かしたとき）
+  const [swipeStartX, setSwipeStartX] = useState<number | null>(null)
 
   // モーダル表示時の背景スクロール抑制
   useEffect(() => {
@@ -1079,10 +1105,22 @@ const themeColor = useMemo(() => {
   const pageBackgroundStyle = backgroundStyle(pageBackground)
   const isDarkPage = isDarkBackground(pageBackground)
   const portfolioVideos = normalizeVideos(profile.portfolio_videos)
-  // カバー画像：本人が設定した画像、なければ1枚目の作品をぼかして使う
-  const coverImageUrl = profile.cover_image_url || works[0]?.image_url || null
-  const isCustomCover = !!profile.cover_image_url
   const sectionTitleClass = `text-lg sm:text-xl font-black tracking-tight ${isDarkPage ? 'text-white' : 'text-sky-950'} drop-shadow-sm`
+
+  // ページ内メニュー（中身があるセクションだけ）
+  const navItems = [
+    { id: 'works', label: '作品' },
+    ...(portfolioVideos.length > 0 ? [{ id: 'videos', label: '動画' }] : []),
+    ...(profile.menu_items && profile.menu_items.length > 0 ? [{ id: 'price', label: '料金' }] : []),
+    { id: 'conditions', label: '受付条件' },
+    { id: 'reviews', label: `レビュー${reviews.length > 0 ? `（${reviews.length}）` : ''}` },
+  ]
+
+  // スマホ下部の依頼ボタン：見積もりフォームがあれば見積もり、なければ直接相談
+  const mobilePrimary =
+    availableForms.length > 0
+      ? { label: '🧮 見積もりを作成する', onClick: () => { setReferenceWorkTitle(null); openEstimateFlow() } }
+      : { label: '✉️ 相談・お問い合わせ', onClick: () => setIsContactOpen(true) }
 
   return (
     <div
@@ -1106,34 +1144,44 @@ const themeColor = useMemo(() => {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-10 relative z-10">
-        {/* カバー画像 */}
-        {coverImageUrl && (
-          <div className="relative h-44 sm:h-72 rounded-3xl overflow-hidden shadow-xl border-2 border-white/70 bg-sky-100">
-            <div className={`absolute inset-0 drawker-kenburns ${isCustomCover ? '' : 'blur-md scale-110'}`}>
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6 relative z-10">
+        {/* カバー画像：本人が設定した画像。なければ作品を最大4枚並べる（ぼかさない） */}
+        <div className="relative h-40 sm:h-64 lg:h-72 rounded-3xl overflow-hidden shadow-xl ring-1 ring-black/5 bg-sky-100">
+          {profile.cover_image_url ? (
+            <div className="absolute inset-0 drawker-kenburns">
               <ProtectedImage
-                src={coverImageUrl}
+                src={profile.cover_image_url}
                 alt=""
                 watermarkText={profile.display_name}
                 wrapperClassName="relative w-full h-full"
                 className="w-full h-full object-cover"
               />
             </div>
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/45 via-transparent to-transparent" />
-          </div>
-        )}
+          ) : works.length > 0 ? (
+            <div className={`absolute inset-0 grid gap-0.5 ${['grid-cols-1', 'grid-cols-2', 'grid-cols-3', 'grid-cols-4'][Math.min(works.length, 4) - 1]}`}>
+              {works.slice(0, 4).map((work) => (
+                <div key={work.id} className="relative overflow-hidden">
+                  <ProtectedImage
+                    src={work.image_url}
+                    alt=""
+                    watermarkText={profile.display_name}
+                    style={{ objectPosition: `${work.focal_x ?? 50}% ${work.focal_y ?? 50}%` }}
+                    wrapperClassName="relative w-full h-full"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="absolute inset-0 bg-gradient-to-br from-sky-300 via-violet-200 to-pink-200" />
+          )}
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/55 via-slate-950/10 to-transparent" />
+        </div>
 
-        {/* メインプロフィール */}
-        <div
-          className={`bg-white/80 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-xl border border-white/80 space-y-6 relative ${
-            coverImageUrl ? '-mt-24 sm:-mt-32 mx-2 sm:mx-6' : ''
-          }`}
-        >
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-            <div className="flex-1 space-y-4">
-              <div className="flex items-start gap-4 sm:gap-5">
-                {profile.avatar_url && (
-                  <div className="relative shrink-0 ring-4 ring-white/80 shadow-md rounded-full drawker-float">
+        {/* 名前・アイコン（カバーの左下に重ねる） */}
+        <div className="relative -mt-16 sm:-mt-20 px-3 sm:px-8 flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-5">
+          {profile.avatar_url && (
+                  <div className="relative shrink-0 ring-[6px] ring-white shadow-xl rounded-full bg-white">
                     <AvatarRing
                       src={profile.avatar_url}
                       alt={profile.display_name || 'アバター画像'}
@@ -1142,8 +1190,8 @@ const themeColor = useMemo(() => {
                     />
                   </div>
                 )}
-
-                <div className="space-y-2">
+          <div className="flex-1 min-w-0 bg-white/95 backdrop-blur-md rounded-2xl px-5 py-4 shadow-lg ring-1 ring-black/5">
+            <div className="space-y-2">
                   <div className="flex flex-wrap items-center gap-3">
                     <h1 className="text-2xl sm:text-3xl font-black text-sky-900 tracking-tight">
                       {profile.display_name}
@@ -1214,13 +1262,19 @@ const themeColor = useMemo(() => {
                     )}
                   </div>
                 </div>
-              </div>
+          </div>
+        </div>
 
-              <p className="text-sky-700 text-sm leading-relaxed whitespace-pre-wrap bg-white/60 p-4 sm:p-5 rounded-2xl border border-white/80 shadow-2xs">
+        <div className="grid lg:grid-cols-[minmax(0,1fr)_340px] gap-6 lg:gap-8 items-start">
+          {/* 左：自己紹介 */}
+          <div className="space-y-6 min-w-0 lg:col-start-1 lg:row-start-1">
+            <Reveal>
+              <section className="bg-white/90 backdrop-blur-xl rounded-3xl p-6 sm:p-7 shadow-xl ring-1 ring-black/5 space-y-4">
+                <p className="text-sky-700 text-sm leading-relaxed whitespace-pre-wrap bg-white/60 p-4 sm:p-5 rounded-2xl border border-white/80 shadow-2xs">
                 {profile.status_comment || 'プロフィールコメントはありません。'}
               </p>
 
-              {/* SNS・外部リンク */}
+                {/* SNS・外部リンク */}
               {hasContactLinks && (
                 <div className="flex flex-wrap items-center gap-2 pt-1">
                   <span className="text-xs font-bold text-sky-500 mr-1">SNS / Links:</span>
@@ -1271,7 +1325,7 @@ const themeColor = useMemo(() => {
                 </div>
               )}
 
-              {/* タグ・スタイル */}
+                {/* タグ・スタイル */}
               <div className="flex flex-wrap gap-1.5 pt-1">
                 {normalizedTastes.map((t) => (
                   <button
@@ -1284,7 +1338,7 @@ const themeColor = useMemo(() => {
                 ))}
               </div>
 
-              {/* SNSシェア機能 */}
+                {/* SNSシェア機能 */}
               <div className="pt-3 border-t border-sky-200/60 flex flex-wrap items-center gap-2">
                 <span className="text-[11px] font-bold text-sky-400 mr-1">このページを共有:</span>
                 <a
@@ -1318,10 +1372,14 @@ const themeColor = useMemo(() => {
                   {shareCopied ? 'URLをコピーしました！' : '🔗 URLコピー'}
                 </button>
               </div>
-            </div>
+              </section>
+            </Reveal>
+          </div>
 
+          {/* 右：料金・依頼ボタン（PCでは画面に付いてくる。スマホでは自己紹介のすぐ下） */}
+          <aside className="lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:sticky lg:top-24 self-start">
             {/* サイド操作枠 */}
-            <div className="w-full lg:w-80 bg-white/80 backdrop-blur-md p-5 rounded-2xl border border-white shadow-sm space-y-4 shrink-0">
+            <div className="w-full bg-white/95 backdrop-blur-md p-5 rounded-3xl ring-1 ring-black/5 shadow-xl space-y-4">
               <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-2.5 text-center">
                 <span className="text-[11px] font-black text-emerald-800 flex items-center justify-center gap-1">
                   <span>💡</span> 仲介手数料0円・直取引価格でご案内
@@ -1515,9 +1573,115 @@ const themeColor = useMemo(() => {
                 </button>
               </div>
             </div>
-          </div>
+          </aside>
+
+          {/* 左：作品・動画・料金・条件・魂募集・レビュー */}
+          <div className="space-y-10 min-w-0 lg:col-start-1 lg:row-start-2">
+            <PortfolioNav items={navItems} />
+
+        <div id="works" className="scroll-mt-32">
+        {/* ポートフォリオ一覧 */}
+        <section className="space-y-5">
+          <Reveal>
+            <div className="flex justify-between items-end px-1">
+              <div>
+                <p className={`text-[10px] font-black tracking-[0.3em] ${isDarkPage ? 'text-white/70' : 'text-sky-500'}`}>GALLERY</p>
+                <h2 className={sectionTitleClass}>ポートフォリオ作品</h2>
+              </div>
+              <span className="text-xs font-extrabold text-sky-600 bg-white/80 backdrop-blur-sm px-3 py-1 rounded-full border border-white shadow-2xs">
+                {works.length} 作品
+              </span>
+            </div>
+          </Reveal>
+
+          {works.length === 0 ? (
+            <div className="bg-white/75 backdrop-blur-xl p-12 rounded-3xl border border-white/80 text-center text-xs font-bold text-sky-400">
+              まだ作品が登録されていません
+            </div>
+          ) : (
+            <WorksShowcase works={works} watermarkText={profile.display_name} onSelect={(work) => setSelectedWork(work)} />
+          )}
+        </section>
         </div>
 
+        {portfolioVideos.length > 0 && (
+        <div id="videos" className="scroll-mt-32">
+        {/* YouTube動画 */}
+          <section className="space-y-5">
+            <Reveal>
+              <div className="px-1">
+                <p className={`text-[10px] font-black tracking-[0.3em] ${isDarkPage ? 'text-white/70' : 'text-red-500'}`}>MOVIE</p>
+                <h2 className={sectionTitleClass}>動画</h2>
+              </div>
+            </Reveal>
+            <YouTubeGallery videos={portfolioVideos} />
+          </section>
+        </div>
+        )}
+
+        <div id="price" className="scroll-mt-32">
+        {/* 料金メニュー */}
+        {profile.menu_items && profile.menu_items.length > 0 && (
+          <Reveal>
+          <section className="bg-white/75 backdrop-blur-xl p-6 sm:p-7 rounded-3xl shadow-xl border border-white/80 space-y-5">
+            <h2 className="text-xs font-black text-sky-900 uppercase tracking-widest flex items-center gap-2">
+              <span className="p-1.5 bg-white rounded-lg text-xs shadow-2xs">🏷️</span> 料金目安・メニュー
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {profile.menu_items.map((item, index) => {
+                const itemDiscount = resolveDiscount(campaign, item.discount)
+                const hasDiscount = typeof item.price === 'number' && itemDiscount
+                const discountedPrice = hasDiscount ? applyDiscount(item.price as number, itemDiscount) : null
+
+                return (
+                  <div
+                    key={index}
+                    className="p-4 bg-white/60 border border-white/80 rounded-2xl flex justify-between items-center hover:bg-white transition shadow-2xs"
+                  >
+                    <span className="text-xs font-bold text-sky-700">{item.title}</span>
+                    {hasDiscount ? (
+                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                        <span className="text-[10px] text-sky-300 line-through decoration-rose-400">
+                          ¥{(item.price as number).toLocaleString()}
+                        </span>
+                        <span
+                          className="text-xs font-black px-2.5 py-1 rounded-lg border"
+                          style={{
+                            color: themeColor,
+                            backgroundColor: hexToRgba(themeColor, 0.08),
+                            borderColor: hexToRgba(themeColor, 0.2),
+                          }}
+                        >
+                          ¥{discountedPrice?.toLocaleString()}〜
+                        </span>
+                        <span className="text-[9px] font-black bg-rose-500 text-white px-1.5 py-0.5 rounded">
+                          {formatDiscountBadge(itemDiscount)}
+                        </span>
+                      </div>
+                    ) : (
+                      <span
+                        className="text-xs font-black px-2.5 py-1 rounded-lg border"
+                        style={{
+                          color: themeColor,
+                          backgroundColor: hexToRgba(themeColor, 0.08),
+                          borderColor: hexToRgba(themeColor, 0.2),
+                        }}
+                      >
+                        {typeof item.price === 'number'
+                          ? `¥${item.price.toLocaleString()}〜`
+                          : '要相談'}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+          </Reveal>
+        )}
+        </div>
+
+        <div id="conditions" className="scroll-mt-32">
         {/* 受付条件 */}
         <Reveal>
         <section className="bg-white/75 backdrop-blur-xl p-6 sm:p-7 rounded-3xl shadow-xl border border-white/80 space-y-5">
@@ -1588,110 +1752,12 @@ const themeColor = useMemo(() => {
           </div>
         </section>
         </Reveal>
-
-        {/* 料金メニュー */}
-        {profile.menu_items && profile.menu_items.length > 0 && (
-          <Reveal>
-          <section className="bg-white/75 backdrop-blur-xl p-6 sm:p-7 rounded-3xl shadow-xl border border-white/80 space-y-5">
-            <h2 className="text-xs font-black text-sky-900 uppercase tracking-widest flex items-center gap-2">
-              <span className="p-1.5 bg-white rounded-lg text-xs shadow-2xs">🏷️</span> 料金目安・メニュー
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {profile.menu_items.map((item, index) => {
-                const itemDiscount = resolveDiscount(campaign, item.discount)
-                const hasDiscount = typeof item.price === 'number' && itemDiscount
-                const discountedPrice = hasDiscount ? applyDiscount(item.price as number, itemDiscount) : null
-
-                return (
-                  <div
-                    key={index}
-                    className="p-4 bg-white/60 border border-white/80 rounded-2xl flex justify-between items-center hover:bg-white transition shadow-2xs"
-                  >
-                    <span className="text-xs font-bold text-sky-700">{item.title}</span>
-                    {hasDiscount ? (
-                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                        <span className="text-[10px] text-sky-300 line-through decoration-rose-400">
-                          ¥{(item.price as number).toLocaleString()}
-                        </span>
-                        <span
-                          className="text-xs font-black px-2.5 py-1 rounded-lg border"
-                          style={{
-                            color: themeColor,
-                            backgroundColor: hexToRgba(themeColor, 0.08),
-                            borderColor: hexToRgba(themeColor, 0.2),
-                          }}
-                        >
-                          ¥{discountedPrice?.toLocaleString()}〜
-                        </span>
-                        <span className="text-[9px] font-black bg-rose-500 text-white px-1.5 py-0.5 rounded">
-                          {formatDiscountBadge(itemDiscount)}
-                        </span>
-                      </div>
-                    ) : (
-                      <span
-                        className="text-xs font-black px-2.5 py-1 rounded-lg border"
-                        style={{
-                          color: themeColor,
-                          backgroundColor: hexToRgba(themeColor, 0.08),
-                          borderColor: hexToRgba(themeColor, 0.2),
-                        }}
-                      >
-                        {typeof item.price === 'number'
-                          ? `¥${item.price.toLocaleString()}〜`
-                          : '要相談'}
-                      </span>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </section>
-          </Reveal>
-        )}
+        </div>
 
         {/* 魂募集 */}
         <SoulListingSection creatorId={id} creatorName={profile.display_name} listings={initialSouls} />
 
-        {/* ポートフォリオ一覧 */}
-        <section className="space-y-5">
-          <Reveal>
-            <div className="flex justify-between items-end px-1">
-              <div>
-                <p className={`text-[10px] font-black tracking-[0.3em] ${isDarkPage ? 'text-white/70' : 'text-sky-500'}`}>GALLERY</p>
-                <h2 className={sectionTitleClass}>ポートフォリオ作品</h2>
-              </div>
-              <span className="text-xs font-extrabold text-sky-600 bg-white/80 backdrop-blur-sm px-3 py-1 rounded-full border border-white shadow-2xs">
-                {works.length} 作品
-              </span>
-            </div>
-          </Reveal>
-
-          {works.length === 0 ? (
-            <div className="bg-white/75 backdrop-blur-xl p-12 rounded-3xl border border-white/80 text-center text-xs font-bold text-sky-400">
-              まだ作品が登録されていません
-            </div>
-          ) : (
-            <>
-              {/* 作品が流れ続ける帯（4枚以上のとき） */}
-              <WorksMarquee works={works} watermarkText={profile.display_name} onSelect={(work) => setSelectedWork(work)} />
-              <MasonryGallery works={works} watermarkText={profile.display_name} onSelect={(work) => setSelectedWork(work)} />
-            </>
-          )}
-        </section>
-
-        {/* YouTube動画 */}
-        {portfolioVideos.length > 0 && (
-          <section className="space-y-5">
-            <Reveal>
-              <div className="px-1">
-                <p className={`text-[10px] font-black tracking-[0.3em] ${isDarkPage ? 'text-white/70' : 'text-red-500'}`}>MOVIE</p>
-                <h2 className={sectionTitleClass}>動画</h2>
-              </div>
-            </Reveal>
-            <YouTubeGallery videos={portfolioVideos} />
-          </section>
-        )}
-
+        <div id="reviews" className="scroll-mt-32">
         {/* レビュー・評価 */}
         <Reveal>
         <section className="bg-white/75 backdrop-blur-xl p-6 sm:p-7 rounded-3xl shadow-xl border border-white/80 space-y-5">
@@ -1790,10 +1856,25 @@ const themeColor = useMemo(() => {
           )}
         </section>
         </Reveal>
+        </div>
 
         {/* イラストレーター向けの案内（本人以外に表示） */}
         {currentUserId !== id && <CreatorJoinCta />}
+          </div>
+        </div>
       </main>
+
+      {/* スマホ下部の依頼ボタン（本人以外） */}
+      {currentUserId !== id && (
+        <MobileActionBar
+          priceText={profile.price_min ? `¥${profile.price_min.toLocaleString()}〜` : null}
+          primaryLabel={mobilePrimary.label}
+          onPrimary={mobilePrimary.onClick}
+          isFavorite={isFavorite}
+          onToggleFavorite={handleToggleFavorite}
+          themeColor={themeColor}
+        />
+      )}
 
       {/* 作品詳細 モーダル */}
       {selectedWork && (
@@ -1808,8 +1889,41 @@ const themeColor = useMemo(() => {
             </button>
 
             <div className="overflow-y-auto flex-1 p-5 sm:p-6 space-y-5">
-              <div className="rounded-2xl overflow-hidden bg-sky-950 flex items-center justify-center max-h-[60vh]">
+              <div
+                className="relative rounded-2xl overflow-hidden bg-sky-950 flex items-center justify-center max-h-[60vh]"
+                onTouchStart={(e) => setSwipeStartX(e.touches[0].clientX)}
+                onTouchEnd={(e) => {
+                  if (swipeStartX === null) return
+                  const dx = e.changedTouches[0].clientX - swipeStartX
+                  if (Math.abs(dx) > 50) showAdjacentWork(dx < 0 ? 1 : -1)
+                  setSwipeStartX(null)
+                }}
+              >
+                {works.length > 1 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => showAdjacentWork(-1)}
+                      aria-label="前の作品"
+                      className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white/85 hover:bg-white text-slate-700 text-xl font-black shadow-md cursor-pointer"
+                    >
+                      ‹
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => showAdjacentWork(1)}
+                      aria-label="次の作品"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white/85 hover:bg-white text-slate-700 text-xl font-black shadow-md cursor-pointer"
+                    >
+                      ›
+                    </button>
+                    <span className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 text-[11px] font-black text-white bg-slate-950/60 px-2.5 py-0.5 rounded-full tabular-nums">
+                      {works.findIndex((w) => w.id === selectedWork.id) + 1} / {works.length}
+                    </span>
+                  </>
+                )}
                 <ProtectedImage
+                  key={selectedWork.id}
                   src={selectedWork.image_url}
                   alt={selectedWork.title || '作品詳細'}
                   watermarkText={profile.display_name}
