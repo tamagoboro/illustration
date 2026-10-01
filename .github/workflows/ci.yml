@@ -1,0 +1,34 @@
+# プッシュ・プルリクエストのたびに、型チェックつきのビルド（next build）が通るかを自動で確認する。
+# ここが赤くなった変更は、main に取り込む前に直す。
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # next build は型チェックも行う。ビルド時にSupabaseへ接続する必要はないので、
+      # 本物の鍵は渡さず、形だけ合った仮の値を入れる（未設定だとクライアントの作成で落ちるため）。
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+          NEXT_PUBLIC_SITE_URL: https://drawker.com
