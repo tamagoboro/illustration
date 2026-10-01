@@ -1,10 +1,12 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { after } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { backgroundImageStyle } from '@/lib/background'
 import SimpleHeader from '@/components/SimpleHeader'
-import ProtectedImage from '@/components/ProtectedImage'
+import SoulGallery from '@/components/SoulGallery'
+import SoulShareButton from '@/components/SoulShareButton'
 import SoulApplyForm from '@/components/SoulApplyForm'
 import {
   SoulListing,
@@ -13,8 +15,15 @@ import {
   getSoulStatus,
   formatSoulPeriod,
   formatPrice,
-  normalizePrices,
+  normalizeSoulListing,
+  getSoulCardVersion,
 } from '@/lib/soulListings'
+
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://drawker.com'
+
+// 魂募集専用のシェア用カード画像（app/api/og/soul/[soulId]）。内容やデザインが変わるとURLも変わる
+const getSoulOgImageUrl = (soulId: string, updatedAt?: string | null) =>
+  `${BASE_URL}/api/og/soul/${soulId}?v=${getSoulCardVersion(updatedAt)}`
 
 type Props = { params: Promise<{ id: string; soulId: string }> }
 
@@ -25,7 +34,7 @@ async function loadListing(id: string, soulId: string) {
   ])
   if (!listing || !profile || profile.is_public === false) return null
   return {
-    listing: { ...listing, prices: normalizePrices(listing.prices) } as SoulListing,
+    listing: normalizeSoulListing(listing),
     profile,
   }
 }
@@ -35,9 +44,20 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const data = await loadListing(id, soulId)
   if (!data) return { title: '魂募集が見つかりません', robots: { index: false, follow: false } }
   const { listing, profile } = data
+  const title = `【魂募集】${listing.title}｜${profile.display_name}`
+  const description = (listing.target_audience || listing.description || `${profile.display_name}さんの魂募集イラスト`).slice(0, 120)
+  const ogImage = getSoulOgImageUrl(listing.id, listing.updated_at)
   return {
-    title: `【魂募集】${listing.title}｜${profile.display_name}`,
-    description: (listing.target_audience || listing.description || `${profile.display_name}さんの魂募集イラスト`).slice(0, 120),
+    title,
+    description,
+    alternates: { canonical: `${BASE_URL}/creator/${id}/souls/${soulId}` },
+    openGraph: {
+      title,
+      description,
+      type: 'article',
+      images: [{ url: ogImage, width: 1200, height: 630, alt: `${listing.title}の魂募集` }],
+    },
+    twitter: { card: 'summary_large_image', title, description, images: [ogImage] },
   }
 }
 
@@ -56,6 +76,15 @@ export default async function SoulDetailPage({ params }: Props) {
   // 掲載前のものは、URLを知っていても見られないようにする
   if (status === 'upcoming') notFound()
 
+  // シェア用カード画像を先に作ってCDNにキャッシュさせておく（Xのクローラーが来た時にすぐ返せるように）
+  after(async () => {
+    try {
+      await fetch(getSoulOgImageUrl(listing.id, listing.updated_at), { cache: 'no-store' })
+    } catch {
+      // 失敗してもページ表示には影響しない
+    }
+  })
+
   return (
     <div className="min-h-screen pb-24 relative bg-cover bg-center" style={backgroundImageStyle}>
       <div className="absolute inset-0 bg-gradient-to-b from-sky-400/20 via-sky-100/10 to-sky-900/20 backdrop-blur-[2px] pointer-events-none -z-10" />
@@ -67,22 +96,14 @@ export default async function SoulDetailPage({ params }: Props) {
         </Link>
 
         <div className="grid md:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] gap-6 items-start">
-          {/* イラスト */}
+          {/* イラスト（最大4枚） */}
           <div className="md:sticky md:top-24 bg-white/80 backdrop-blur-md rounded-3xl p-3 border border-white/80 shadow-lg">
-            <div className="relative rounded-2xl overflow-hidden bg-violet-50">
-              <ProtectedImage
-                src={listing.image_url}
-                alt={`${listing.title}（魂募集イラスト）`}
-                watermarkText={profile.display_name}
-                wrapperClassName="relative w-full"
-                className="block w-full h-auto max-h-[75vh] object-contain"
-              />
-              {status !== 'open' && (
-                <div className="absolute inset-0 bg-slate-900/40 flex items-center justify-center pointer-events-none">
-                  <span className="px-5 py-2 rounded-full bg-white text-slate-700 text-sm font-black">{SOUL_STATUS_LABELS[status]}</span>
-                </div>
-              )}
-            </div>
+            <SoulGallery
+              images={listing.image_urls}
+              title={listing.title}
+              watermarkText={profile.display_name}
+              overlayLabel={status !== 'open' ? SOUL_STATUS_LABELS[status] : null}
+            />
           </div>
 
           {/* 詳細 */}
@@ -145,6 +166,8 @@ export default async function SoulDetailPage({ params }: Props) {
                 <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap break-words">{listing.description}</p>
               </section>
             )}
+
+            {status === 'open' && <SoulShareButton listing={listing} creatorName={profile.display_name} size="lg" />}
 
             <SoulApplyForm
               creatorId={id}

@@ -17,16 +17,20 @@ export const runtime = 'nodejs'
 const unauthorized = () => NextResponse.json({ error: 'ログインが必要です' }, { status: 401 })
 
 // 想定外のエラーでも、画面に原因の分かる説明を返す（以前は500のHTMLが返り「通信に失敗しました」としか出なかった）
+// 設定の状態はログイン済みの本人にだけ返す（未ログインの人にサーバーの内部状態を見せない）
+type AuthedUser = NonNullable<Awaited<ReturnType<typeof getUserFromRequest>>>
 const withErrorHandling =
-  (label: string, handler: (req: Request) => Promise<Response>) =>
+  (label: string, handler: (req: Request, user: AuthedUser) => Promise<Response>) =>
   async (req: Request) => {
     try {
+      const user = await getUserFromRequest(req)
+      if (!user) return unauthorized()
       const configError = getServerConfigError()
       if (configError) {
         console.error(`Discord Webhook ${label}: ${configError}`)
         return NextResponse.json({ error: configError }, { status: 500 })
       }
-      return await handler(req)
+      return await handler(req, user)
     } catch (e) {
       console.error(`Discord Webhook ${label} エラー:`, e)
       return NextResponse.json(
@@ -37,9 +41,7 @@ const withErrorHandling =
   }
 
 // 登録（保存前にテスト送信して、正しく届くURLかを確かめる）
-export const POST = withErrorHandling('連携', async (req: Request) => {
-  const user = await getUserFromRequest(req)
-  if (!user) return unauthorized()
+export const POST = withErrorHandling('連携', async (req: Request, user) => {
 
   const body = await req.json().catch(() => null)
   const url = typeof body?.url === 'string' ? body.url.trim() : ''
@@ -83,9 +85,7 @@ export const POST = withErrorHandling('連携', async (req: Request) => {
 })
 
 // テスト送信（保存済みのWebhookに送る）
-export const PUT = withErrorHandling('テスト送信', async (req: Request) => {
-  const user = await getUserFromRequest(req)
-  if (!user) return unauthorized()
+export const PUT = withErrorHandling('テスト送信', async (_req: Request, user) => {
 
   const admin = createServiceClient()
   const { data } = await admin.from('discord_webhooks').select('encrypted_url').eq('user_id', user.id).maybeSingle()
@@ -106,9 +106,7 @@ export const PUT = withErrorHandling('テスト送信', async (req: Request) => 
 })
 
 // 解除
-export const DELETE = withErrorHandling('解除', async (req: Request) => {
-  const user = await getUserFromRequest(req)
-  if (!user) return unauthorized()
+export const DELETE = withErrorHandling('解除', async (_req: Request, user) => {
 
   const admin = createServiceClient()
   await Promise.all([

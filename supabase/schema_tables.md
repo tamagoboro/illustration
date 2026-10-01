@@ -231,7 +231,8 @@ DBを変更したら、この記録も更新すること。
 - id: uuid not null default gen_random_uuid()
 - user_id: uuid not null
 - title: text not null
-- image_url: text not null
+- image_url: text not null（表紙。image_urls の1枚目と同じ）
+- image_urls: ARRAY not null default '{}'::text[]（1〜4枚。update_soul_listings_images.sql）
 - description: text not null default ''::text
 - target_audience: text not null default ''::text
 - prices: jsonb not null default '[]'::jsonb
@@ -242,6 +243,7 @@ DBを変更したら、この記録も更新すること。
 - sort_order: integer not null default 0
 - created_at: timestamp with time zone not null default now()
 - updated_at: timestamp with time zone not null default now()
+- ※ user_id にユニーク制約（1クリエイター1件まで）
 
 ## user_icon_rings
 - user_id: uuid not null

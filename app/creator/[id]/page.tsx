@@ -4,7 +4,7 @@ import { after } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { serializeJsonLd } from '@/lib/safeUrl'
 import { getOgCardVersion } from '@/lib/ogCard'
-import { normalizePrices, SoulListing } from '@/lib/soulListings'
+import { normalizeSoulListing, SoulListing } from '@/lib/soulListings'
 import CreatorClient from './CreatorClient'
 
 type Props = {
@@ -159,10 +159,7 @@ export default async function Page({ params }: Props) {
   const estimateForms = formsRes.data
   const reviewRows = reviewRowsRes.data
   const creatorRingRow = creatorRingRes.data
-  const initialSouls: SoulListing[] = (soulsRes.data || []).map((row: any) => ({
-    ...row,
-    prices: normalizePrices(row.prices),
-  }))
+  const initialSouls: SoulListing[] = (soulsRes.data || []).map(normalizeSoulListing)
 
   let reviewerProfileMap: Record<string, { display_name: string | null; avatar_url: string | null }> = {}
   let reviewerRingMap: Record<string, string> = {}

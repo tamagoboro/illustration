@@ -5,7 +5,8 @@ export type SoulListing = {
   id: string
   user_id: string
   title: string
-  image_url: string
+  image_url: string // 表紙（image_urls の1枚目と同じ）
+  image_urls: string[] // 最大4枚。1枚目が表紙
   description: string
   target_audience: string
   prices: SoulPrice[]
@@ -52,6 +53,14 @@ export function formatSoulPeriod(listing: Pick<SoulListing, 'starts_at' | 'ends_
   return `${listing.starts_at ? formatDate(listing.starts_at) : ''} 〜 ${formatDate(listing.ends_at)}`
 }
 
+export const MAX_SOUL_IMAGES = 4
+
+// DBの行を画面用に整える（画像を4枚まで追加する前の行は image_url だけなので、それを1枚目として扱う）
+export const normalizeSoulListing = (row: any): SoulListing => {
+  const images: string[] = Array.isArray(row.image_urls) && row.image_urls.length ? row.image_urls : row.image_url ? [row.image_url] : []
+  return { ...row, image_urls: images.slice(0, MAX_SOUL_IMAGES), image_url: images[0] || row.image_url, prices: normalizePrices(row.prices) }
+}
+
 export const normalizePrices = (raw: unknown): SoulPrice[] =>
   Array.isArray(raw)
     ? raw
@@ -64,4 +73,28 @@ export const formatPrice = (price: number | null) => (price === null ? '応相�
 export const minSoulPrice = (prices: SoulPrice[]) => {
   const values = prices.map((p) => p.price).filter((p): p is number => typeof p === 'number')
   return values.length ? Math.min(...values) : null
+}
+
+// 魂募集のシェア用カード画像と、シェアするときのURL。updated_at とデザインのバージョンが変わると
+// URLも変わり、Xに古いカードが残らない（lib/ogCard.ts と同じ考え方）
+export const SOUL_OG_DESIGN_VERSION = 1
+
+export const getSoulCardVersion = (updatedAt?: string | null) =>
+  `${updatedAt ? new Date(updatedAt).getTime() : 0}-${SOUL_OG_DESIGN_VERSION}`
+
+export const getSoulShareUrl = (origin: string, creatorId: string, soulId: string, updatedAt?: string | null) =>
+  `${origin}/creator/${creatorId}/souls/${soulId}?s=${getSoulCardVersion(updatedAt)}`
+
+// Xで宣伝するときの文面
+export function buildSoulShareText(listing: Pick<SoulListing, 'title' | 'prices' | 'ends_at'>, creatorName: string) {
+  const min = minSoulPrice(listing.prices)
+  const lines = [
+    `🎭 魂募集中！「${listing.title}」`,
+    listing.prices.length ? `💰 ${min === null ? '金額は応相談' : `${formatPrice(min)}〜`}` : '',
+    listing.ends_at ? `📅 ${listing.ends_at.replace(/-/g, '/')}まで募集` : '',
+    `🎨 ${creatorName}`,
+    '',
+    '#魂募集 #VTuber #Drawker',
+  ]
+  return lines.filter((l, i) => l !== '' || i === 4).join('\n')
 }
