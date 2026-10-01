@@ -40,6 +40,40 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.8,
   }))
 
+  // 受付中の募集（募集ボード）。テーブルが無い・読めない場合は載せないだけで、サイトマップ自体は出す
+  const { data: wantedPosts } = await supabase
+    .from('wanted_posts')
+    .select('id, updated_at')
+    .eq('status', 'open')
+    .order('created_at', { ascending: false })
+    .limit(500)
+  const wantedUrls: MetadataRoute.Sitemap = (wantedPosts || []).map((post) => ({
+    url: `${baseUrl}/wanted/${post.id}`,
+    lastModified: new Date(post.updated_at || Date.now()),
+    changeFrequency: 'daily',
+    priority: 0.6,
+  }))
+
+  // 検索に出したい固定ページ（一覧・読みもの）。本人専用のページやログイン画面は載せない
+  const staticPages: { path: string; changeFrequency: 'daily' | 'weekly' | 'monthly'; priority: number }[] = [
+    { path: '/wanted', changeFrequency: 'daily', priority: 0.8 },
+    { path: '/gallery', changeFrequency: 'daily', priority: 0.7 },
+    { path: '/feed', changeFrequency: 'daily', priority: 0.7 },
+    { path: '/ranking', changeFrequency: 'weekly', priority: 0.7 },
+    { path: '/market', changeFrequency: 'weekly', priority: 0.7 },
+    { path: '/match', changeFrequency: 'monthly', priority: 0.6 },
+    { path: '/guide', changeFrequency: 'monthly', priority: 0.6 },
+    { path: '/faq', changeFrequency: 'monthly', priority: 0.5 },
+    { path: '/about', changeFrequency: 'monthly', priority: 0.5 },
+    { path: '/updates', changeFrequency: 'weekly', priority: 0.4 },
+  ]
+  const staticUrls: MetadataRoute.Sitemap = staticPages.map((page) => ({
+    url: `${baseUrl}${page.path}`,
+    lastModified: new Date(),
+    changeFrequency: page.changeFrequency,
+    priority: page.priority,
+  }))
+
   return [
     {
       url: baseUrl,
@@ -53,6 +87,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'monthly',
       priority: 0.5,
     },
+    ...staticUrls,
+    ...wantedUrls,
     ...creatorUrls,
   ]
 }

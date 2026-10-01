@@ -9,7 +9,7 @@ import { extractStoragePath } from '@/lib/storageUtils'
 type ReportRow = {
   id: string
   reporter_id: string | null
-  target_type: 'profile' | 'portfolio_item' | 'post' | 'post_comment'
+  target_type: 'profile' | 'portfolio_item' | 'post' | 'post_comment' | 'wanted_post'
   target_id: string
   creator_id: string
   reason: string
@@ -355,6 +355,15 @@ export default function AdminReportsPage() {
                       >
                         投稿を見る →
                       </Link>
+                    ) : r.target_type === 'wanted_post' ? (
+                      // 募集の削除は、開いた先のページの「管理者メニュー」から行う
+                      <Link
+                        href={`/wanted/${r.target_id}`}
+                        target="_blank"
+                        className="text-[11px] font-bold text-rose-600 hover:underline"
+                      >
+                        募集を見る・削除する →
+                      </Link>
                     ) : r.target_type === 'post_comment' ? (
                       r.reported_comment && (
                         <Link
@@ -388,6 +397,8 @@ export default function AdminReportsPage() {
                     ? 'プロフィール全体'
                     : r.target_type === 'post'
                       ? `フィード投稿 (ID: ${r.target_id})`
+                      : r.target_type === 'wanted_post'
+                        ? `募集 (ID: ${r.target_id})`
                       : r.target_type === 'post_comment'
                         ? `コメント (ID: ${r.target_id})`
                         : `作品 (ID: ${r.target_id})`}{' '}

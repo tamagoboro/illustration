@@ -12,6 +12,7 @@ import NotificationBell from './NotificationBell'
 // ロゴとメニューはトップページのヘッダーと同じ見た目にそろえ、どのページからでも移動できるようにする。
 const NAV_LINKS = [
   { href: '/', label: 'ホーム' },
+  { href: '/wanted', label: '募集ボード' },
   { href: '/feed', label: 'フィード' },
   { href: '/ranking', label: '注目クリエイター' },
   { href: '/gallery', label: '新着作品' },

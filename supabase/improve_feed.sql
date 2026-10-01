@@ -212,7 +212,9 @@ begin
   if v_found then
     alter table public.reports
       add constraint reports_target_type_check
-      check (target_type in ('profile', 'portfolio_item', 'post', 'post_comment'));
+      -- 'wanted_post'（募集ボードの募集）は add_wanted_board.sql の分。このファイルをあとから再実行しても
+      -- 募集の通報が使えなくならないよう、ここにも入れておく
+      check (target_type in ('profile', 'portfolio_item', 'post', 'post_comment', 'wanted_post'));
   end if;
 end $$;
 
@@ -233,6 +235,7 @@ begin
       when new.target_type = 'profile' then 'プロフィール全体 / ' || new.reason
       when new.target_type = 'post' then 'フィード投稿 / ' || new.reason
       when new.target_type = 'post_comment' then 'コメント / ' || new.reason
+      when new.target_type = 'wanted_post' then '募集 / ' || new.reason
       else '作品 / ' || new.reason
     end,
     '/admin/reports'

@@ -12,6 +12,7 @@ import CreatorThumbnailSlideshow, { ThumbnailSlide } from '@/components/CreatorT
 import { MODERATED_PLACEHOLDER_URL } from '@/lib/storageUtils'
 import NotificationBell from '@/components/NotificationBell'
 import RecentlyViewedCreators from '@/components/RecentlyViewedCreators'
+import WantedTeaser from '@/components/wanted/WantedTeaser'
 import { isCampaignActive, applyDiscount, formatDiscountBadge, Campaign } from '@/lib/discount'
 import { UPDATES } from '@/lib/updates'
 import { getSoulStatus } from '@/lib/soulListings'
@@ -59,6 +60,7 @@ const NAV_LINKS = [
   { href: '#pickup', label: 'イラストレーター紹介' },
   { href: '#search', label: 'クリエイターを探す' },
   { href: '/ranking', label: '注目クリエイター' },
+  { href: '/wanted', label: '募集ボード' },
   { href: '/feed', label: 'フィード' },
 ]
 
@@ -820,6 +822,11 @@ export default function Home() {
 
       <section className="max-w-7xl mx-auto px-4 sm:px-6 mb-8">
         <RecentlyViewedCreators />
+      </section>
+
+      {/* 募集中の依頼（募集ボード） */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 mb-8 empty:hidden">
+        <WantedTeaser />
       </section>
 
       {/* 画像バナー（画像・リンク先は lib/banner.ts で設定） */}

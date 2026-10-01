@@ -9,23 +9,7 @@ import { ItemDiscountConfig, toDateInputValue, fromDateInputValue } from '@/lib/
 import NotificationBell from '@/components/NotificationBell'
 import { backgroundImageStyle } from '@/lib/background'
 import QuickStartPanel from '@/components/dashboard/QuickStartPanel'
-
-const PRESET_TASTES = [
-  'アイコン',
-  'ヘッダー',
-  'デザイン',
-  '背景',
-  'ペット',
-  'SD・ちびキャラ',
-  'ゲーム用イラスト',
-  '一枚絵',
-  'ロゴ',
-  'VTuber向け',
-  'パーツ分け可',
-  'モデリング',
-  '3D背景',
-  '著作権譲渡可',
-]
+import { PRESET_TASTES } from '@/lib/tastes'
 
 const SNS_PLATFORMS = [
   { id: 'twitter', label: '𝕏 (Twitter)' },

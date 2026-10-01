@@ -202,7 +202,7 @@ DBを変更したら、この記録も更新すること。
 ## reports
 - id: uuid not null default gen_random_uuid()
 - reporter_id: uuid
-- target_type: text not null（'profile' / 'portfolio_item' / 'post'＝フィードの投稿 / 'post_comment'＝投稿へのコメント。improve_feed.sql）
+- target_type: text not null（'profile' / 'portfolio_item' / 'post'＝フィードの投稿 / 'post_comment'＝投稿へのコメント。improve_feed.sql / 'wanted_post'＝募集ボードの募集。add_wanted_board.sql）
 - target_id: text not null
 - creator_id: uuid not null
 - reason: text not null
@@ -264,6 +264,30 @@ DBを変更したら、この記録も更新すること。
 - user_id: uuid not null
 - soul_listing_id: uuid not null
 - created_at: timestamp with time zone not null default now()
+
+## wanted_posts（募集ボードの募集。add_wanted_board.sql）
+- id: uuid not null default gen_random_uuid()
+- user_id: uuid not null（募集を出した人）
+- title: text not null（60文字まで）
+- description: text not null default ''::text（1000文字まで）
+- tastes: ARRAY not null default '{}'::text[]（ジャンル。8個まで）
+- budget_min: integer
+- budget_max: integer
+- desired_deadline: date（希望納期）
+- apply_until: date（募集の締切）
+- commercial_use: boolean not null default false
+- status: text not null default 'open'::text（'open' / 'closed'）
+- created_at: timestamp with time zone not null default now()
+- updated_at: timestamp with time zone not null default now()
+
+## wanted_applications（募集への応募。読めるのは応募した本人と募集を出した人だけ）
+- id: uuid not null default gen_random_uuid()
+- post_id: uuid not null
+- creator_id: uuid not null
+- message: text not null（1000文字まで）
+- proposed_price: integer
+- created_at: timestamp with time zone not null default now()
+- ※ (post_id, creator_id) にユニーク制約（1つの募集に応募は1人1回）
 
 ## user_blocks
 - user_id: uuid not null（ブロック／ミュートした人）

@@ -413,6 +413,7 @@ begin
       when new.target_type = 'profile' then 'プロフィール全体 / ' || new.reason
       when new.target_type = 'post' then 'フィード投稿 / ' || new.reason
       when new.target_type = 'post_comment' then 'コメント / ' || new.reason
+      when new.target_type = 'wanted_post' then '募集 / ' || new.reason
       else '作品 / ' || new.reason
     end,
     '/admin/reports'

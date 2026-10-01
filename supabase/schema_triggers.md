@@ -31,6 +31,10 @@ improve_feed.sql でブロック（user_blocks）のトリガーを追加（下�
 | post_likes | trg_enforce_user_blocks_on_post_like | enforce_user_blocks_on_post_reaction |
 | creator_follows | trg_enforce_user_blocks_on_follow | enforce_user_blocks_on_follow（相手にブロックされている人はフォローできない） |
 | user_blocks | trg_apply_user_block | apply_user_block（ブロックした時点でお互いのフォローを外す） |
+| wanted_posts | set_wanted_posts_updated_at | update_updated_at_column |
+| wanted_posts | trg_enforce_wanted_post_limits | enforce_wanted_post_limits（同時に出せる募集は3件まで。add_wanted_board.sql） |
+| wanted_applications | trg_enforce_wanted_application_rules | enforce_wanted_application_rules（クリエイターのみ・締切後は不可・ブロック中は不可） |
+| wanted_applications | trg_notify_owner_on_wanted_application | notify_owner_on_wanted_application |
 | reviews | trg_grant_review_points | grant_review_points |
 | reviews | trg_notify_creator_on_new_review | notify_creator_on_new_review |
 | referrals | trg_notify_referrer_on_new_referral | notify_referrer_on_new_referral |

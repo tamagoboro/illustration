@@ -10,11 +10,18 @@ const REPORT_REASONS = [
   'その他',
 ]
 
-// 通報する対象。user_id は投稿者／コメントした人
-export type PostReportTarget = { type: 'post' | 'post_comment'; id: string; user_id: string }
+// 通報する対象。user_id は投稿者／コメントした人／募集を出した人
+export type PostReportTarget = { type: 'post' | 'post_comment' | 'wanted_post'; id: string; user_id: string }
 
-// フィードの投稿・コメントを通報するモーダル。クリエイターページの通報（プロフィール・作品）と同じ reports テーブルに、
-// target_type = 'post' / 'post_comment' で保存する（supabase/improve_feed.sql）。運営は /admin/reports で確認・削除できる。
+const REPORT_TITLES: Record<PostReportTarget['type'], string> = {
+  post: 'この投稿を通報',
+  post_comment: 'このコメントを通報',
+  wanted_post: 'この募集を通報',
+}
+
+// フィードの投稿・コメントと、募集ボードの募集を通報するモーダル。
+// クリエイターページの通報（プロフィール・作品）と同じ reports テーブルに、target_type を変えて保存する
+// （supabase/improve_feed.sql / add_wanted_board.sql）。運営は /admin/reports で確認・削除できる。
 export default function PostReportModal({
   target,
   onClose,
@@ -80,9 +87,7 @@ export default function PostReportModal({
         ) : (
           <>
             <div>
-              <h3 className="text-sm font-black text-slate-900">
-                {target.type === 'post' ? 'この投稿を通報' : 'このコメントを通報'}
-              </h3>
+              <h3 className="text-sm font-black text-slate-900">{REPORT_TITLES[target.type]}</h3>
               <p className="text-[11px] text-slate-400 mt-1">
                 無断転載や規約違反の疑いがある場合にお知らせください。内容は運営のみが確認します。
               </p>
