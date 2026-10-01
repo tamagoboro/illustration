@@ -138,6 +138,14 @@ export default function LoginPage() {
       setReferrerId(ref)
       setIsSignUp(true)
     }
+    // クリエイター向けの案内（「無料で作品を掲載する」など）から来た場合は、
+    // 最初から新規登録の画面を「クリエイターとして利用する」を選んだ状態で開く（/login?signup=creator）。
+    // 依頼者向けには /login?signup=client も使える
+    const signup = params.get('signup')
+    if (signup === 'creator' || signup === 'client') {
+      setIsSignUp(true)
+      setAccountType(signup)
+    }
     if (params.get('error') === 'oauth') {
       setErrorMsg('Googleログインに失敗しました。もう一度お試しください。')
     }
@@ -237,20 +245,34 @@ export default function LoginPage() {
       if (error) {
         setErrorMsg('登録に失敗しました: ' + error.message)
       } else {
+        // 登録できたら、そのままログイン状態にして次の画面へ進める。
+        // 以前は登録直後に「ログインしてください」と案内していたため、同じメールとパスワードを
+        // もう一度入力する必要があり、登録の手間になっていた。
+        // signUpがセッションを返さない設定でも、メール確認が済んでいる扱いならここでログインできる。
+        let sessionUser = data.session ? data.user : null
+        if (!sessionUser) {
+          const { data: signInData } = await supabase.auth.signInWithPassword({ email, password })
+          sessionUser = signInData?.user ?? null
+        }
+
         let avatarPending = false
-        if (data.user && data.session) {
+        if (sessionUser) {
           if (customAvatarFile) {
             try {
-              const uploadedUrl = await uploadCustomAvatar(data.user.id, customAvatarFile)
+              const uploadedUrl = await uploadCustomAvatar(sessionUser.id, customAvatarFile)
               const { data: updated } = await supabase.auth.updateUser({ data: { avatar_url: uploadedUrl } })
-              await ensureProfileFromSignupMetadata(updated.user || data.user)
+              await ensureProfileFromSignupMetadata(updated.user || sessionUser)
             } catch (uploadError) {
               console.error('アイコンアップロードエラー:', uploadError)
-              await ensureProfileFromSignupMetadata(data.user)
+              await ensureProfileFromSignupMetadata(sessionUser)
             }
           } else {
-            await ensureProfileFromSignupMetadata(data.user)
+            await ensureProfileFromSignupMetadata(sessionUser)
           }
+
+          // クリエイターはダッシュボードへ（先頭に「かんたん登録」が出る）。依頼者はトップページへ
+          router.push(accountType === 'creator' ? '/dashboard' : '/')
+          return
         } else if (customAvatarFile) {
           // メール確認が必要な設定の場合、この場ではアップロードできない
           avatarPending = true
@@ -272,10 +294,10 @@ export default function LoginPage() {
       if (error) {
         setErrorMsg('ログインに失敗しました。メールアドレスとパスワードを確認してください。')
       } else {
-        if (data.user) {
-          await ensureProfileFromSignupMetadata(data.user)
-        }
-        router.push('/')
+        // 登録後の最初のログイン（プロフィールを今回作った）でクリエイターなら、ダッシュボードへ案内する
+        const isFirstLogin = data.user ? await ensureProfileFromSignupMetadata(data.user) : false
+        const isCreator = data.user?.user_metadata?.account_type === 'creator'
+        router.push(isFirstLogin && isCreator ? '/dashboard' : '/')
       }
     }
 
@@ -403,7 +425,9 @@ export default function LoginPage() {
             {forgotMode
               ? '登録済みのメールアドレスに再設定用のリンクをお送りします'
               : isSignUp
-              ? 'お気に入り保存やマイページ機能を利用できます'
+              ? accountType === 'creator'
+                ? '無料でポートフォリオを作って、依頼を受け付けられます'
+                : 'お気に入り保存やマイページ機能を利用できます'
               : 'マイページにアクセスします'}
           </p>
         </div>

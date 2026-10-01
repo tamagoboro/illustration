@@ -863,7 +863,7 @@ export default function Home() {
               </p>
             </div>
             <Link
-              href="/login"
+              href="/login?signup=creator"
               className="px-6 py-3 bg-white text-sky-700 hover:bg-sky-50 font-black text-xs rounded-2xl shadow flex items-center gap-1 transition-all transform hover:-translate-y-0.5 shrink-0"
             >
               無料で作品を登録・掲載する <span>→</span>
@@ -1227,7 +1227,7 @@ export default function Home() {
                     条件をリセット
                   </button>
                   <Link
-                    href="/login"
+                    href="/login?signup=creator"
                     className="px-4 py-2 text-xs font-bold text-white bg-sky-500 rounded-xl hover:bg-sky-600 shadow-xs"
                   >
                     あなたが最初のクリエイターとして登録する

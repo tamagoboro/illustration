@@ -5,25 +5,26 @@ import type { SupabaseClient, User } from '@supabase/supabase-js'
 // メール確認が必須な設定の場合、signUp直後はまだセッションが無くDBへ書き込めないため、
 // （書き込みにはauth.uid()が必要）確認後の初回ログイン時にもここを呼び、
 // user_metadataに保存しておいた値から埋める。既にprofilesの行がある場合は何もしない。
-export async function ensureProfileFromSignupMetadata(user: User) {
+// 今回プロフィールを新しく作ったときだけ true を返す（＝登録後の最初のログイン。行き先を決めるのに使う）。
+export async function ensureProfileFromSignupMetadata(user: User): Promise<boolean> {
   const { data: existing } = await supabase
     .from('profiles')
     .select('user_id')
     .eq('user_id', user.id)
     .maybeSingle()
 
-  if (existing) return
+  if (existing) return false
 
   const meta = user.user_metadata || {}
   const displayName = typeof meta.display_name === 'string' ? meta.display_name.trim() : ''
-  if (!displayName) return
+  if (!displayName) return false
 
   // 新規登録時に選んだ「依頼者/クリエイター」で初期状態を分ける。
   // クリエイターを選んだ場合のみ、最初から一覧に公開しダッシュボード導線を表示する。
   // 依頼者を選んだ場合も、あとからダッシュボードで保存すればいつでもクリエイター化できる。
   const isCreator = meta.account_type === 'creator'
 
-  await supabase.from('profiles').upsert(
+  const { error } = await supabase.from('profiles').upsert(
     {
       user_id: user.id,
       is_public: isCreator,
@@ -46,6 +47,8 @@ export async function ensureProfileFromSignupMetadata(user: User) {
     },
     { onConflict: 'user_id' }
   )
+  if (error) console.error('プロフィール作成エラー:', error)
+  return !error
 }
 
 // Google等のOAuthログインでは、auth.usersへのINSERT時点でDBトリガー（handle_new_user）が

@@ -26,7 +26,7 @@ export default function CreatorJoinCta() {
             </ul>
           </div>
           <Link
-            href="/login"
+            href="/login?signup=creator"
             className="self-start text-center px-7 py-3.5 rounded-full bg-white text-violet-700 text-sm font-black shadow-lg hover:scale-105 active:scale-95 transition-transform"
           >
             無料でポートフォリオを作る →
