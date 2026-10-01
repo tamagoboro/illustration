@@ -14,6 +14,9 @@ import {
   COMMERCIAL_USE_LABELS,
   SOUL_STATUS_LABELS,
   MAX_SOUL_IMAGES,
+  MAX_SOUL_DELIVERABLES,
+  MAX_SOUL_PROFILE_ITEMS,
+  MAX_SOUL_FAQS,
   getSoulStatus,
   formatSoulPeriod,
   formatPrice,
@@ -37,7 +40,15 @@ type FormState = {
   startsAt: string
   endsAt: string
   isClosed: boolean
+  deliverables: string[]
+  characterProfile: { label: string; value: string }[]
+  faqs: { q: string; a: string }[]
 }
+
+// キャラクター設定表で、よく使う項目をワンタップで追加できるようにする
+const PROFILE_PRESETS = ['年齢', '身長', '誕生日', '性格', '一人称', '好きなもの', '苦手なもの', 'ファンネーム']
+// 納品物の例（ワンタップで追加）
+const DELIVERABLE_PRESETS = ['立ち絵（PNG・透過）', '表情差分', 'Live2D用パーツ分けPSD', '高解像度データ', '配信用アイコン', 'キャラクターデザイン資料']
 
 const emptyForm = (): FormState => ({
   id: null,
@@ -50,6 +61,9 @@ const emptyForm = (): FormState => ({
   startsAt: '',
   endsAt: '',
   isClosed: false,
+  deliverables: [],
+  characterProfile: [],
+  faqs: [],
 })
 
 const STATUS_STYLES: Record<string, string> = {
@@ -111,6 +125,9 @@ export default function DashboardSoulsPage() {
       startsAt: l.starts_at || '',
       endsAt: l.ends_at || '',
       isClosed: l.is_closed,
+      deliverables: [...l.deliverables],
+      characterProfile: l.character_profile.map((p) => ({ ...p })),
+      faqs: l.faqs.map((f) => ({ ...f })),
     })
   }
 
@@ -179,6 +196,11 @@ export default function DashboardSoulsPage() {
         starts_at: form.startsAt || null,
         ends_at: form.endsAt || null,
         is_closed: form.isClosed,
+        deliverables: form.deliverables.map((d) => d.trim()).filter(Boolean),
+        character_profile: form.characterProfile
+          .map((p) => ({ label: p.label.trim(), value: p.value.trim() }))
+          .filter((p) => p.label && p.value),
+        faqs: form.faqs.map((f) => ({ q: f.q.trim(), a: f.a.trim() })).filter((f) => f.q && f.a),
       }
       const { error } = form.id
         ? await supabase.from('soul_listings').update(row).eq('id', form.id)
@@ -492,6 +514,155 @@ export default function DashboardSoulsPage() {
                 onChange={(e) => updateForm({ description: e.target.value })}
               />
             </label>
+
+            {/* 納品物 */}
+            <div className="space-y-2 p-4 rounded-2xl bg-emerald-50/50 border border-emerald-100">
+              <div>
+                <span className="text-xs font-black text-slate-700">お迎えすると受け取れるもの（納品物）</span>
+                <p className="text-[10px] text-slate-400">✓付きの一覧で表示されます。何がもらえるか分かると、応募されやすくなります。</p>
+              </div>
+              {form.deliverables.map((d, i) => (
+                <div key={i} className="flex gap-2">
+                  <input
+                    className={inputClass}
+                    maxLength={60}
+                    placeholder="例：表情差分 ×5"
+                    value={d}
+                    onChange={(e) => updateForm({ deliverables: form.deliverables.map((x, j) => (j === i ? e.target.value : x)) })}
+                  />
+                  <button
+                    onClick={() => updateForm({ deliverables: form.deliverables.filter((_, j) => j !== i) })}
+                    className="px-2 text-slate-300 hover:text-rose-500 text-sm cursor-pointer"
+                    aria-label="削除"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              {form.deliverables.length < MAX_SOUL_DELIVERABLES && (
+                <div className="flex flex-wrap gap-1.5">
+                  {DELIVERABLE_PRESETS.filter((p) => !form.deliverables.includes(p)).map((preset) => (
+                    <button
+                      key={preset}
+                      onClick={() => updateForm({ deliverables: [...form.deliverables, preset] })}
+                      className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-50 cursor-pointer"
+                    >
+                      ＋ {preset}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => updateForm({ deliverables: [...form.deliverables, ''] })}
+                    className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-500 text-white cursor-pointer"
+                  >
+                    ＋ 自由に追加
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* キャラクター設定 */}
+            <div className="space-y-2 p-4 rounded-2xl bg-violet-50/50 border border-violet-100">
+              <div>
+                <span className="text-xs font-black text-slate-700">キャラクター設定表</span>
+                <p className="text-[10px] text-slate-400">年齢・身長・性格などを表にして表示します。</p>
+              </div>
+              {form.characterProfile.map((item, i) => (
+                <div key={i} className="flex gap-2">
+                  <input
+                    className={`${inputClass} w-32 shrink-0`}
+                    maxLength={20}
+                    placeholder="項目"
+                    value={item.label}
+                    onChange={(e) =>
+                      updateForm({
+                        characterProfile: form.characterProfile.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)),
+                      })
+                    }
+                  />
+                  <input
+                    className={inputClass}
+                    maxLength={100}
+                    placeholder="内容（例：158cm）"
+                    value={item.value}
+                    onChange={(e) =>
+                      updateForm({
+                        characterProfile: form.characterProfile.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)),
+                      })
+                    }
+                  />
+                  <button
+                    onClick={() => updateForm({ characterProfile: form.characterProfile.filter((_, j) => j !== i) })}
+                    className="px-2 text-slate-300 hover:text-rose-500 text-sm cursor-pointer"
+                    aria-label="削除"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              {form.characterProfile.length < MAX_SOUL_PROFILE_ITEMS && (
+                <div className="flex flex-wrap gap-1.5">
+                  {PROFILE_PRESETS.filter((p) => !form.characterProfile.some((x) => x.label === p)).map((preset) => (
+                    <button
+                      key={preset}
+                      onClick={() => updateForm({ characterProfile: [...form.characterProfile, { label: preset, value: '' }] })}
+                      className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-white border border-violet-200 text-violet-700 hover:bg-violet-50 cursor-pointer"
+                    >
+                      ＋ {preset}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => updateForm({ characterProfile: [...form.characterProfile, { label: '', value: '' }] })}
+                    className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-violet-500 text-white cursor-pointer"
+                  >
+                    ＋ 自由に追加
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* よくある質問 */}
+            <div className="space-y-2 p-4 rounded-2xl bg-sky-50/50 border border-sky-100">
+              <div>
+                <span className="text-xs font-black text-slate-700">よくある質問（Q&amp;A）</span>
+                <p className="text-[10px] text-slate-400">「名前は変えられますか？」など、応募前に気になりそうなことを先に答えておけます。</p>
+              </div>
+              {form.faqs.map((faq, i) => (
+                <div key={i} className="space-y-1.5 bg-white rounded-xl p-3 border border-sky-100">
+                  <div className="flex gap-2">
+                    <input
+                      className={inputClass}
+                      maxLength={100}
+                      placeholder="質問（例：名前は変えられますか？）"
+                      value={faq.q}
+                      onChange={(e) => updateForm({ faqs: form.faqs.map((x, j) => (j === i ? { ...x, q: e.target.value } : x)) })}
+                    />
+                    <button
+                      onClick={() => updateForm({ faqs: form.faqs.filter((_, j) => j !== i) })}
+                      className="px-2 text-slate-300 hover:text-rose-500 text-sm cursor-pointer"
+                      aria-label="削除"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <textarea
+                    rows={2}
+                    className={inputClass}
+                    maxLength={500}
+                    placeholder="答え"
+                    value={faq.a}
+                    onChange={(e) => updateForm({ faqs: form.faqs.map((x, j) => (j === i ? { ...x, a: e.target.value } : x)) })}
+                  />
+                </div>
+              ))}
+              {form.faqs.length < MAX_SOUL_FAQS && (
+                <button
+                  onClick={() => updateForm({ faqs: [...form.faqs, { q: '', a: '' }] })}
+                  className="text-[11px] font-bold text-sky-600 hover:underline cursor-pointer"
+                >
+                  ＋ 質問を追加
+                </button>
+              )}
+            </div>
 
             {form.id && (
               <label className="flex items-center gap-2 text-xs font-bold text-slate-600 cursor-pointer">

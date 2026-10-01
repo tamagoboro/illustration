@@ -246,7 +246,15 @@ DBを変更したら、この記録も更新すること。
 - sort_order: integer not null default 0
 - created_at: timestamp with time zone not null default now()
 - updated_at: timestamp with time zone not null default now()
+- deliverables: jsonb not null default '[]'（納品物リスト。add_soul_listing_details.sql）
+- character_profile: jsonb not null default '[]'（キャラクター設定表）
+- faqs: jsonb not null default '[]'（よくある質問）
 - ※ user_id にユニーク制約（1クリエイター1件まで）
+
+## soul_interests
+- user_id: uuid not null
+- soul_listing_id: uuid not null
+- created_at: timestamp with time zone not null default now()
 
 ## user_icon_rings
 - user_id: uuid not null

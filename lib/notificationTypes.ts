@@ -8,6 +8,7 @@ export const NOTIFICATION_TYPE_GROUPS: { title: string; items: NotificationTypeO
     items: [
       { type: 'new_request', label: '新しいリクエスト', description: '依頼者からリクエストが届いたとき' },
       { type: 'soul_application', label: '魂募集への応募', description: '魂募集イラストに応募があったとき' },
+      { type: 'soul_interest', label: '魂募集の「気になる」', description: '魂募集が「気になる」に追加されたとき' },
       { type: 'request_response', label: 'リクエストへの返信', description: '自分が送ったリクエストが承諾・辞退されたとき' },
       { type: 'new_review', label: 'レビュー', description: 'レビューが投稿されたとき' },
     ],

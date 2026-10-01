@@ -21,6 +21,7 @@ add_soul_listings_and_discord.sql で soul_listings / creator_follows / favorite
 | favorite_creators | trg_notify_creator_on_new_favorite | notify_creator_on_new_favorite |
 | creator_follows | trg_notify_creator_on_new_follower | notify_creator_on_new_follower |
 | soul_listings | set_soul_listings_updated_at | update_updated_at_column |
+| soul_interests | trg_notify_creator_on_soul_interest | notify_creator_on_soul_interest |
 | favorite_creators | trg_sync_profile_likes_count | sync_profile_likes_count（お気に入りの増減で likes_count を集計） |
 | post_likes | trg_notify_author_on_post_like | notify_author_on_post_like |
 | post_comments | trg_notify_author_on_post_comment | notify_author_on_post_comment |

@@ -1,5 +1,7 @@
 // 魂募集イラスト（soul_listings）の型と表示用の共通処理
 export type SoulPrice = { label: string; price: number | null }
+export type SoulProfileItem = { label: string; value: string }
+export type SoulFaq = { q: string; a: string }
 
 export type SoulListing = {
   id: string
@@ -15,6 +17,9 @@ export type SoulListing = {
   ends_at: string | null
   is_closed: boolean
   sort_order: number
+  deliverables: string[] // 納品物リスト
+  character_profile: SoulProfileItem[] // キャラクター設定表
+  faqs: SoulFaq[] // よくある質問
   created_at?: string
   updated_at?: string
 }
@@ -58,7 +63,32 @@ export const MAX_SOUL_IMAGES = 4
 // DBの行を画面用に整える（画像を4枚まで追加する前の行は image_url だけなので、それを1枚目として扱う）
 export const normalizeSoulListing = (row: any): SoulListing => {
   const images: string[] = Array.isArray(row.image_urls) && row.image_urls.length ? row.image_urls : row.image_url ? [row.image_url] : []
-  return { ...row, image_urls: images.slice(0, MAX_SOUL_IMAGES), image_url: images[0] || row.image_url, prices: normalizePrices(row.prices) }
+  return {
+    ...row,
+    image_urls: images.slice(0, MAX_SOUL_IMAGES),
+    image_url: images[0] || row.image_url,
+    prices: normalizePrices(row.prices),
+    deliverables: Array.isArray(row.deliverables) ? row.deliverables.filter((d: unknown) => typeof d === 'string' && d.trim()) : [],
+    character_profile: Array.isArray(row.character_profile)
+      ? row.character_profile
+          .filter((p: any) => p && typeof p.label === 'string' && typeof p.value === 'string' && p.label.trim())
+          .map((p: any) => ({ label: p.label, value: p.value }))
+      : [],
+    faqs: Array.isArray(row.faqs)
+      ? row.faqs.filter((f: any) => f && typeof f.q === 'string' && f.q.trim()).map((f: any) => ({ q: f.q, a: typeof f.a === 'string' ? f.a : '' }))
+      : [],
+  }
+}
+
+export const MAX_SOUL_DELIVERABLES = 20
+export const MAX_SOUL_PROFILE_ITEMS = 20
+export const MAX_SOUL_FAQS = 15
+
+// 掲載終了日までの残り日数（終了日が無ければnull、当日は0）
+export function soulDaysLeft(listing: Pick<SoulListing, 'ends_at'>, today = todayInJapan()) {
+  if (!listing.ends_at) return null
+  const diff = (new Date(`${listing.ends_at}T00:00:00Z`).getTime() - new Date(`${today}T00:00:00Z`).getTime()) / 86400000
+  return Math.max(0, Math.round(diff))
 }
 
 export const normalizePrices = (raw: unknown): SoulPrice[] =>
