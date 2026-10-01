@@ -42,7 +42,7 @@ export default function RecentlyViewedCreators() {
       <h2 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-1.5">
         🕐 最近見たクリエイター
       </h2>
-      <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1">
+      <div className="flex gap-3 overflow-x-auto py-2.5 -mx-2 px-2.5">
         {items.map((item) => (
           <Link
             key={item.userId}

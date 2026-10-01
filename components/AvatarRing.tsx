@@ -5,7 +5,11 @@ import { useIconRing } from '@/lib/iconRings'
 
 // 購入したアイコンリングをアバターの周りに表示する共通コンポーネント。
 // サイト内でアイコンが表示される箇所はすべて円形に統一し、リング画像の形が崩れないようにする。
-// アバター本体はリングの内側の穴に収まるよう76%サイズで中央配置。
+//
+// アイコン本体は、リングの有無にかかわらず常に size のまま表示する（リングを付けた人だけアイコンが
+// 小さくなるのを防ぐ）。リング画像は穴（内側76%）がアイコンにぴったり重なるよう、外側にはみ出して描く。
+// はみ出す分は周りのレイアウトに影響しない（size の枠のまま）。
+const RING_HOLE_RATIO = 0.76
 export default function AvatarRing({
   src,
   alt,
@@ -43,30 +47,24 @@ export default function AvatarRing({
     )
   }
 
+  // リング画像の大きさと、外側へはみ出す幅
+  const ringSize = size / RING_HOLE_RATIO
+  const overhang = (ringSize - size) / 2
+
   return (
     <div style={{ width: size, height: size, position: 'relative' }}>
-      <div
-        style={{
-          position: 'absolute',
-          top: '12%',
-          left: '12%',
-          width: '76%',
-          height: '76%',
-          borderRadius: '9999px',
-          overflow: 'hidden',
-        }}
-      >
-        {avatarInner}
-      </div>
+      <div style={{ position: 'absolute', inset: 0, borderRadius: '9999px', overflow: 'hidden' }}>{avatarInner}</div>
       <img
         src={ring.image}
         alt=""
         aria-hidden="true"
         style={{
           position: 'absolute',
-          inset: 0,
-          width: '100%',
-          height: '100%',
+          top: -overhang,
+          left: -overhang,
+          width: ringSize,
+          height: ringSize,
+          maxWidth: 'none',
           pointerEvents: 'none',
         }}
       />

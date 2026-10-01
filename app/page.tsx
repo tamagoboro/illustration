@@ -1408,7 +1408,7 @@ export default function Home() {
                       <div className="p-3.5 space-y-2.5 flex-1 flex flex-col justify-between">
                         <div className="space-y-2">
                           <div className="space-y-0.5">
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-2.5">
                               <AvatarRing
                                 src={profile.avatar_url}
                                 alt=""
