@@ -114,6 +114,16 @@ export default function RewardsPage() {
     init()
   }, [])
 
+  // ログインボーナスのポップアップでポイントが増えたら、表示中の残高にも反映する
+  useEffect(() => {
+    const onUpdated = (e: Event) => {
+      const next = (e as CustomEvent<{ balance?: number }>).detail?.balance
+      if (typeof next === 'number') setBalance(next)
+    }
+    window.addEventListener('drawker:points-updated', onUpdated)
+    return () => window.removeEventListener('drawker:points-updated', onUpdated)
+  }, [])
+
   const handlePurchase = async (ringId: string) => {
     if (!userId) return
     setBusyRingId(ringId)
