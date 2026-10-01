@@ -4,82 +4,14 @@ import { useState, useEffect, ChangeEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { ensureProfileFromSignupMetadata } from '@/lib/ensureProfile'
+import { ensureProfileFromSignupMetadata, completeProfileSetup } from '@/lib/ensureProfile'
+import { readReturnPath, saveSignupType } from '@/lib/returnPath'
+import { markProfileReady } from '@/components/SessionGuard'
+import { AVATAR_PRESETS, buildAvatarDataUrl, uploadCustomAvatar } from '@/lib/avatar'
 
 // トップページ（app/page.tsx）と同じ背景画像・世界観に統一
 const BACKGROUND_IMAGE_URL =
   'https://qcklfkslqtjnxufqcqyi.supabase.co/storage/v1/object/public/portfolios/bg.png'
-
-// 新規登録時にアップロード不要で選べるプリセットアイコン（絵文字＋グラデーションのSVGをその場で生成）
-const AVATAR_PRESETS: { id: string; emoji: string; colors: [string, string] }[] = [
-  { id: 'cloud', emoji: '☁️', colors: ['#38bdf8', '#22d3ee'] },
-  { id: 'palette', emoji: '🎨', colors: ['#fb923c', '#f59e0b'] },
-  { id: 'pencil', emoji: '✏️', colors: ['#60a5fa', '#818cf8'] },
-  { id: 'star', emoji: '⭐', colors: ['#f472b6', '#fb7185'] },
-  { id: 'brush', emoji: '🖌️', colors: ['#34d399', '#10b981'] },
-  { id: 'sparkle', emoji: '💫', colors: ['#a78bfa', '#8b5cf6'] },
-]
-
-const buildAvatarDataUrl = (colors: [string, string], emoji: string) => {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${colors[0]}"/><stop offset="1" stop-color="${colors[1]}"/></linearGradient></defs><rect width="200" height="200" rx="100" fill="url(#g)"/><text x="50%" y="54%" font-size="96" text-anchor="middle" dominant-baseline="middle">${emoji}</text></svg>`
-  return `data:image/svg+xml,${encodeURIComponent(svg)}`
-}
-
-// アップロードされた画像をアイコン用に軽量化（600px・webp）してからStorageへ保存する
-const compressAvatarImage = (file: File, maxWidth = 600, quality = 0.85): Promise<Blob> => {
-  return new Promise((resolve, reject) => {
-    if (file.size > 10 * 1024 * 1024) {
-      reject(new Error('ファイルサイズが大きすぎます（10MB以下の画像を選択してください）'))
-      return
-    }
-    if (!file.type.startsWith('image/')) {
-      reject(new Error('画像ファイルを選択してください'))
-      return
-    }
-
-    const img = new Image()
-    const objectUrl = URL.createObjectURL(file)
-    img.onload = () => {
-      URL.revokeObjectURL(objectUrl)
-      let { width, height } = img
-      if (width > maxWidth) {
-        height = Math.round((height * maxWidth) / width)
-        width = maxWidth
-      }
-      const canvas = document.createElement('canvas')
-      canvas.width = width
-      canvas.height = height
-      const ctx = canvas.getContext('2d')
-      if (!ctx) {
-        reject(new Error('画像の処理に失敗しました'))
-        return
-      }
-      ctx.drawImage(img, 0, 0, width, height)
-      canvas.toBlob(
-        (blob) => (blob ? resolve(blob) : reject(new Error('画像の圧縮に失敗しました'))),
-        'image/webp',
-        quality
-      )
-    }
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl)
-      reject(new Error('画像の読み込みに失敗しました。別の画像でお試しください。'))
-    }
-    img.src = objectUrl
-  })
-}
-
-const uploadCustomAvatar = async (userId: string, file: File): Promise<string> => {
-  const blob = await compressAvatarImage(file)
-  const fileName = `${userId}/avatar_${Date.now()}.webp`
-  const { error: uploadError } = await supabase.storage
-    .from('portfolios')
-    .upload(fileName, blob, { contentType: 'image/webp', upsert: true })
-  if (uploadError) throw uploadError
-
-  const { data } = supabase.storage.from('portfolios').getPublicUrl(fileName)
-  return data.publicUrl
-}
 
 export default function LoginPage() {
   const router = useRouter()
@@ -149,10 +81,6 @@ export default function LoginPage() {
     if (params.get('error') === 'oauth') {
       setErrorMsg('Googleログインに失敗しました。もう一度お試しください。')
     }
-    if (params.get('error') === 'not_registered') {
-      setErrorMsg('このGoogleアカウントはまだ登録されていません。お手数ですが、メールアドレスで新規登録をお願いします。')
-      setIsSignUp(true)
-    }
   }, [])
 
   const handleCustomAvatarChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -179,9 +107,10 @@ export default function LoginPage() {
 
   const [googleLoading, setGoogleLoading] = useState(false)
 
-  // Googleでのログイン。新規登録（このGoogleアカウントでの初回サインイン）は、
-  // app/auth/callback/route.ts 側で常に弾く方針にしたため、このボタン自体もログイン中の
-  // 画面（isSignUp=false）でしか表示しない。新しいアカウントはメールでのみ作れる。
+  // Googleでのログイン・新規登録。
+  // 初めてのGoogleアカウントの場合は、戻ってきたあと app/auth/callback/route.ts が初期設定の画面（/welcome）へ送り、
+  // 表示名・アイコン・利用方法（依頼者/クリエイター）を入力してもらう。
+  // （以前は、名前もアイコンも未設定のまま登録が完了してしまうため、Googleでの新規登録を止めていた）
   const handleGoogleLogin = async () => {
     if (!agreedTerms) {
       setErrorMsg('利用規約への同意が必要です。')
@@ -189,10 +118,13 @@ export default function LoginPage() {
     }
     setErrorMsg('')
     setGoogleLoading(true)
+    // 新規登録の画面で選んでいた利用方法を、初期設定の画面へ引き継ぐ
+    saveSignupType(isSignUp ? accountType : null)
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        // ログイン後は、ログイン前に見ていたページへ戻る
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(readReturnPath())}`,
       },
     })
     if (error) {
@@ -257,21 +189,23 @@ export default function LoginPage() {
 
         let avatarPending = false
         if (sessionUser) {
+          // アイコンは、選んだプリセットか、アップロードした画像（失敗したらプリセット）
+          let avatarUrl = buildAvatarDataUrl(selectedAvatar.colors, selectedAvatar.emoji)
           if (customAvatarFile) {
             try {
-              const uploadedUrl = await uploadCustomAvatar(sessionUser.id, customAvatarFile)
-              const { data: updated } = await supabase.auth.updateUser({ data: { avatar_url: uploadedUrl } })
-              await ensureProfileFromSignupMetadata(updated.user || sessionUser)
+              avatarUrl = await uploadCustomAvatar(sessionUser.id, customAvatarFile)
+              await supabase.auth.updateUser({ data: { avatar_url: avatarUrl } })
             } catch (uploadError) {
               console.error('アイコンアップロードエラー:', uploadError)
-              await ensureProfileFromSignupMetadata(sessionUser)
             }
-          } else {
-            await ensureProfileFromSignupMetadata(sessionUser)
           }
 
-          // クリエイターはダッシュボードへ（先頭に「かんたん登録」が出る）。依頼者はトップページへ
-          router.push(accountType === 'creator' ? '/dashboard' : '/')
+          // 選んだ表示名・アイコン・利用方法をプロフィールへ反映する
+          await completeProfileSetup(sessionUser.id, { displayName, avatarUrl, accountType })
+          markProfileReady(sessionUser.id)
+
+          // クリエイターはダッシュボードへ（先頭に「かんたん登録」が出る）。依頼者は登録前に見ていたページへ戻る
+          router.push(accountType === 'creator' ? '/dashboard' : readReturnPath())
           return
         } else if (customAvatarFile) {
           // メール確認が必要な設定の場合、この場ではアップロードできない
@@ -297,7 +231,8 @@ export default function LoginPage() {
         // 登録後の最初のログイン（プロフィールを今回作った）でクリエイターなら、ダッシュボードへ案内する
         const isFirstLogin = data.user ? await ensureProfileFromSignupMetadata(data.user) : false
         const isCreator = data.user?.user_metadata?.account_type === 'creator'
-        router.push(isFirstLogin && isCreator ? '/dashboard' : '/')
+        // それ以外は、ログイン前に見ていたページへ戻る（依頼やフォローの途中で迷子にならないように）
+        router.push(isFirstLogin && isCreator ? '/dashboard' : readReturnPath())
       }
     }
 
@@ -533,34 +468,25 @@ export default function LoginPage() {
             </label>
           </div>
 
-          {/* Googleでの新規登録は不可（isBrandNewUserとして弾かれる）。既存アカウントの
-              ログインだけに使わせるため、ボタンごとログイン状態のときしか出さない。 */}
-          {isSignUp ? (
-            <p className="text-[10px] text-slate-400 text-center">
-              新規登録はメールアドレスのみで行えます（Googleでの新規登録は現在ご利用いただけません）。
+          {/* Googleでログイン／登録。初めてのアカウントなら、このあと表示名と利用方法を入力する画面（/welcome）に進む */}
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            disabled={googleLoading || !agreedTerms}
+            className="w-full py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold rounded-2xl transition text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer active:scale-95 flex items-center justify-center gap-2.5"
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+              <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.9c1.7-1.57 2.7-3.87 2.7-6.62z" />
+              <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.9-2.26c-.8.54-1.84.86-3.06.86-2.35 0-4.34-1.59-5.05-3.72H.96v2.33A9 9 0 0 0 9 18z" />
+              <path fill="#FBBC05" d="M3.95 10.7A5.4 5.4 0 0 1 3.67 9c0-.59.1-1.17.28-1.7V4.97H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.03l2.99-2.33z" />
+              <path fill="#EA4335" d="M9 3.58c1.32 0 2.51.46 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.97l2.99 2.33C4.66 5.17 6.65 3.58 9 3.58z" />
+            </svg>
+            {googleLoading ? '処理中...' : isSignUp ? 'Googleで登録する（パスワード不要）' : 'Googleでログイン'}
+          </button>
+          {!agreedTerms && (
+            <p className="text-[10px] text-slate-400 text-center -mt-2">
+              Googleを使う場合も、上のチェックが必要です。
             </p>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={handleGoogleLogin}
-                disabled={googleLoading || !agreedTerms}
-                className="w-full py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold rounded-2xl transition text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer active:scale-95 flex items-center justify-center gap-2.5"
-              >
-                <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-                  <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.9c1.7-1.57 2.7-3.87 2.7-6.62z" />
-                  <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.9-2.26c-.8.54-1.84.86-3.06.86-2.35 0-4.34-1.59-5.05-3.72H.96v2.33A9 9 0 0 0 9 18z" />
-                  <path fill="#FBBC05" d="M3.95 10.7A5.4 5.4 0 0 1 3.67 9c0-.59.1-1.17.28-1.7V4.97H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.03l2.99-2.33z" />
-                  <path fill="#EA4335" d="M9 3.58c1.32 0 2.51.46 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.97l2.99 2.33C4.66 5.17 6.65 3.58 9 3.58z" />
-                </svg>
-                {googleLoading ? '処理中...' : 'Googleでログイン'}
-              </button>
-              {!agreedTerms && (
-                <p className="text-[10px] text-slate-400 text-center -mt-2">
-                  Googleを使う場合も、上のチェックが必要です。
-                </p>
-              )}
-            </>
           )}
 
           <div className="flex items-center gap-3">

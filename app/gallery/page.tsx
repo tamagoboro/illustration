@@ -3,6 +3,14 @@ import { supabase } from '@/lib/supabase'
 import ProtectedImage from '@/components/ProtectedImage'
 import SimpleHeader from '@/components/SimpleHeader'
 import { backgroundImageStyle } from '@/lib/background'
+import { buildPageMetadata } from '@/lib/pageMetadata'
+
+export const metadata = buildPageMetadata({
+  title: '新着作品｜クリエイターの最新イラストから探す',
+  description:
+    'Drawkerに掲載中のイラストレーター・クリエイターの新着作品を一覧で見られます。気になる絵柄を見つけたら、そのまま作者の料金・納期を確認して依頼の相談ができます。',
+  path: '/gallery',
+})
 
 export const revalidate = 300
 

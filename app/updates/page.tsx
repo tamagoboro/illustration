@@ -2,6 +2,14 @@ import Link from 'next/link'
 import SimpleHeader from '@/components/SimpleHeader'
 import { backgroundImageStyle } from '@/lib/background'
 import { UPDATES } from '@/lib/updates'
+import { buildPageMetadata } from '@/lib/pageMetadata'
+
+export const metadata = buildPageMetadata({
+  title: 'お知らせ・アップデート履歴',
+  description:
+    'Drawkerの新機能や変更点のお知らせです。',
+  path: '/updates',
+})
 
 const HIGHLIGHT_FEATURES = [
   '直接リクエスト機能（見積もりフォームにない内容もクリエイターへ直接相談できます）',

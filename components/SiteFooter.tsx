@@ -7,6 +7,7 @@ const FOOTER_LINKS = [
   { href: '/updates', label: 'お知らせ' },
   { href: '/ranking', label: '注目クリエイター' },
   { href: '/favorites', label: 'お気に入り一覧' },
+  { href: '/about', label: '運営者情報・お問い合わせ' },
   { href: '/terms', label: '利用規約' },
   { href: '/privacy', label: 'プライバシーポリシー' },
 ]

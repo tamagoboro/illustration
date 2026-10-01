@@ -1,20 +1,14 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseRouteClient } from '@/lib/supabaseServer'
-import { fillProfileFromOAuthMetadata } from '@/lib/ensureProfile'
-
-// 「未登録のGoogleアカウントで、ログイン扱いのまま入れてしまう」のを防ぐための判定。
-// Supabaseはユーザーの初回サインインかどうかを直接は教えてくれないため、
-// created_at（アカウント作成時刻）と last_sign_in_at（今回のサインイン時刻）がほぼ同時なら
-// 「たった今この場で作られたアカウント＝初回」とみなす（数秒のズレは許容する）。
-function isBrandNewUser(user: { created_at: string; last_sign_in_at?: string | null }): boolean {
-  if (!user.last_sign_in_at) return true
-  const createdAt = new Date(user.created_at).getTime()
-  const signedInAt = new Date(user.last_sign_in_at).getTime()
-  return Math.abs(signedInAt - createdAt) < 5000
-}
 
 // Google等のOAuthログイン後にSupabaseから戻ってくる先（signInWithOAuthのredirectToに指定）。
-// 受け取った認可コードをセッションと交換し、プロフィールが未作成/空欄なら埋めてからリダイレクトする。
+// 受け取った認可コードをセッションと交換し、次の画面へリダイレクトする。
+//
+// 初めてのGoogleアカウントでは、DBのトリガー（handle_new_user）が表示名の空なプロフィールを作るだけで、
+// 名前・アイコン・利用方法（依頼者/クリエイター）が決まっていない。
+// 以前はこの状態のまま登録が完了してしまうため、Googleでの新規登録そのものを止めていた。
+// いまは、表示名がまだ無い人を初期設定の画面（/welcome）へ送り、そこで入力してもらってから先へ進める。
+// （/welcome を途中で閉じても、components/SessionGuard.tsx が次に開いたページから /welcome へ戻す）
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
@@ -27,21 +21,14 @@ export async function GET(request: Request) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error && data.user) {
-      // Googleでの新規登録は許可しない方針（新しいアカウントはメールでのみ作成できる）。
-      // このGoogleアカウントでの登録がまだ無い（＝たった今初めて作られた）場合は、
-      // そのまま入れずに一旦サインアウトする。
-      // Supabase Auth側にはもうこのアカウントが作られてしまっているが、実害はない
-      // （メールでの登録が別途必要で、このGoogleアカウント自体を使い道にする手段が無い）。
-      if (isBrandNewUser(data.user)) {
-        await supabase.auth.signOut()
-        return NextResponse.redirect(`${origin}/login?error=not_registered`)
-      }
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('display_name')
+        .eq('user_id', data.user.id)
+        .maybeSingle()
 
-      try {
-        await fillProfileFromOAuthMetadata(supabase, data.user)
-      } catch (e) {
-        // プロフィール補完に失敗してもログイン自体は成立させる（ダッシュボードで後から直せる）
-        console.error('OAuthプロフィール補完エラー:', e)
+      if (!profile?.display_name?.trim()) {
+        return NextResponse.redirect(`${origin}/welcome?next=${encodeURIComponent(next)}`)
       }
       return NextResponse.redirect(`${origin}${next}`)
     }

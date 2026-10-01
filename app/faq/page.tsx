@@ -1,14 +1,14 @@
-import type { Metadata } from 'next'
 import Link from 'next/link'
+import { buildPageMetadata } from '@/lib/pageMetadata'
 import SimpleHeader from '@/components/SimpleHeader'
 import { backgroundImageStyle } from '@/lib/background'
 
-const SITE_NAME = 'Drawker（ドローカー）'
-
-export const metadata: Metadata = {
-  title: `よくある質問 | ${SITE_NAME}`,
+// title にサイト名は付けない（app/layout.tsx のテンプレートが付けるので、書くと二重になる）
+export const metadata = buildPageMetadata({
+  title: 'よくある質問',
   description: 'Drawkerの使い方・手数料・支払い・トラブル時の対応など、よくある質問をまとめました。',
-}
+  path: '/faq',
+})
 
 const FAQS: { q: string; a: React.ReactNode }[] = [
   {

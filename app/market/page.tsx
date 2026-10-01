@@ -2,6 +2,14 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import SimpleHeader from '@/components/SimpleHeader'
 import { backgroundImageStyle } from '@/lib/background'
+import { buildPageMetadata } from '@/lib/pageMetadata'
+
+export const metadata = buildPageMetadata({
+  title: 'イラスト依頼の相場マップ｜アイコン・立ち絵・一枚絵の料金目安',
+  description:
+    'アイコン・立ち絵・一枚絵など、イラスト依頼の料金相場の目安をメニュー別・ジャンル別にまとめました。掲載中クリエイターの実際の料金メニューをもとに集計しています。',
+  path: '/market',
+})
 
 export const revalidate = 300
 

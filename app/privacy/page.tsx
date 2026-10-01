@@ -1,4 +1,12 @@
 import Link from 'next/link'
+import { buildPageMetadata } from '@/lib/pageMetadata'
+
+export const metadata = buildPageMetadata({
+  title: 'プライバシーポリシー',
+  description:
+    'Drawker（ドローカー）のプライバシーポリシーです。取得する情報とその利用目的、お問い合わせ窓口について記載しています。',
+  path: '/privacy',
+})
 
 export default function PrivacyPage() {
   return (

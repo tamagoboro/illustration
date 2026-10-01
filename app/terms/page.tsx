@@ -1,4 +1,12 @@
 import Link from 'next/link'
+import { buildPageMetadata } from '@/lib/pageMetadata'
+
+export const metadata = buildPageMetadata({
+  title: '利用規約',
+  description:
+    'Drawker（ドローカー）の利用規約です。',
+  path: '/terms',
+})
 
 export default function TermsPage() {
   return (

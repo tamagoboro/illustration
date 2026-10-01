@@ -1,6 +1,14 @@
 import Link from 'next/link'
 import SimpleHeader from '@/components/SimpleHeader'
 import { backgroundImageStyle } from '@/lib/background'
+import { buildPageMetadata } from '@/lib/pageMetadata'
+
+export const metadata = buildPageMetadata({
+  title: '使い方ガイド｜Drawkerのご利用の流れ',
+  description:
+    'Drawkerでクリエイターを探して依頼するまでの流れと、手数料0円で直接取引できる仕組み、安全に利用するための注意点をまとめました。',
+  path: '/guide',
+})
 
 const STEPS = [
   {

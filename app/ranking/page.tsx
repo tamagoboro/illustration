@@ -5,6 +5,14 @@ import SimpleHeader from '@/components/SimpleHeader'
 import CreatorThumbnailSlideshow, { ThumbnailSlide } from '@/components/CreatorThumbnailSlideshow'
 import { backgroundImageStyle } from '@/lib/background'
 import { MODERATED_PLACEHOLDER_URL } from '@/lib/storageUtils'
+import { buildPageMetadata } from '@/lib/pageMetadata'
+
+export const metadata = buildPageMetadata({
+  title: '今週の注目クリエイター',
+  description:
+    '閲覧数の急上昇や問い合わせの多さなど、行動データをもとに自動で集計した、いま注目されているイラストレーター・クリエイターを紹介します。',
+  path: '/ranking',
+})
 
 export const revalidate = 600
 
