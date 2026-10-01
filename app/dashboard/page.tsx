@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase'
 import { ItemDiscountConfig, toDateInputValue, fromDateInputValue } from '@/lib/discount'
 import NotificationBell from '@/components/NotificationBell'
 import { backgroundImageStyle } from '@/lib/background'
+import QuickStartPanel from '@/components/dashboard/QuickStartPanel'
 
 const PRESET_TASTES = [
   'アイコン',
@@ -187,10 +188,16 @@ export default function Dashboard() {
   const savedAvatarUrlRef = useRef('')
   const savedPortfolioUrlsRef = useRef<string[]>(['', '', '', ''])
 
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([
-    { title: 'アイコン制作', price: 5000 },
-    { title: 'ヘッダー制作', price: 8000 }
-  ])
+  // 最初は空の1行だけにしておく（例は入力欄のプレースホルダーで見せる）。
+  // 以前は見本の「アイコン制作 ¥5,000」「ヘッダー制作 ¥8,000」を初期値として入れていたため、
+  // 料金を一度も設定していない人が別の項目を保存しただけで、見本が本人の料金として公開されていた。
+  // 名前が空の行は保存時に取り除かれるので、空の行はそのまま保存しても公開されない。
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([{ title: '', price: '' }])
+
+  // 「かんたん登録」（作品・料金・タグの3つだけを入れる画面）を出すかどうか。
+  // 読み込んだ時点で3つがそろっていない人に出し、保存できたら閉じる
+  const [showQuickStart, setShowQuickStart] = useState(false)
+  const [quickStartShowPublicToggle, setQuickStartShowPublicToggle] = useState(false)
   const [expandedDiscountRows, setExpandedDiscountRows] = useState<Set<number>>(new Set())
 
   // 料金メニューの載せ方。文字で1項目ずつ入力するか、手持ちの料金表（おしながき）の画像を載せるかを選べる。
@@ -381,6 +388,15 @@ export default function Dashboard() {
           setPortfolioFocal(focal)
           savedPortfolioUrlsRef.current = urls
         }
+
+        // 一覧に載って見つけてもらうのに最低限必要な3つ（作品・料金・タグ）がそろっていない人には、
+        // 先頭に「かんたん登録」を出す。作品の読み込みに失敗したときは、そろっているか判断できないので出さない
+        const loadedHasWork = !!portfolioData && portfolioData.length > 0
+        const loadedHasPrice =
+          (safeParseInt(profileData?.price_min) ?? 0) > 0 || (profileData?.price_menu_images?.length ?? 0) > 0
+        const loadedHasTags = (profileData?.tastes?.length ?? 0) > 0
+        setShowQuickStart(!portfolioError && !(loadedHasWork && loadedHasPrice && loadedHasTags))
+        setQuickStartShowPublicToggle(profileData?.is_public === false)
 
         setIsDirty(false)
       } catch (error: any) {
@@ -730,6 +746,8 @@ export default function Dashboard() {
       const { data: publicUrlData } = supabase.storage.from('portfolios').getPublicUrl(fileName)
 
       setPriceMenuImages((prev) => [...prev, normalizeStorageUrl(publicUrlData.publicUrl)])
+      // 「かんたん登録」から上げた場合に備えて、載せ方を「画像」にそろえる（タブ側は元から画像のときだけ上げられる）
+      setPriceMenuMode('image')
       setIsDirty(true)
     } catch (error: any) {
       console.error('料金表画像アップロードエラー:', error)
@@ -793,10 +811,12 @@ export default function Dashboard() {
     setTimeout(() => setSaveSuccess(null), 3000)
   }
 
-  const handleSaveProfile = async (e: FormEvent) => {
-    e.preventDefault()
-    if (!user) return
+  // 保存できたら true を返す（「かんたん登録」から、作品の保存と続けて呼ぶため）
+  const handleSaveProfile = async (e?: FormEvent): Promise<boolean> => {
+    e?.preventDefault()
+    if (!user) return false
     setSaving(true)
+    let saved = false
 
     try {
       // 料金・納期日数はマイナスを許容する意味がなく、そのまま保存すると公開ページに
@@ -828,7 +848,7 @@ export default function Dashboard() {
       const finalPriceMenuImages = priceMenuMode === 'image' ? priceMenuImages : []
       if (priceMenuMode === 'image' && finalPriceMenuImages.length === 0) {
         alert('料金表の画像を1枚以上アップロードするか、料金メニューを「文字で入力」に切り替えてから保存してください。')
-        return
+        return false
       }
 
       const finalCampaignDiscountValue = cleanInteger(campaignDiscountValue)
@@ -900,7 +920,7 @@ export default function Dashboard() {
       if (error?.code === 'PGRST204' && error.message?.includes('price_menu_images')) {
         if (priceMenuMode === 'image') {
           alert('料金表の画像はまだご利用いただけません。お手数ですが、料金メニューを「文字で入力」に切り替えて保存してください。')
-          return
+          return false
         }
         const { price_menu_images: _unsupported, ...payloadWithoutPriceMenuImages } = profilePayload
         ;({ error } = await supabase
@@ -944,6 +964,7 @@ export default function Dashboard() {
 
         showSuccessToast('プロフィール情報を更新しました！')
         setIsDirty(false)
+        saved = true
       }
     } catch (error: any) {
       console.error('プロフィール保存中に予期しないエラーが発生しました:', error)
@@ -951,18 +972,21 @@ export default function Dashboard() {
     } finally {
       setSaving(false)
     }
+    return saved
   }
 
-  const handleSavePortfolio = async (e: FormEvent) => {
-    e.preventDefault()
-    if (!user) return
+  // 保存できたら true を返す（「かんたん登録」から、プロフィールの保存と続けて呼ぶため）
+  const handleSavePortfolio = async (e?: FormEvent): Promise<boolean> => {
+    e?.preventDefault()
+    if (!user) return false
     if (portfolioLoadFailed) {
       alert(
         '作品データの読み込みに失敗した状態のため、このまま保存すると既存の作品が消えてしまう恐れがあります。ページを再読み込みしてからもう一度お試しください。'
       )
-      return
+      return false
     }
     setSaving(true)
+    let saved = false
 
     try {
       // 保存前の登録件数を見ておき、「0件→1件以上」に変わった瞬間だけ
@@ -1029,6 +1053,7 @@ export default function Dashboard() {
 
       showSuccessToast('作品ポートフォリオを更新しました！')
       setIsDirty(false)
+      saved = true
     } catch (error: any) {
       console.error('ポートフォリオ保存エラー:', error)
       alert(
@@ -1037,6 +1062,39 @@ export default function Dashboard() {
     } finally {
       setSaving(false)
     }
+    return saved
+  }
+
+  // 「かんたん登録」の保存。作品（portfolio_items）とプロフィール（profiles）は保存先が別なので、続けて両方保存する
+  const handleQuickStartSave = async () => {
+    const hasWork = portfolioUrls.some((url) => url.trim() !== '')
+    const hasPrice = (priceMin.trim() !== '' && Number(priceMin) > 0) || priceMenuImages.length > 0
+    if (!hasWork) {
+      alert('作品を1枚以上アップロードしてください。')
+      return
+    }
+    if (!hasPrice) {
+      alert('参考最低価格を入力するか、料金表の画像をアップロードしてください。')
+      return
+    }
+    if (tastes.length === 0) {
+      alert('得意なジャンルを1つ以上選んでください。')
+      return
+    }
+
+    if (!(await handleSavePortfolio())) return
+    if (!(await handleSaveProfile())) return
+
+    setShowQuickStart(false)
+    showSuccessToast(
+      isPublic ? '登録が完了しました！ページが一覧に掲載されます' : '保存しました（ページは非公開のままです）'
+    )
+  }
+
+  // 「かんたん登録」で料金表の画像を消す。1枚もなくなったら、料金メニューの載せ方を「文字」に戻す
+  const handleQuickStartRemovePriceMenuImage = (index: number) => {
+    if (priceMenuImages.length <= 1) setPriceMenuMode('text')
+    handleRemovePriceMenuImage(index)
   }
 
   // プロフィール完成度チェックリスト。既存項目を見るだけで計算できるので新規テーブルは不要。
@@ -1206,6 +1264,42 @@ export default function Dashboard() {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+        {/* かんたん登録（作品・料金・タグがそろっていない人にだけ出す） */}
+        {showQuickStart && (
+          <QuickStartPanel
+            workUrls={portfolioUrls.filter((url) => url.trim() !== '')}
+            canAddWork={portfolioUrls.some((url) => url.trim() === '')}
+            uploadingWork={uploadingIndex !== null}
+            onUploadWork={(e) => {
+              const emptyIndex = portfolioUrls.findIndex((url) => url.trim() === '')
+              if (emptyIndex !== -1) handleFileUpload(e, emptyIndex)
+            }}
+            priceMin={priceMin}
+            onPriceMinChange={(value) => {
+              setPriceMin(value)
+              setIsDirty(true)
+            }}
+            priceMenuImages={priceMenuMode === 'image' ? priceMenuImages : []}
+            canUsePriceMenuImage={priceMenuMode === 'image' || !menuItems.some((item) => item.title.trim() !== '')}
+            canAddPriceMenuImage={priceMenuImages.length < PRICE_MENU_IMAGE_LIMIT}
+            uploadingPriceMenu={uploadingPriceMenu}
+            onUploadPriceMenuImage={handlePriceMenuImageUpload}
+            onRemovePriceMenuImage={handleQuickStartRemovePriceMenuImage}
+            presetTastes={PRESET_TASTES}
+            tastes={tastes}
+            onToggleTaste={togglePresetTaste}
+            showPublicToggle={quickStartShowPublicToggle}
+            isPublic={isPublic}
+            onPublicChange={(value) => {
+              setIsPublic(value)
+              setIsDirty(true)
+            }}
+            saving={saving}
+            onSave={handleQuickStartSave}
+            onDismiss={() => setShowQuickStart(false)}
+          />
+        )}
+
         {/* クイックアクションバー */}
         <div className="bg-white rounded-3xl border border-slate-200/80 p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3 w-full sm:w-auto">
