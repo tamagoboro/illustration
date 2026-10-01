@@ -135,7 +135,7 @@ DBを変更したら、この記録も更新すること。
 ## posts
 - id: uuid not null default gen_random_uuid()
 - user_id: uuid not null
-- content: character varying not null
+- content: character varying not null（500文字まで。improve_feed.sql）
 - image_urls: ARRAY default '{}'::text[]
 - is_sensitive: boolean default false
 - created_at: timestamp with time zone default now()
@@ -196,7 +196,7 @@ DBを変更したら、この記録も更新すること。
 ## reports
 - id: uuid not null default gen_random_uuid()
 - reporter_id: uuid
-- target_type: text not null（'profile' / 'portfolio_item' / 'post'＝フィードの投稿。improve_feed.sql）
+- target_type: text not null（'profile' / 'portfolio_item' / 'post'＝フィードの投稿 / 'post_comment'＝投稿へのコメント。improve_feed.sql）
 - target_id: text not null
 - creator_id: uuid not null
 - reason: text not null
@@ -257,6 +257,12 @@ DBを変更したら、この記録も更新すること。
 ## soul_interests
 - user_id: uuid not null
 - soul_listing_id: uuid not null
+- created_at: timestamp with time zone not null default now()
+
+## user_blocks
+- user_id: uuid not null（ブロック／ミュートした人）
+- target_id: uuid not null（された相手）
+- kind: text not null（'block' / 'mute'。improve_feed.sql）
 - created_at: timestamp with time zone not null default now()
 
 ## user_icon_rings

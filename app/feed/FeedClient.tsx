@@ -7,7 +7,8 @@ import { convertToWebp } from '@/lib/imageUtils'
 import { extractStoragePath } from '@/lib/storageUtils'
 import AvatarRing from '@/components/AvatarRing'
 import ProtectedImage from '@/components/ProtectedImage'
-import PostReportModal from '@/components/PostReportModal'
+import PostReportModal, { PostReportTarget } from '@/components/PostReportModal'
+import { BlockKind, loadUserBlocks, setUserBlock } from '@/lib/userBlocks'
 import { backgroundImageStyle } from '@/lib/background'
 import SimpleHeader from '@/components/SimpleHeader'
 
@@ -40,9 +41,14 @@ type PostWithAuthor = {
 
 type FeedTab = 'all' | 'following'
 
+// 「⋯」メニュー（通報・ミュート・ブロック・管理者による削除）を開いている対象
+type ActionTarget =
+  | { kind: 'post'; post: PostWithAuthor }
+  | { kind: 'comment'; postId: string; comment: Comment }
+
 const FEED_PAGE_SIZE = 30
-const POST_MAX_LENGTH = 200
-// supabase/improve_feed.sql の post_comments_content_length と合わせる
+// supabase/improve_feed.sql の posts_content_length / post_comments_content_length と合わせる
+const POST_MAX_LENGTH = 500
 const COMMENT_MAX_LENGTH = 500
 // 「人気のタグ」を数える対象（タグ付きの新しい投稿から何件まで見るか）
 const POPULAR_TAG_SAMPLE_SIZE = 200
@@ -128,7 +134,15 @@ export default function FeedClient({ postId }: { postId?: string }) {
 
   // 「リンク」を押してURLをコピーした直後の投稿（ボタンの表示を一時的に切り替える）
   const [copiedPostId, setCopiedPostId] = useState<string | null>(null)
-  const [reportTarget, setReportTarget] = useState<PostWithAuthor | null>(null)
+  const [reportTarget, setReportTarget] = useState<PostReportTarget | null>(null)
+  const [actionTarget, setActionTarget] = useState<ActionTarget | null>(null)
+  // 管理者は、通報を待たずに「⋯」メニューから投稿・コメントを削除できる
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  // 自分がブロック・ミュートしている相手（相手のユーザーID → 種類）。その人の投稿・コメントは出さない。
+  // 投稿の読み込み（fetchPosts）の中でも使うので、最新の値を ref にも持つ
+  const [blockMap, setBlockMap] = useState<Record<string, BlockKind>>({})
+  const blockMapRef = useRef<Record<string, BlockKind> | null>(null)
 
   // 表示まわりのステート
   const [myAvatarUrl, setMyAvatarUrl] = useState<string | null>(null)
@@ -145,6 +159,13 @@ export default function FeedClient({ postId }: { postId?: string }) {
           .eq('user_id', data.user.id)
           .maybeSingle()
         setMyAvatarUrl(me?.avatar_url ?? null)
+
+        const { data: adminRow } = await supabase
+          .from('admins')
+          .select('user_id')
+          .eq('user_id', data.user.id)
+          .maybeSingle()
+        setIsAdmin(!!adminRow)
       }
     })
     if (isSinglePost) return
@@ -219,6 +240,13 @@ export default function FeedClient({ postId }: { postId?: string }) {
     const { data: userResp } = await supabase.auth.getUser()
     const activeUserId = userResp.user?.id
 
+    // ブロック・ミュートしている相手（最初の読み込みのときに1回だけ取得する）
+    if (activeUserId && !blockMapRef.current) {
+      blockMapRef.current = await loadUserBlocks(activeUserId)
+      setBlockMap(blockMapRef.current)
+    }
+    const hiddenUserIds = Object.keys(blockMapRef.current || {})
+
     // 「フォロー中」タブ：フォローしているクリエイターの投稿だけに絞る
     let followingIds: string[] | null = null
     if (!postId && feedTab === 'following') {
@@ -237,7 +265,9 @@ export default function FeedClient({ postId }: { postId?: string }) {
 
     const runQuery = (select: string) => {
       let query = supabase.from('posts').select(select)
+      // 個別ページはURLを直接開いているので、ブロック・ミュート中の相手の投稿でもそのまま表示する
       if (postId) return query.eq('id', postId)
+      if (hiddenUserIds.length > 0) query = query.not('user_id', 'in', `(${hiddenUserIds.join(',')})`)
       if (followingIds) query = query.in('user_id', followingIds)
       if (searchTag) query = query.ilike('content', `%${escapeLikePattern(searchTag)}%`)
       if (imagesOnly) query = query.neq('image_urls', '{}')
@@ -463,6 +493,8 @@ export default function FeedClient({ postId }: { postId?: string }) {
 
     if (error) {
       console.error('いいねの更新エラー:', error)
+      // P0001 はDB側のチェック（投稿者にブロックされている等）が意図的に出したエラーなので、内容をそのまま案内する
+      if (error.code === 'P0001' && error.message) alert(error.message)
       return // 失敗時は表示を変えない（DBの状態と食い違わせない）
     }
 
@@ -495,7 +527,8 @@ export default function FeedClient({ postId }: { postId?: string }) {
     setIsSendingComment(false)
 
     if (error) {
-      alert('コメントの送信に失敗しました')
+      console.error('コメントの送信エラー:', error)
+      alert(error.code === 'P0001' && error.message ? error.message : 'コメントの送信に失敗しました')
       return
     }
     setCommentInput('')
@@ -512,6 +545,11 @@ export default function FeedClient({ postId }: { postId?: string }) {
       alert('コメントの削除に失敗しました')
       return
     }
+    dropComment(targetPostId, commentId)
+  }
+
+  // 一覧からコメントを1件取り除き、件数を合わせる
+  const dropComment = (targetPostId: string, commentId: string) => {
     setCommentsByPost((prev) => ({
       ...prev,
       [targetPostId]: (prev[targetPostId] || []).filter((c) => c.id !== commentId),
@@ -519,6 +557,82 @@ export default function FeedClient({ postId }: { postId?: string }) {
     setPosts((prev) =>
       prev.map((p) => (p.id === targetPostId ? { ...p, comments_count: Math.max(0, p.comments_count - 1) } : p))
     )
+  }
+
+  // 「⋯」メニューの対象を書いた人（ユーザーIDと表示名）
+  const actionUser = actionTarget
+    ? actionTarget.kind === 'post'
+      ? { id: actionTarget.post.user_id, name: actionTarget.post.profiles?.display_name || 'クリエイター' }
+      : { id: actionTarget.comment.user_id, name: actionTarget.comment.profiles?.display_name || 'ユーザー' }
+    : null
+
+  // ブロック／ミュートする。その人の投稿・コメントは、この画面からすぐに消える
+  const handleBlockUser = async (kind: BlockKind) => {
+    if (!currentUser || !actionUser) return
+    const message =
+      kind === 'block'
+        ? `${actionUser.name}さんをブロックしますか？\n\n・相手の投稿・コメントが表示されなくなります\n・相手は、あなたの投稿へのコメント・いいねと、あなたのフォローができなくなります\n\n解除は「ブロック・ミュートの管理」からできます。`
+        : `${actionUser.name}さんをミュートしますか？\n\n・相手の投稿・コメントが表示されなくなります（相手には伝わりません）\n\n解除は「ブロック・ミュートの管理」からできます。`
+    if (!confirm(message)) return
+
+    const ok = await setUserBlock(currentUser.id, actionUser.id, kind)
+    if (!ok) {
+      alert('設定に失敗しました。時間をおいて再度お試しください。')
+      return
+    }
+    const next = { ...(blockMapRef.current || {}), [actionUser.id]: kind }
+    blockMapRef.current = next
+    setBlockMap(next)
+    if (!isSinglePost) setPosts((prev) => prev.filter((p) => p.user_id !== actionUser.id))
+    setActionTarget(null)
+  }
+
+  // 管理者による削除（admin_remove_post / admin_remove_post_comment）。
+  // 書いた本人に理由つきで通知され、操作は admin_audit_log に残る
+  const handleAdminRemove = async () => {
+    if (!isAdmin || !actionTarget) return
+    const label = actionTarget.kind === 'post' ? '投稿' : 'コメント'
+    const reason = window.prompt(`管理者としてこの${label}を削除します。理由を入力してください（本人に通知されます）。`)
+    if (reason === null) return
+    if (!reason.trim()) {
+      alert('理由を入力してください。')
+      return
+    }
+
+    if (actionTarget.kind === 'post') {
+      const { post } = actionTarget
+      const { data, error } = await supabase.rpc('admin_remove_post', {
+        p_post_id: post.id,
+        p_reason: reason.trim(),
+        p_notify: true,
+      })
+      if (error) {
+        console.error('投稿削除エラー:', error)
+        alert('削除に失敗しました。' + error.message)
+        return
+      }
+      setPosts((prev) => prev.filter((p) => p.id !== post.id))
+      // 投稿の画像ファイルもストレージから消す。失敗しても投稿の削除自体は完了しているので、記録だけ残す
+      const paths = ((data || []) as string[]).map((u) => extractStoragePath(u)).filter((p): p is string => !!p)
+      if (paths.length > 0) {
+        const { error: removeError } = await supabase.storage.from('portfolios').remove(paths)
+        if (removeError) console.error('画像ファイルの削除エラー:', removeError)
+      }
+    } else {
+      const { postId: targetPostId, comment } = actionTarget
+      const { error } = await supabase.rpc('admin_remove_post_comment', {
+        p_comment_id: comment.id,
+        p_reason: reason.trim(),
+        p_notify: true,
+      })
+      if (error) {
+        console.error('コメント削除エラー:', error)
+        alert('削除に失敗しました。' + error.message)
+        return
+      }
+      dropComment(targetPostId, comment.id)
+    }
+    setActionTarget(null)
   }
 
   // 投稿の個別ページ（/feed/[postId]）のURLを共有する。SNSに貼ると投稿の画像がカードとして表示される。
@@ -835,7 +949,8 @@ export default function FeedClient({ postId }: { postId?: string }) {
                 const images = post.image_urls
                 const isHidden = post.is_sensitive && !revealedPostIds.has(post.id)
                 const authorName = post.profiles?.display_name || 'クリエイター'
-                const comments = commentsByPost[post.id]
+                // ブロック・ミュートしている相手のコメントは出さない
+                const comments = commentsByPost[post.id]?.filter((c) => !blockMap[c.user_id])
 
                 return (
                   <article
@@ -895,11 +1010,13 @@ export default function FeedClient({ postId }: { postId?: string }) {
                         )}
                         {!isMyPost && (
                           <>
+                            {/* 通報・ミュート・ブロック（管理者は削除も） */}
                             <button
-                              onClick={() => setReportTarget(post)}
-                              className="text-[11px] font-bold text-slate-300 hover:text-rose-500 hover:bg-rose-50 px-2 py-1 rounded-lg transition cursor-pointer"
+                              onClick={() => setActionTarget({ kind: 'post', post })}
+                              aria-label="この投稿のメニュー"
+                              className="text-sm font-black text-slate-300 hover:text-slate-600 hover:bg-slate-50 px-2 py-0.5 rounded-lg transition cursor-pointer"
                             >
-                              通報
+                              ⋯
                             </button>
                             <Link
                               href={`/creator/${post.user_id}`}
@@ -1069,12 +1186,20 @@ export default function FeedClient({ postId }: { postId?: string }) {
                                     <span className="text-[9px] text-slate-400 font-bold shrink-0">
                                       {formatRelativeTime(comment.created_at)}
                                     </span>
-                                    {currentUser?.id === comment.user_id && (
+                                    {currentUser?.id === comment.user_id ? (
                                       <button
                                         onClick={() => handleDeleteComment(post.id, comment.id)}
                                         className="text-[9px] font-bold text-rose-400 hover:text-rose-600 hover:underline shrink-0 cursor-pointer"
                                       >
                                         削除
+                                      </button>
+                                    ) : (
+                                      <button
+                                        onClick={() => setActionTarget({ kind: 'comment', postId: post.id, comment })}
+                                        aria-label="このコメントのメニュー"
+                                        className="text-xs font-black leading-none text-slate-300 hover:text-slate-600 px-1 shrink-0 cursor-pointer"
+                                      >
+                                        ⋯
                                       </button>
                                     )}
                                   </div>
@@ -1158,6 +1283,15 @@ export default function FeedClient({ postId }: { postId?: string }) {
                 {loadingMore ? '読み込み中...' : 'もっと見る'}
               </button>
             </div>
+          )}
+
+          {/* ブロック・ミュートしている人がいるときだけ、解除ページへの導線を出す */}
+          {!isSinglePost && Object.keys(blockMap).length > 0 && (
+            <p className="text-center">
+              <Link href="/blocks" className="text-[10px] font-bold text-slate-500 hover:text-sky-600 hover:underline drop-shadow-xs">
+                ブロック・ミュートの管理（{Object.keys(blockMap).length}人）
+              </Link>
+            </p>
           )}
         </div>
 
@@ -1256,8 +1390,94 @@ export default function FeedClient({ postId }: { postId?: string }) {
         </div>
       )}
 
+      {/* 「⋯」メニュー：通報・ミュート・ブロック（管理者は削除も） */}
+      {actionTarget && actionUser && (
+        <div
+          className="fixed inset-0 z-50 bg-sky-950/70 backdrop-blur-md flex items-end sm:items-center justify-center p-4"
+          onClick={() => setActionTarget(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-2 shadow-2xl border border-sky-100"
+          >
+            <p className="text-xs font-black text-slate-700 px-1 pb-1 truncate">
+              {actionUser.name}さんの{actionTarget.kind === 'post' ? '投稿' : 'コメント'}
+            </p>
+
+            <button
+              onClick={() => {
+                setReportTarget(
+                  actionTarget.kind === 'post'
+                    ? { type: 'post', id: actionTarget.post.id, user_id: actionTarget.post.user_id }
+                    : { type: 'post_comment', id: actionTarget.comment.id, user_id: actionTarget.comment.user_id }
+                )
+                setActionTarget(null)
+              }}
+              className="w-full text-left px-4 py-3 rounded-2xl bg-slate-50 hover:bg-rose-50 transition cursor-pointer"
+            >
+              <span className="block text-xs font-black text-slate-800">🚩 通報する</span>
+              <span className="block text-[10px] font-bold text-slate-400">無断転載や規約違反の疑いを運営に知らせます</span>
+            </button>
+
+            {currentUser ? (
+              <>
+                <button
+                  onClick={() => handleBlockUser('mute')}
+                  className="w-full text-left px-4 py-3 rounded-2xl bg-slate-50 hover:bg-sky-50 transition cursor-pointer"
+                >
+                  <span className="block text-xs font-black text-slate-800">🔇 この人をミュートする</span>
+                  <span className="block text-[10px] font-bold text-slate-400">
+                    投稿・コメントが表示されなくなります（相手には伝わりません）
+                  </span>
+                </button>
+                <button
+                  onClick={() => handleBlockUser('block')}
+                  className="w-full text-left px-4 py-3 rounded-2xl bg-slate-50 hover:bg-sky-50 transition cursor-pointer"
+                >
+                  <span className="block text-xs font-black text-slate-800">🚫 この人をブロックする</span>
+                  <span className="block text-[10px] font-bold text-slate-400">
+                    ミュートに加えて、相手はあなたの投稿へのコメント・いいね、あなたのフォローができなくなります
+                  </span>
+                </button>
+              </>
+            ) : (
+              <p className="text-[10px] font-bold text-slate-400 px-1">
+                <Link href="/login" className="text-sky-600 hover:underline">ログイン</Link>
+                すると、ミュート・ブロックができます
+              </p>
+            )}
+
+            {isAdmin && (
+              <button
+                onClick={handleAdminRemove}
+                className="w-full text-left px-4 py-3 rounded-2xl bg-rose-50 hover:bg-rose-100 transition cursor-pointer"
+              >
+                <span className="block text-xs font-black text-rose-700">🛡️ 管理者として削除する</span>
+                <span className="block text-[10px] font-bold text-rose-400">理由が本人に通知され、操作履歴に残ります</span>
+              </button>
+            )}
+
+            <div className="flex items-center justify-between gap-3 pt-2">
+              {currentUser ? (
+                <Link href="/blocks" className="text-[10px] font-bold text-slate-400 hover:text-sky-600 hover:underline">
+                  ブロック・ミュートの管理 →
+                </Link>
+              ) : (
+                <span />
+              )}
+              <button
+                onClick={() => setActionTarget(null)}
+                className="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 通報モーダル */}
-      {reportTarget && <PostReportModal post={reportTarget} onClose={() => setReportTarget(null)} />}
+      {reportTarget && <PostReportModal target={reportTarget} onClose={() => setReportTarget(null)} />}
     </div>
   )
 }

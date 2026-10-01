@@ -3,6 +3,7 @@
 最終確認: harden_security.sql と remove_duplicate_request_notifications.sql の適用後。
 add_follows.sql で posts / profiles にフォロワー通知のトリガーを追加（下表に反映済み）。
 add_soul_listings_and_discord.sql で soul_listings / creator_follows / favorite_creators のトリガーを追加（下表に反映済み）。
+improve_feed.sql でブロック（user_blocks）のトリガーを追加（下表に反映済み）。
 関数の中身は schema_functions.sql を参照。DBを変更したらこの記録も更新すること。
 
 取得クエリ:
@@ -26,6 +27,10 @@ add_soul_listings_and_discord.sql で soul_listings / creator_follows / favorite
 | post_likes | trg_notify_author_on_post_like | notify_author_on_post_like |
 | post_comments | trg_notify_author_on_post_comment | notify_author_on_post_comment |
 | posts | trg_notify_followers_on_new_post | notify_followers_on_new_post |
+| post_comments | trg_enforce_user_blocks_on_post_comment | enforce_user_blocks_on_post_reaction（投稿者にブロックされている人は書き込めない。improve_feed.sql） |
+| post_likes | trg_enforce_user_blocks_on_post_like | enforce_user_blocks_on_post_reaction |
+| creator_follows | trg_enforce_user_blocks_on_follow | enforce_user_blocks_on_follow（相手にブロックされている人はフォローできない） |
+| user_blocks | trg_apply_user_block | apply_user_block（ブロックした時点でお互いのフォローを外す） |
 | reviews | trg_grant_review_points | grant_review_points |
 | reviews | trg_notify_creator_on_new_review | notify_creator_on_new_review |
 | referrals | trg_notify_referrer_on_new_referral | notify_referrer_on_new_referral |

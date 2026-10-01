@@ -10,13 +10,16 @@ const REPORT_REASONS = [
   'その他',
 ]
 
-// フィードの投稿を通報するモーダル。クリエイターページの通報（プロフィール・作品）と同じ reports テーブルに、
-// target_type = 'post' で保存する（supabase/improve_feed.sql）。運営は /admin/reports で確認・削除できる。
+// 通報する対象。user_id は投稿者／コメントした人
+export type PostReportTarget = { type: 'post' | 'post_comment'; id: string; user_id: string }
+
+// フィードの投稿・コメントを通報するモーダル。クリエイターページの通報（プロフィール・作品）と同じ reports テーブルに、
+// target_type = 'post' / 'post_comment' で保存する（supabase/improve_feed.sql）。運営は /admin/reports で確認・削除できる。
 export default function PostReportModal({
-  post,
+  target,
   onClose,
 }: {
-  post: { id: string; user_id: string }
+  target: PostReportTarget
   onClose: () => void
 }) {
   const [reason, setReason] = useState(REPORT_REASONS[0])
@@ -30,9 +33,9 @@ export default function PostReportModal({
       const { data: { user: reporter } } = await supabase.auth.getUser()
       const { error } = await supabase.from('reports').insert({
         reporter_id: reporter?.id || null,
-        target_type: 'post',
-        target_id: post.id,
-        creator_id: post.user_id,
+        target_type: target.type,
+        target_id: target.id,
+        creator_id: target.user_id,
         reason,
         comment: comment.trim() || null,
       })
@@ -77,7 +80,9 @@ export default function PostReportModal({
         ) : (
           <>
             <div>
-              <h3 className="text-sm font-black text-slate-900">この投稿を通報</h3>
+              <h3 className="text-sm font-black text-slate-900">
+                {target.type === 'post' ? 'この投稿を通報' : 'このコメントを通報'}
+              </h3>
               <p className="text-[11px] text-slate-400 mt-1">
                 無断転載や規約違反の疑いがある場合にお知らせください。内容は運営のみが確認します。
               </p>

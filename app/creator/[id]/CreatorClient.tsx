@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { supabase, Profile, PortfolioItem } from '@/lib/supabase'
 import { loadFavorites, toggleFavoriteRecord } from '@/lib/favorites'
 import FollowButton from '@/components/FollowButton'
+import UserBlockButtons from '@/components/UserBlockButtons'
 import { getCreatorShareUrl } from '@/lib/ogCard'
 import SoulListingSection from '@/components/SoulListingSection'
 import type { SoulListing } from '@/lib/soulListings'
@@ -1570,6 +1571,8 @@ const themeColor = useMemo(() => {
                 >
                   🚩 無断転載・不審な点を通報する
                 </button>
+
+                <UserBlockButtons targetUserId={id} targetName={profile.display_name} currentUserId={currentUserId} />
               </div>
             </div>
           </aside>

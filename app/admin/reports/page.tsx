@@ -9,7 +9,7 @@ import { extractStoragePath } from '@/lib/storageUtils'
 type ReportRow = {
   id: string
   reporter_id: string | null
-  target_type: 'profile' | 'portfolio_item' | 'post'
+  target_type: 'profile' | 'portfolio_item' | 'post' | 'post_comment'
   target_id: string
   creator_id: string
   reason: string
@@ -17,6 +17,9 @@ type ReportRow = {
   status: 'open' | 'reviewed' | 'dismissed'
   created_at: string
   creator_display_name?: string | null
+  // コメントの通報（target_type = 'post_comment'）のときだけ：通報されたコメントの本文と、付いている投稿。
+  // コメントがすでに削除されていれば、どちらも null
+  reported_comment?: { post_id: string; content: string } | null
 }
 
 export default function AdminReportsPage() {
@@ -79,6 +82,22 @@ export default function AdminReportsPage() {
       })
     }
 
+    // 通報されたコメントの本文と、付いている投稿（投稿を見るリンク用）
+    const commentIds = Array.from(new Set(rows.filter((r) => r.target_type === 'post_comment').map((r) => r.target_id)))
+    if (commentIds.length > 0) {
+      const { data: commentsData } = await supabase
+        .from('post_comments')
+        .select('id, post_id, content')
+        .in('id', commentIds)
+      const commentMap: Record<string, { post_id: string; content: string }> = {}
+      ;(commentsData || []).forEach((c: any) => {
+        commentMap[c.id] = { post_id: c.post_id, content: c.content }
+      })
+      rows.forEach((r) => {
+        if (r.target_type === 'post_comment') r.reported_comment = commentMap[r.target_id] || null
+      })
+    }
+
     setReports(rows)
     setLoadingReports(false)
   }
@@ -126,13 +145,32 @@ export default function AdminReportsPage() {
       if (removeError) console.error('画像ファイルの削除エラー:', removeError)
     }
 
-    setReports((prev) =>
-      prev.map((r) =>
-        r.target_type === 'post' && r.target_id === report.target_id && r.status === 'open'
-          ? { ...r, status: 'reviewed' as const }
-          : r
-      )
-    )
+    // その投稿と、一緒に消えたコメントへの通報が「対応済み」になるので、一覧を取り直す
+    await refreshReports()
+  }
+
+  // 通報されたコメントを削除する（admin_remove_post_comment）。本人に理由つきで通知され、操作履歴に残る
+  const removeReportedComment = async (report: ReportRow) => {
+    const reason = window.prompt('このコメントを削除します。理由を入力してください（本人に通知されます）。', report.reason)
+    if (reason === null) return
+    if (!reason.trim()) {
+      alert('理由を入力してください。')
+      return
+    }
+
+    setBusyId(report.id)
+    const { error } = await supabase.rpc('admin_remove_post_comment', {
+      p_comment_id: report.target_id,
+      p_reason: reason.trim(),
+      p_notify: true,
+    })
+    setBusyId(null)
+    if (error) {
+      console.error('コメント削除エラー:', error)
+      alert('削除に失敗しました。' + error.message)
+      return
+    }
+    await refreshReports()
   }
 
   // 同じクリエイターに、別々の人からの未対応通報が複数件来ている場合に目立たせる。
@@ -317,6 +355,16 @@ export default function AdminReportsPage() {
                       >
                         投稿を見る →
                       </Link>
+                    ) : r.target_type === 'post_comment' ? (
+                      r.reported_comment && (
+                        <Link
+                          href={`/feed/${r.reported_comment.post_id}`}
+                          target="_blank"
+                          className="text-[11px] font-bold text-rose-600 hover:underline"
+                        >
+                          コメントのある投稿を見る →
+                        </Link>
+                      )
                     ) : (
                       <Link
                         href={`/admin/images?user=${r.creator_id}`}
@@ -340,9 +388,16 @@ export default function AdminReportsPage() {
                     ? 'プロフィール全体'
                     : r.target_type === 'post'
                       ? `フィード投稿 (ID: ${r.target_id})`
-                      : `作品 (ID: ${r.target_id})`}{' '}
+                      : r.target_type === 'post_comment'
+                        ? `コメント (ID: ${r.target_id})`
+                        : `作品 (ID: ${r.target_id})`}{' '}
                   / {r.reason}
                 </p>
+                {r.target_type === 'post_comment' && (
+                  <p className="text-xs text-slate-700 border-l-2 border-rose-200 pl-2.5 whitespace-pre-wrap break-words">
+                    {r.reported_comment ? r.reported_comment.content : '（このコメントはすでに削除されています）'}
+                  </p>
+                )}
                 {r.comment && (
                   <p className="text-xs text-slate-500 bg-slate-50 p-2.5 rounded-xl whitespace-pre-wrap">{r.comment}</p>
                 )}
@@ -373,6 +428,15 @@ export default function AdminReportsPage() {
                         className="px-3 py-1.5 bg-rose-500 hover:bg-rose-600 text-white font-bold text-[11px] rounded-lg cursor-pointer disabled:opacity-50"
                       >
                         投稿を削除する
+                      </button>
+                    )}
+                    {r.target_type === 'post_comment' && r.reported_comment && (
+                      <button
+                        onClick={() => removeReportedComment(r)}
+                        disabled={busyId === r.id}
+                        className="px-3 py-1.5 bg-rose-500 hover:bg-rose-600 text-white font-bold text-[11px] rounded-lg cursor-pointer disabled:opacity-50"
+                      >
+                        コメントを削除する
                       </button>
                     )}
                   </div>

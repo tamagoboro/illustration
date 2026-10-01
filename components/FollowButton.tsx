@@ -64,7 +64,8 @@ export default function FollowButton({
 
     if (error) {
       console.error('フォローの更新エラー:', error)
-      alert('フォローの更新に失敗しました')
+      // P0001 はDB側のチェック（相手にブロックされている等）が意図的に出したエラーなので、内容をそのまま案内する
+      alert(error.code === 'P0001' && error.message ? error.message : 'フォローの更新に失敗しました')
       return
     }
     setIsFollowing(!wasFollowing)
