@@ -15,6 +15,12 @@ import { recordRecentlyViewed } from '@/lib/recentlyViewed'
 import AvatarRing from '@/components/AvatarRing'
 import ProtectedImage from '@/components/ProtectedImage'
 import NotificationBell from '@/components/NotificationBell'
+import Reveal from '@/components/Reveal'
+import WorksMarquee from '@/components/portfolio/WorksMarquee'
+import MasonryGallery from '@/components/portfolio/MasonryGallery'
+import YouTubeGallery from '@/components/portfolio/YouTubeGallery'
+import CreatorJoinCta from '@/components/portfolio/CreatorJoinCta'
+import { normalizeBackground, backgroundStyle, isDarkBackground, normalizeVideos } from '@/lib/portfolioDesign'
 import { ItemDiscountConfig, Campaign, isCampaignActive, resolveDiscount, applyDiscount, formatDiscountBadge, formatSavingsBadge } from '@/lib/discount'
 
 type Option = {
@@ -135,6 +141,10 @@ type ExtendedProfile = Profile & {
   campaign_start_at?: string | null
   campaign_end_at?: string | null
   accepts_direct_requests?: boolean | null
+  // ページのデザイン（supabase/add_portfolio_design.sql）
+  page_background?: unknown
+  cover_image_url?: string | null
+  portfolio_videos?: unknown
 }
 
 const formatExternalUrl = (url?: string | null) => {
@@ -999,9 +1009,12 @@ const themeColor = useMemo(() => {
     await refreshReviews()
   }
 
-  // シェア用URL。カードが変わるたびに ?s= が変わり、Xに古いカードが残らない（lib/ogCard.ts）
-  const sharePageUrl =
-    typeof window !== 'undefined' ? getCreatorShareUrl(window.location.origin, id, profile?.updated_at) : ''
+  // シェア用URL。カードが変わるたびに ?s= が変わり、Xに古いカードが残らない（lib/ogCard.ts）。
+  // window はブラウザにしか無いので、表示後に組み立てる（サーバーとブラウザで描画結果が食い違わないように）
+  const [sharePageUrl, setSharePageUrl] = useState('')
+  useEffect(() => {
+    setSharePageUrl(getCreatorShareUrl(window.location.origin, id, profile?.updated_at))
+  }, [id, profile?.updated_at])
   const shareText = `${profile?.display_name || 'クリエイター'}さんのポートフォリオ・見積もりページ`
 
   const handleCopyShareUrl = () => {
@@ -1061,12 +1074,21 @@ const themeColor = useMemo(() => {
     return '即対応可'
   }
 
+  // ページのデザイン（背景・カバー画像・動画）。未設定なら従来どおりの空の背景
+  const pageBackground = normalizeBackground(profile.page_background)
+  const pageBackgroundStyle = backgroundStyle(pageBackground)
+  const isDarkPage = isDarkBackground(pageBackground)
+  const portfolioVideos = normalizeVideos(profile.portfolio_videos)
+  // カバー画像：本人が設定した画像、なければ1枚目の作品をぼかして使う
+  const coverImageUrl = profile.cover_image_url || works[0]?.image_url || null
+  const isCustomCover = !!profile.cover_image_url
+  const sectionTitleClass = `text-lg sm:text-xl font-black tracking-tight ${isDarkPage ? 'text-white' : 'text-sky-950'} drop-shadow-sm`
+
   return (
     <div
       className="min-h-screen bg-cover bg-center text-sky-800 pb-28 relative font-sans"
-      style={{ backgroundImage: `linear-gradient(180deg, rgba(56,189,248,0.35) 0%, rgba(224,242,254,0.25) 45%, rgba(255,255,255,0.1) 100%), url(${BACKGROUND_IMAGE_URL})` }}
+      style={pageBackgroundStyle}
     >
-      <div className="absolute inset-0 bg-sky-900/10 backdrop-brightness-95 pointer-events-none" />
 
       {/* ヘッダー */}
       <header className="px-6 py-4 bg-white/70 backdrop-blur-xl border-b border-white/50 sticky top-0 z-30 shadow-xs">
@@ -1084,14 +1106,34 @@ const themeColor = useMemo(() => {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8 relative z-10">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-10 relative z-10">
+        {/* カバー画像 */}
+        {coverImageUrl && (
+          <div className="relative h-44 sm:h-72 rounded-3xl overflow-hidden shadow-xl border-2 border-white/70 bg-sky-100">
+            <div className={`absolute inset-0 drawker-kenburns ${isCustomCover ? '' : 'blur-md scale-110'}`}>
+              <ProtectedImage
+                src={coverImageUrl}
+                alt=""
+                watermarkText={profile.display_name}
+                wrapperClassName="relative w-full h-full"
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/45 via-transparent to-transparent" />
+          </div>
+        )}
+
         {/* メインプロフィール */}
-        <div className="bg-white/75 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-xl border border-white/80 space-y-6">
+        <div
+          className={`bg-white/80 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-xl border border-white/80 space-y-6 relative ${
+            coverImageUrl ? '-mt-24 sm:-mt-32 mx-2 sm:mx-6' : ''
+          }`}
+        >
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
             <div className="flex-1 space-y-4">
               <div className="flex items-start gap-4 sm:gap-5">
                 {profile.avatar_url && (
-                  <div className="relative shrink-0 ring-4 ring-white/80 shadow-md rounded-full">
+                  <div className="relative shrink-0 ring-4 ring-white/80 shadow-md rounded-full drawker-float">
                     <AvatarRing
                       src={profile.avatar_url}
                       alt={profile.display_name || 'アバター画像'}
@@ -1477,6 +1519,7 @@ const themeColor = useMemo(() => {
         </div>
 
         {/* 受付条件 */}
+        <Reveal>
         <section className="bg-white/75 backdrop-blur-xl p-6 sm:p-7 rounded-3xl shadow-xl border border-white/80 space-y-5">
           <h2 className="text-xs font-black text-sky-900 uppercase tracking-widest flex items-center gap-2">
             <span className="p-1.5 bg-white rounded-lg text-xs shadow-2xs">⚙️</span> 制作・受付条件
@@ -1544,9 +1587,11 @@ const themeColor = useMemo(() => {
             ))}
           </div>
         </section>
+        </Reveal>
 
         {/* 料金メニュー */}
         {profile.menu_items && profile.menu_items.length > 0 && (
+          <Reveal>
           <section className="bg-white/75 backdrop-blur-xl p-6 sm:p-7 rounded-3xl shadow-xl border border-white/80 space-y-5">
             <h2 className="text-xs font-black text-sky-900 uppercase tracking-widest flex items-center gap-2">
               <span className="p-1.5 bg-white rounded-lg text-xs shadow-2xs">🏷️</span> 料金目安・メニュー
@@ -1601,54 +1646,54 @@ const themeColor = useMemo(() => {
               })}
             </div>
           </section>
+          </Reveal>
         )}
 
         {/* 魂募集 */}
         <SoulListingSection creatorId={id} creatorName={profile.display_name} listings={initialSouls} />
 
         {/* ポートフォリオ一覧 */}
-        <section className="space-y-4">
-          <div className="flex justify-between items-baseline px-1">
-            <h2 className="text-base font-black text-sky-900 tracking-tight drop-shadow-xs">
-              ポートフォリオ作品
-            </h2>
-            <span className="text-xs font-extrabold text-sky-500 bg-white/60 backdrop-blur-sm px-2.5 py-1 rounded-full border border-white">
-              {works.length} 作品
-            </span>
-          </div>
+        <section className="space-y-5">
+          <Reveal>
+            <div className="flex justify-between items-end px-1">
+              <div>
+                <p className={`text-[10px] font-black tracking-[0.3em] ${isDarkPage ? 'text-white/70' : 'text-sky-500'}`}>GALLERY</p>
+                <h2 className={sectionTitleClass}>ポートフォリオ作品</h2>
+              </div>
+              <span className="text-xs font-extrabold text-sky-600 bg-white/80 backdrop-blur-sm px-3 py-1 rounded-full border border-white shadow-2xs">
+                {works.length} 作品
+              </span>
+            </div>
+          </Reveal>
 
           {works.length === 0 ? (
             <div className="bg-white/75 backdrop-blur-xl p-12 rounded-3xl border border-white/80 text-center text-xs font-bold text-sky-400">
               まだ作品が登録されていません
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-              {works.map((work) => (
-                <div
-                  key={work.id}
-                  onClick={() => setSelectedWork(work)}
-                  className="group relative aspect-square bg-white/40 rounded-2xl overflow-hidden shadow-lg border border-white/80 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl cursor-pointer"
-                >
-                  <ProtectedImage
-                    src={work.image_url}
-                    alt={work.title || `${profile.display_name}の作品`}
-                    watermarkText={profile.display_name}
-                    loading="lazy"
-                    decoding="async"
-                    style={{ objectPosition: `${work.focal_x ?? 50}% ${work.focal_y ?? 50}%` }}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-sky-950/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-3 flex flex-col justify-end">
-                    <p className="text-xs font-bold text-white truncate">{work.title || '無題'}</p>
-                    <span className="text-[10px] text-white/80 font-medium">クリックで拡大</span>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <>
+              {/* 作品が流れ続ける帯（4枚以上のとき） */}
+              <WorksMarquee works={works} watermarkText={profile.display_name} onSelect={(work) => setSelectedWork(work)} />
+              <MasonryGallery works={works} watermarkText={profile.display_name} onSelect={(work) => setSelectedWork(work)} />
+            </>
           )}
         </section>
 
+        {/* YouTube動画 */}
+        {portfolioVideos.length > 0 && (
+          <section className="space-y-5">
+            <Reveal>
+              <div className="px-1">
+                <p className={`text-[10px] font-black tracking-[0.3em] ${isDarkPage ? 'text-white/70' : 'text-red-500'}`}>MOVIE</p>
+                <h2 className={sectionTitleClass}>動画</h2>
+              </div>
+            </Reveal>
+            <YouTubeGallery videos={portfolioVideos} />
+          </section>
+        )}
+
         {/* レビュー・評価 */}
+        <Reveal>
         <section className="bg-white/75 backdrop-blur-xl p-6 sm:p-7 rounded-3xl shadow-xl border border-white/80 space-y-5">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <h2 className="text-xs font-black text-sky-900 uppercase tracking-widest flex items-center gap-2">
@@ -1744,6 +1789,10 @@ const themeColor = useMemo(() => {
             </div>
           )}
         </section>
+        </Reveal>
+
+        {/* イラストレーター向けの案内（本人以外に表示） */}
+        {currentUserId !== id && <CreatorJoinCta />}
       </main>
 
       {/* 作品詳細 モーダル */}

@@ -1,1 +1,89 @@
 @import "tailwindcss";
+
+/* ===== ポートフォリオページの動き ===== */
+
+/* 作品が横に流れ続ける帯（同じ並びを2回並べ、半分まで動かしたら最初に戻る＝継ぎ目なくループ） */
+@keyframes drawker-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.drawker-marquee {
+  animation: drawker-marquee var(--marquee-duration, 40s) linear infinite;
+}
+.drawker-marquee-track:hover .drawker-marquee {
+  animation-play-state: paused;
+}
+
+/* スクロールで画面に入ったらふわっと出てくる（components/Reveal.tsx） */
+.drawker-reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity 0.7s ease,
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+.drawker-reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* カバー画像のゆっくりとした拡大（ケンバーンズ風） */
+@keyframes drawker-kenburns {
+  from {
+    transform: scale(1.04);
+  }
+  to {
+    transform: scale(1.14);
+  }
+}
+.drawker-kenburns {
+  animation: drawker-kenburns 18s ease-in-out infinite alternate;
+}
+
+/* ふわふわ浮く（アイコンなど） */
+@keyframes drawker-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+.drawker-float {
+  animation: drawker-float 4s ease-in-out infinite;
+}
+
+/* グラデーションがゆっくり流れる（CTAなど） */
+@keyframes drawker-gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+.drawker-gradient-flow {
+  background-size: 200% 200%;
+  animation: drawker-gradient 8s linear infinite;
+}
+
+/* 動きを減らす設定の人には、アニメーションを止める */
+@media (prefers-reduced-motion: reduce) {
+  .drawker-marquee,
+  .drawker-kenburns,
+  .drawker-float,
+  .drawker-gradient-flow {
+    animation: none;
+  }
+  .drawker-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}

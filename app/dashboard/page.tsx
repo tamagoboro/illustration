@@ -2102,6 +2102,14 @@ export default function Dashboard() {
                       />
                     </div>
 
+                    <Link
+                      href="/dashboard/design"
+                      className="block p-4 rounded-2xl bg-gradient-to-r from-sky-50 via-violet-50 to-pink-50 border border-violet-100 hover:brightness-[0.98] transition space-y-1"
+                    >
+                      <span className="text-xs font-bold text-slate-800 block">🎨 ページのデザインを変える →</span>
+                      <span className="text-[11px] text-slate-500 block">背景・カバー画像・YouTube動画を設定して、あなたらしいポートフォリオに。</span>
+                    </Link>
+
                     <div className="grid sm:grid-cols-2 gap-3">
                       <Link
                         href="/dashboard/souls"

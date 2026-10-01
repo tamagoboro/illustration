@@ -180,6 +180,9 @@ DBを変更したら、この記録も更新すること。
 - campaign_end_at: timestamp with time zone
 - accepts_direct_requests: boolean not null default true
 - has_dashboard_setup: boolean not null default false
+- page_background: jsonb not null（背景。add_portfolio_design.sql）
+- cover_image_url: text（カバー画像）
+- portfolio_videos: jsonb not null default '[]'::jsonb（YouTube動画・最大6本）
 
 ## referrals
 - id: uuid not null default gen_random_uuid()
