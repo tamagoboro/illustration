@@ -22,6 +22,8 @@ type RequestRow = {
   creator_response: string | null
   created_at: string
   client_display_name?: string | null
+  soul_listing_id?: string | null
+  soul_title?: string | null
 }
 
 export default function DashboardRequestsPage() {
@@ -73,6 +75,16 @@ export default function DashboardRequestsPage() {
       })
       rows.forEach((r) => {
         r.client_display_name = nameMap[r.client_id] || null
+      })
+    }
+
+    // 魂募集への応募なら、どの募集への応募かを表示する
+    const soulIds = Array.from(new Set(rows.map((r) => r.soul_listing_id).filter(Boolean))) as string[]
+    if (soulIds.length > 0) {
+      const { data: souls } = await supabase.from('soul_listings').select('id, title').in('id', soulIds)
+      const titleMap = Object.fromEntries((souls || []).map((s: any) => [s.id, s.title]))
+      rows.forEach((r) => {
+        if (r.soul_listing_id) r.soul_title = titleMap[r.soul_listing_id] || '（削除された魂募集）'
       })
     }
 
@@ -157,6 +169,11 @@ export default function DashboardRequestsPage() {
                   >
                     {statusLabel(r.status)}
                   </span>
+                  {r.soul_listing_id && (
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">
+                      🎭 魂募集「{r.soul_title}」への応募
+                    </span>
+                  )}
                   <span className="text-[10px] text-slate-400">
                     {r.client_display_name || '依頼者'}さん・{new Date(r.created_at).toLocaleString('ja-JP')}
                   </span>

@@ -7,6 +7,8 @@ import { supabase, Profile, PortfolioItem } from '@/lib/supabase'
 import { loadFavorites, toggleFavoriteRecord } from '@/lib/favorites'
 import FollowButton from '@/components/FollowButton'
 import { getCreatorShareUrl } from '@/lib/ogCard'
+import SoulListingSection from '@/components/SoulListingSection'
+import type { SoulListing } from '@/lib/soulListings'
 import { convertToWebp } from '@/lib/imageUtils'
 import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft'
 import { recordRecentlyViewed } from '@/lib/recentlyViewed'
@@ -177,6 +179,7 @@ export default function CreatorClient({
   initialForms = [],
   initialReviews = [],
   creatorRingId = null,
+  initialSouls = [],
 }: {
   id: string
   initialProfile?: ExtendedProfile | null
@@ -184,6 +187,7 @@ export default function CreatorClient({
   initialForms?: EstimateFormRow[]
   initialReviews?: ReviewRow[]
   creatorRingId?: string | null
+  initialSouls?: SoulListing[]
 }) {
   const router = useRouter()
   const [profile, setProfile] = useState<ExtendedProfile | null>(initialProfile || null)
@@ -1598,6 +1602,9 @@ const themeColor = useMemo(() => {
             </div>
           </section>
         )}
+
+        {/* 魂募集 */}
+        <SoulListingSection creatorId={id} creatorName={profile.display_name} listings={initialSouls} />
 
         {/* ポートフォリオ一覧 */}
         <section className="space-y-4">

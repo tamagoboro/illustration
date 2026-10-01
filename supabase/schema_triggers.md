@@ -2,6 +2,7 @@
 現行DBのトリガー一覧の記録（pg_trigger から書き出したもの。内部トリガーは除く）。
 最終確認: harden_security.sql と remove_duplicate_request_notifications.sql の適用後。
 add_follows.sql で posts / profiles にフォロワー通知のトリガーを追加（下表に反映済み）。
+add_soul_listings_and_discord.sql で soul_listings / creator_follows / favorite_creators のトリガーを追加（下表に反映済み）。
 関数の中身は schema_functions.sql を参照。DBを変更したらこの記録も更新すること。
 
 取得クエリ:
@@ -17,6 +18,9 @@ add_follows.sql で posts / profiles にフォロワー通知のトリガーを�
 | profiles | trg_notify_favorites_on_reopen | notify_favorites_on_reopen（お気に入り登録者＋フォロワーへ） |
 | profiles | trg_notify_followers_on_campaign | notify_followers_on_campaign |
 | profiles | trg_protect_profile_likes_count | protect_profile_likes_count（APIからの likes_count 書き換えを無効化） |
+| favorite_creators | trg_notify_creator_on_new_favorite | notify_creator_on_new_favorite |
+| creator_follows | trg_notify_creator_on_new_follower | notify_creator_on_new_follower |
+| soul_listings | set_soul_listings_updated_at | update_updated_at_column |
 | favorite_creators | trg_sync_profile_likes_count | sync_profile_likes_count（お気に入りの増減で likes_count を集計） |
 | post_likes | trg_notify_author_on_post_like | notify_author_on_post_like |
 | post_comments | trg_notify_author_on_post_comment | notify_author_on_post_comment |
@@ -26,9 +30,9 @@ add_follows.sql で posts / profiles にフォロワー通知のトリガーを�
 | referrals | trg_notify_referrer_on_new_referral | notify_referrer_on_new_referral |
 | reports | trg_notify_admins_on_new_report | notify_admins_on_new_report |
 | requests | trg_enforce_request_rate_limits | enforce_request_rate_limits |
-| requests | trg_guard_requests_write | guard_requests_write（列ごとの書き込み制限） |
+| requests | trg_guard_requests_write | guard_requests_write（列ごとの書き込み制限。soul_listing_id も変更不可・他人の募集には紐付け不可） |
 | requests | trg_notify_client_on_request_response | notify_client_on_request_response |
-| requests | trg_notify_creator_on_new_request | notify_creator_on_new_request |
+| requests | trg_notify_creator_on_new_request | notify_creator_on_new_request（魂募集への応募は soul_application） |
 
 ## 認証（auth.users）
 

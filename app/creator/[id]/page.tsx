@@ -4,6 +4,7 @@ import { after } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { serializeJsonLd } from '@/lib/safeUrl'
 import { getOgCardVersion } from '@/lib/ogCard'
+import { normalizePrices, SoulListing } from '@/lib/soulListings'
 import CreatorClient from './CreatorClient'
 
 type Props = {
@@ -133,7 +134,7 @@ export default async function Page({ params }: Props) {
 
   // 互いに依存しないクエリはPromise.allでまとめて並行実行し、サーバー応答を高速化する
   // （直列だと1件ずつ待つ分だけページの初期表示が遅くなっていた）
-  const [profileRes, worksRes, formsRes, reviewRowsRes, creatorRingRes] = await Promise.all([
+  const [profileRes, worksRes, formsRes, reviewRowsRes, creatorRingRes, soulsRes] = await Promise.all([
     supabase.from('profiles').select('*').eq('user_id', id).single(),
     supabase.from('portfolio_items').select('*').eq('user_id', id).order('sort_order', { ascending: true }),
     // 複数の見積もりフォームに対応。新形式（estimate_forms）が無ければ
@@ -144,6 +145,8 @@ export default async function Page({ params }: Props) {
     supabase.from('reviews').select('*').eq('creator_id', id).order('created_at', { ascending: false }),
     // クリエイター本人の装着中アイコンリング
     supabase.from('public_equipped_rings').select('equipped_ring_id').eq('user_id', id).maybeSingle(),
+    // 魂募集（表示するのは掲載期間内で募集中のものだけ。判定は表示側で行う）
+    supabase.from('soul_listings').select('*').eq('user_id', id).order('sort_order', { ascending: true }),
   ])
 
   const profile = profileRes.data
@@ -156,6 +159,10 @@ export default async function Page({ params }: Props) {
   const estimateForms = formsRes.data
   const reviewRows = reviewRowsRes.data
   const creatorRingRow = creatorRingRes.data
+  const initialSouls: SoulListing[] = (soulsRes.data || []).map((row: any) => ({
+    ...row,
+    prices: normalizePrices(row.prices),
+  }))
 
   let reviewerProfileMap: Record<string, { display_name: string | null; avatar_url: string | null }> = {}
   let reviewerRingMap: Record<string, string> = {}
@@ -242,6 +249,7 @@ export default async function Page({ params }: Props) {
         initialForms={estimateForms || []}
         initialReviews={initialReviews}
         creatorRingId={creatorRingId}
+        initialSouls={initialSouls}
       />
     </>
   )

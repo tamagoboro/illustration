@@ -52,6 +52,11 @@ DBを変更したら、この記録も更新すること。
 - creator_id: uuid not null
 - created_at: timestamp with time zone not null default now()
 
+## discord_webhooks
+- user_id: uuid not null
+- encrypted_url: text not null（AES-256-GCMで暗号化。RLSで誰も読めず、service_roleのみ）
+- updated_at: timestamp with time zone not null default now()
+
 ## favorite_creators
 - user_id: uuid not null
 - creator_id: uuid not null
@@ -82,6 +87,13 @@ DBを変更したら、この記録も更新すること。
 - link_url: text
 - is_read: boolean not null default false
 - created_at: timestamp with time zone not null default now()
+
+## notification_settings
+- user_id: uuid not null
+- discord_enabled: boolean not null default true
+- discord_types: ARRAY not null（Discordに送る notifications.type）
+- discord_webhook_hint: text（伏せ字。service_roleのみ書き込み）
+- updated_at: timestamp with time zone not null default now()
 
 ## page_blocks
 - id: uuid not null default gen_random_uuid()
@@ -203,6 +215,7 @@ DBを変更したら、この記録も更新すること。
 - reference_url: text
 - size_spec: text
 - desired_deadline: date
+- soul_listing_id: uuid（魂募集への応募のとき）
 
 ## reviews
 - id: uuid not null default gen_random_uuid()
@@ -213,6 +226,22 @@ DBを変更したら、この記録も更新すること。
 - created_at: timestamp with time zone not null default now()
 - updated_at: timestamp with time zone not null default now()
 - image_urls: ARRAY not null default '{}'::text[]
+
+## soul_listings
+- id: uuid not null default gen_random_uuid()
+- user_id: uuid not null
+- title: text not null
+- image_url: text not null
+- description: text not null default ''::text
+- target_audience: text not null default ''::text
+- prices: jsonb not null default '[]'::jsonb
+- commercial_use: text not null default 'allowed'::text
+- starts_at: date
+- ends_at: date
+- is_closed: boolean not null default false
+- sort_order: integer not null default 0
+- created_at: timestamp with time zone not null default now()
+- updated_at: timestamp with time zone not null default now()
 
 ## user_icon_rings
 - user_id: uuid not null

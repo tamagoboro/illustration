@@ -2102,6 +2102,23 @@ export default function Dashboard() {
                       />
                     </div>
 
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      <Link
+                        href="/dashboard/souls"
+                        className="p-4 rounded-2xl bg-violet-50/60 border border-violet-100 hover:bg-violet-50 transition-colors space-y-1"
+                      >
+                        <span className="text-xs font-bold text-slate-800 block">🎭 魂募集イラストを掲載する →</span>
+                        <span className="text-[11px] text-slate-500 block">キャラクターの魂（中の人）を募集するイラストを、ポートフォリオに掲載できます。</span>
+                      </Link>
+                      <Link
+                        href="/dashboard/notifications"
+                        className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-100 hover:bg-indigo-50 transition-colors space-y-1"
+                      >
+                        <span className="text-xs font-bold text-slate-800 block">🔔 Discord通知を設定する →</span>
+                        <span className="text-[11px] text-slate-500 block">リクエスト・応募・フォローなどを、あなたのDiscordに届けられます。</span>
+                      </Link>
+                    </div>
+
                     <div className="space-y-2 p-4 rounded-2xl bg-pink-50/40 border border-pink-100">
                       <div className="flex items-center justify-between">
                         <label className="text-xs font-bold text-slate-800 flex items-center gap-2">
