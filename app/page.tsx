@@ -57,8 +57,7 @@ const BACKGROUND_IMAGE_URL =
 // ヘッダーのナビゲーション（# 始まりはトップページ内の見出しへジャンプ）
 const NAV_LINKS = [
   { href: '#news', label: '最新情報' },
-  { href: '#pickup', label: 'イラストレーター紹介' },
-  { href: '#search', label: 'クリエイターを探す' },
+  { href: '/articles', label: '記事' },
   { href: '/ranking', label: '注目クリエイター' },
   { href: '/wanted', label: '募集ボード' },
   { href: '/feed', label: 'フィード' },
