@@ -6,6 +6,7 @@ import SoulApplyForm from '@/components/SoulApplyForm'
 import SoulInterestButton from '@/components/SoulInterestButton'
 import ProtectedImage from '@/components/ProtectedImage'
 import Reveal from '@/components/Reveal'
+import FlowStepsList from '@/components/FlowStepsList'
 import {
   SoulListing,
   COMMERCIAL_USE_LABELS,
@@ -15,6 +16,7 @@ import {
   formatPrice,
   minSoulPrice,
   soulDaysLeft,
+  DEFAULT_SOUL_FLOW,
 } from '@/lib/soulListings'
 import { normalizeBackground, backgroundStyle } from '@/lib/portfolioDesign'
 import type { SoulPageData } from '@/lib/soulPageData'
@@ -28,13 +30,6 @@ const COMMERCIAL_STYLES: Record<SoulListing['commercial_use'], string> = {
   negotiable: 'bg-amber-100 text-amber-700',
 }
 
-// 応募の流れ（Drawkerは決済を仲介しないので、契約・支払いは当事者同士で行う）
-const FLOW_STEPS = [
-  { emoji: '✉️', title: '応募する', body: 'このページの応募フォームから、自己紹介や活動予定を送ります。' },
-  { emoji: '💬', title: 'クリエイターと相談', body: 'クリエイターから連絡が来たら、プランや納品の詳細をすり合わせます。' },
-  { emoji: '🤝', title: '契約・お支払い', body: '条件に合意したら、クリエイターと直接お支払いの方法を決めます。' },
-  { emoji: '🎁', title: '納品・デビュー', body: 'データを受け取ったら、この子の魂としての活動スタートです！' },
-]
 
 function SectionTitle({ en, children }: { en: string; children: string }) {
   return (
@@ -51,6 +46,8 @@ export default function SoulDetailView({ id, listing, profile, creatorStats }: {
   const min = minSoulPrice(listing.prices)
   const daysLeft = isOpen ? soulDaysLeft(listing) : null
   const pageStyle = backgroundStyle(normalizeBackground(profile.page_background))
+  // お迎えまでの流れ：クリエイターが編集していればそれを、なければ標準の流れを出す
+  const flowSteps = listing.flow_steps.length > 0 ? listing.flow_steps : DEFAULT_SOUL_FLOW
   const priceHeadline = listing.prices.length === 0 ? null : min === null ? '応相談' : `${formatPrice(min)}〜`
 
   return (
@@ -240,16 +237,7 @@ export default function SoulDetailView({ id, listing, profile, creatorStats }: {
             <Reveal>
               <section className="bg-white/95 rounded-3xl p-6 ring-1 ring-black/5 shadow-lg space-y-4">
                 <SectionTitle en="FLOW">お迎えまでの流れ</SectionTitle>
-                <ol className="grid sm:grid-cols-4 gap-3">
-                  {FLOW_STEPS.map((step, i) => (
-                    <li key={step.title} className="relative rounded-2xl bg-slate-50 p-4 space-y-1.5">
-                      <span className="text-[10px] font-black text-violet-500">STEP {i + 1}</span>
-                      <p className="text-2xl">{step.emoji}</p>
-                      <p className="text-sm font-black text-slate-800">{step.title}</p>
-                      <p className="text-[11px] text-slate-500 leading-relaxed">{step.body}</p>
-                    </li>
-                  ))}
-                </ol>
+                <FlowStepsList steps={flowSteps} />
               </section>
             </Reveal>
 

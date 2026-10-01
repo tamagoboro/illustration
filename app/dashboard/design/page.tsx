@@ -7,6 +7,8 @@ import { supabase } from '@/lib/supabase'
 import { backgroundImageStyle } from '@/lib/background'
 import { convertToWebp } from '@/lib/imageUtils'
 import SimpleHeader from '@/components/SimpleHeader'
+import FlowStepsEditor from '@/components/FlowStepsEditor'
+import { DEFAULT_COMMISSION_FLOW, FlowStep, cleanFlowSteps, normalizeFlowSteps } from '@/lib/flowSteps'
 import {
   BACKGROUND_PRESETS,
   DEFAULT_BACKGROUND,
@@ -27,6 +29,7 @@ export default function PageDesignSettings() {
   const [background, setBackground] = useState<PageBackground>(DEFAULT_BACKGROUND)
   const [coverUrl, setCoverUrl] = useState<string | null>(null)
   const [videos, setVideos] = useState<PortfolioVideo[]>([])
+  const [commissionFlow, setCommissionFlow] = useState<FlowStep[]>([])
   const [videoInput, setVideoInput] = useState('')
   const [videoTitle, setVideoTitle] = useState('')
   const [videoError, setVideoError] = useState('')
@@ -43,13 +46,14 @@ export default function PageDesignSettings() {
       setUserId(data.user.id)
       const { data: profile } = await supabase
         .from('profiles')
-        .select('page_background, cover_image_url, portfolio_videos')
+        .select('page_background, cover_image_url, portfolio_videos, commission_flow')
         .eq('user_id', data.user.id)
         .maybeSingle()
       if (profile) {
         setBackground(normalizeBackground(profile.page_background))
         setCoverUrl(profile.cover_image_url || null)
         setVideos(normalizeVideos(profile.portfolio_videos))
+        setCommissionFlow(normalizeFlowSteps(profile.commission_flow))
       }
       setLoading(false)
     })
@@ -98,7 +102,12 @@ export default function PageDesignSettings() {
     setMessage(null)
     const { error } = await supabase
       .from('profiles')
-      .update({ page_background: background, cover_image_url: coverUrl, portfolio_videos: videos })
+      .update({
+        page_background: background,
+        cover_image_url: coverUrl,
+        portfolio_videos: videos,
+        commission_flow: cleanFlowSteps(commissionFlow),
+      })
       .eq('user_id', userId)
     setSaving(false)
     if (error) {
@@ -123,7 +132,7 @@ export default function PageDesignSettings() {
           </Link>
           <h1 className="text-2xl font-black text-slate-800 drop-shadow-sm mt-1">🎨 ページのデザイン</h1>
           <p className="text-xs text-slate-600 font-medium drop-shadow-xs">
-            背景・カバー画像・動画を設定して、あなたらしいポートフォリオにしましょう。
+            背景・カバー画像・動画・ご依頼の流れを設定して、あなたらしいポートフォリオにしましょう。
           </p>
         </div>
 
@@ -332,6 +341,20 @@ export default function PageDesignSettings() {
                   <p className="text-[10px] text-slate-400">通常の動画・ショート動画・ライブ配信のアーカイブのURLに対応しています。</p>
                 </div>
               )}
+            </section>
+
+            {/* ご依頼の流れ */}
+            <section className="bg-white/95 rounded-3xl p-6 border border-white/70 shadow-sm space-y-3">
+              <div>
+                <h2 className="text-sm font-black text-slate-800">ご依頼の流れ</h2>
+                <p className="text-[11px] text-slate-500">ポートフォリオの「料金」の下に表示されます。支払いのタイミングや確認の回数など、あなたの進め方に合わせて変えられます。</p>
+              </div>
+              <FlowStepsEditor
+                title="ステップ"
+                steps={commissionFlow}
+                defaultSteps={DEFAULT_COMMISSION_FLOW}
+                onChange={setCommissionFlow}
+              />
             </section>
           </>
         )}

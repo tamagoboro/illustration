@@ -183,6 +183,7 @@ DBを変更したら、この記録も更新すること。
 - page_background: jsonb not null（背景。add_portfolio_design.sql）
 - cover_image_url: text（カバー画像）
 - portfolio_videos: jsonb not null default '[]'::jsonb（YouTube動画・最大6本）
+- commission_flow: jsonb not null default '[]'::jsonb（ご依頼の流れ。空なら標準の流れ。add_commission_flow.sql）
 
 ## referrals
 - id: uuid not null default gen_random_uuid()
@@ -249,6 +250,7 @@ DBを変更したら、この記録も更新すること。
 - deliverables: jsonb not null default '[]'（納品物リスト。add_soul_listing_details.sql）
 - character_profile: jsonb not null default '[]'（キャラクター設定表）
 - faqs: jsonb not null default '[]'（よくある質問）
+- flow_steps: jsonb not null default '[]'（お迎えまでの流れ。空なら標準の流れ。add_soul_flow_steps.sql）
 - ※ user_id にユニーク制約（1クリエイター1件まで）
 
 ## soul_interests

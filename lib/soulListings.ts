@@ -1,7 +1,20 @@
+import { FlowStep, MAX_FLOW_STEPS, normalizeFlowSteps } from '@/lib/flowSteps'
+
 // 魂募集イラスト（soul_listings）の型と表示用の共通処理
 export type SoulPrice = { label: string; price: number | null }
 export type SoulProfileItem = { label: string; value: string }
 export type SoulFaq = { q: string; a: string }
+export type SoulFlowStep = FlowStep
+
+// お迎えまでの流れ（クリエイターが編集していないときに表示する標準の流れ）。
+// Drawkerは決済を仲介しないので、契約・支払いは当事者同士で行う前提の文面にしている
+export const DEFAULT_SOUL_FLOW: SoulFlowStep[] = [
+  { emoji: '✉️', title: '応募する', body: 'このページの応募フォームから、自己紹介や活動予定を送ります。' },
+  { emoji: '💬', title: 'クリエイターと相談', body: 'クリエイターから連絡が来たら、プランや納品の詳細をすり合わせます。' },
+  { emoji: '🤝', title: '契約・お支払い', body: '条件に合意したら、クリエイターと直接お支払いの方法を決めます。' },
+  { emoji: '🎁', title: '納品・デビュー', body: 'データを受け取ったら、この子の魂としての活動スタートです！' },
+]
+export const MAX_SOUL_FLOW_STEPS = MAX_FLOW_STEPS
 
 export type SoulListing = {
   id: string
@@ -20,6 +33,7 @@ export type SoulListing = {
   deliverables: string[] // 納品物リスト
   character_profile: SoulProfileItem[] // キャラクター設定表
   faqs: SoulFaq[] // よくある質問
+  flow_steps: SoulFlowStep[] // お迎えまでの流れ（空なら標準の流れを表示）
   created_at?: string
   updated_at?: string
 }
@@ -74,6 +88,7 @@ export const normalizeSoulListing = (row: any): SoulListing => {
           .filter((p: any) => p && typeof p.label === 'string' && typeof p.value === 'string' && p.label.trim())
           .map((p: any) => ({ label: p.label, value: p.value }))
       : [],
+    flow_steps: normalizeFlowSteps(row.flow_steps),
     faqs: Array.isArray(row.faqs)
       ? row.faqs.filter((f: any) => f && typeof f.q === 'string' && f.q.trim()).map((f: any) => ({ q: f.q, a: typeof f.a === 'string' ? f.a : '' }))
       : [],

@@ -8,6 +8,8 @@ import { backgroundImageStyle } from '@/lib/background'
 import { convertToWebp } from '@/lib/imageUtils'
 import SimpleHeader from '@/components/SimpleHeader'
 import SoulShareButton from '@/components/SoulShareButton'
+import FlowStepsEditor from '@/components/FlowStepsEditor'
+import { cleanFlowSteps } from '@/lib/flowSteps'
 import {
   SoulListing,
   SoulPrice,
@@ -17,6 +19,8 @@ import {
   MAX_SOUL_DELIVERABLES,
   MAX_SOUL_PROFILE_ITEMS,
   MAX_SOUL_FAQS,
+  DEFAULT_SOUL_FLOW,
+  SoulFlowStep,
   getSoulStatus,
   formatSoulPeriod,
   formatPrice,
@@ -43,6 +47,7 @@ type FormState = {
   deliverables: string[]
   characterProfile: { label: string; value: string }[]
   faqs: { q: string; a: string }[]
+  flowSteps: SoulFlowStep[] // 空なら標準の流れを表示
 }
 
 // キャラクター設定表で、よく使う項目をワンタップで追加できるようにする
@@ -64,6 +69,7 @@ const emptyForm = (): FormState => ({
   deliverables: [],
   characterProfile: [],
   faqs: [],
+  flowSteps: [],
 })
 
 const STATUS_STYLES: Record<string, string> = {
@@ -128,6 +134,7 @@ export default function DashboardSoulsPage() {
       deliverables: [...l.deliverables],
       characterProfile: l.character_profile.map((p) => ({ ...p })),
       faqs: l.faqs.map((f) => ({ ...f })),
+      flowSteps: l.flow_steps.map((f) => ({ ...f })),
     })
   }
 
@@ -201,6 +208,7 @@ export default function DashboardSoulsPage() {
           .map((p) => ({ label: p.label.trim(), value: p.value.trim() }))
           .filter((p) => p.label && p.value),
         faqs: form.faqs.map((f) => ({ q: f.q.trim(), a: f.a.trim() })).filter((f) => f.q && f.a),
+        flow_steps: cleanFlowSteps(form.flowSteps),
       }
       const { error } = form.id
         ? await supabase.from('soul_listings').update(row).eq('id', form.id)
@@ -663,6 +671,14 @@ export default function DashboardSoulsPage() {
                 </button>
               )}
             </div>
+
+            {/* お迎えまでの流れ */}
+            <FlowStepsEditor
+              title="お迎えまでの流れ"
+              steps={form.flowSteps}
+              defaultSteps={DEFAULT_SOUL_FLOW}
+              onChange={(flowSteps) => updateForm({ flowSteps })}
+            />
 
             {form.id && (
               <label className="flex items-center gap-2 text-xs font-bold text-slate-600 cursor-pointer">
