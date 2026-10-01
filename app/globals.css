@@ -73,12 +73,52 @@
   animation: drawker-gradient 8s linear infinite;
 }
 
+/* ===== ログインボーナスのポップアップ（components/LoginBonusPopup.tsx） ===== */
+
+/* カードがぽんっと出てくる */
+@keyframes drawker-pop-in {
+  0% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.92);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1.02);
+  }
+  100% {
+    transform: none;
+  }
+}
+.drawker-pop-in {
+  animation: drawker-pop-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* 今日のぶんの丸がスタンプのように押される */
+@keyframes drawker-stamp {
+  0% {
+    opacity: 0;
+    transform: scale(2.2) rotate(-15deg);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(0.9);
+  }
+  100% {
+    transform: none;
+  }
+}
+.drawker-stamp {
+  animation: drawker-stamp 0.45s cubic-bezier(0.22, 1, 0.36, 1) 0.45s both;
+}
+
 /* 動きを減らす設定の人には、アニメーションを止める */
 @media (prefers-reduced-motion: reduce) {
   .drawker-marquee,
   .drawker-kenburns,
   .drawker-float,
-  .drawker-gradient-flow {
+  .drawker-gradient-flow,
+  .drawker-pop-in,
+  .drawker-stamp {
     animation: none;
   }
   .drawker-reveal {

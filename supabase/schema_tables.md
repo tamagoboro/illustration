@@ -103,6 +103,11 @@ DBを変更したら、この記録も更新すること。
 - content_data: jsonb not null default '{}'::jsonb
 - style_data: jsonb default '{}'::jsonb
 
+## daily_logins
+- user_id: uuid not null
+- login_date: date not null
+- created_at: timestamp with time zone not null default now()
+
 ## point_transactions
 - id: uuid not null default gen_random_uuid()
 - user_id: uuid not null
