@@ -13,14 +13,16 @@ export const loadPostPageData = cache(async (postId: string) => {
   // UUIDでない値をそのまま問い合わせるとDB側でエラーになるので、先に弾く
   if (!UUID_PATTERN.test(postId)) return null
 
-  const { data } = await supabase
+  const { data: row } = await supabase
     .from('posts')
     .select('id, user_id, content, image_urls, is_sensitive, created_at, profiles:user_id (display_name)')
     .eq('id', postId)
     .maybeSingle()
-  if (!data) return null
+  if (!row) return null
 
-  const profile: any = Array.isArray(data.profiles) ? data.profiles[0] : data.profiles
+  // DBの型定義を生成していないので、列は any として扱う
+  const data = row as any
+  const profile = Array.isArray(data.profiles) ? data.profiles[0] : data.profiles
   const imageUrls: string[] = data.image_urls || []
 
   return {

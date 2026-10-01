@@ -82,7 +82,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ pos
   const post = await loadPostPageData(postId)
   // 取得できなかった画像は飛ばし、取れた枚数で並べ方を決める
   const sources = post
-    ? (await Promise.all(post.ogImageSources.map((url) => fetchImage(url)))).filter((b): b is Buffer => !!b)
+    ? ((await Promise.all(post.ogImageSources.map((url) => fetchImage(url)))).filter(Boolean) as Buffer[])
     : []
   if (!post || sources.length === 0) return new Response('Not Found', { status: 404 })
 
