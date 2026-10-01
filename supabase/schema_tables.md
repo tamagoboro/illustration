@@ -184,6 +184,7 @@ DBを変更したら、この記録も更新すること。
 - cover_image_url: text（カバー画像）
 - portfolio_videos: jsonb not null default '[]'::jsonb（YouTube動画・最大6本）
 - commission_flow: jsonb not null default '[]'::jsonb（ご依頼の流れ。空なら標準の流れ。add_commission_flow.sql）
+- commission_flow_public: boolean not null default false（ご依頼の流れを公開しているか。add_commission_flow_visibility.sql）
 
 ## referrals
 - id: uuid not null default gen_random_uuid()

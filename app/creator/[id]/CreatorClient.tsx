@@ -150,6 +150,7 @@ type ExtendedProfile = Profile & {
   cover_image_url?: string | null
   portfolio_videos?: unknown
   commission_flow?: unknown // ご依頼の流れ（supabase/add_commission_flow.sql）
+  commission_flow_public?: boolean | null // ご依頼の流れを公開しているか（初期は非公開）
 }
 
 const formatExternalUrl = (url?: string | null) => {
@@ -1112,6 +1113,8 @@ const themeColor = useMemo(() => {
   // ご依頼の流れ：クリエイターが編集していればそれを、なければ標準の流れを出す
   const customCommissionFlow = normalizeFlowSteps(profile.commission_flow)
   const commissionFlow = customCommissionFlow.length > 0 ? customCommissionFlow : DEFAULT_COMMISSION_FLOW
+  // 本人が「公開する」を押すまでは表示しない
+  const showCommissionFlow = profile.commission_flow_public === true
   const sectionTitleClass = `text-lg sm:text-xl font-black tracking-tight ${isDarkPage ? 'text-white' : 'text-sky-950'} drop-shadow-sm`
 
   // ページ内メニュー（中身があるセクションだけ）
@@ -1119,7 +1122,7 @@ const themeColor = useMemo(() => {
     { id: 'works', label: '作品' },
     ...(portfolioVideos.length > 0 ? [{ id: 'videos', label: '動画' }] : []),
     ...(profile.menu_items && profile.menu_items.length > 0 ? [{ id: 'price', label: '料金' }] : []),
-    { id: 'flow', label: '依頼の流れ' },
+    ...(showCommissionFlow ? [{ id: 'flow', label: '依頼の流れ' }] : []),
     { id: 'conditions', label: '受付条件' },
     { id: 'reviews', label: `レビュー${reviews.length > 0 ? `（${reviews.length}）` : ''}` },
   ]
@@ -1676,7 +1679,8 @@ const themeColor = useMemo(() => {
         )}
         </div>
 
-        {/* ご依頼の流れ */}
+        {/* ご依頼の流れ（本人が公開したときだけ） */}
+        {showCommissionFlow && (
         <div id="flow" className="scroll-mt-32">
           <Reveal>
             <section className="bg-white/90 backdrop-blur-xl p-6 sm:p-7 rounded-3xl shadow-xl ring-1 ring-black/5 space-y-5">
@@ -1687,6 +1691,7 @@ const themeColor = useMemo(() => {
             </section>
           </Reveal>
         </div>
+        )}
 
         <div id="conditions" className="scroll-mt-32">
         {/* 受付条件 */}

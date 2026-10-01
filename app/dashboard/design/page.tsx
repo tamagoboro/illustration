@@ -30,6 +30,8 @@ export default function PageDesignSettings() {
   const [coverUrl, setCoverUrl] = useState<string | null>(null)
   const [videos, setVideos] = useState<PortfolioVideo[]>([])
   const [commissionFlow, setCommissionFlow] = useState<FlowStep[]>([])
+  // ご依頼の流れを公開しているか（初期は非公開。確認・編集してから「公開する」ボタンで公開する）
+  const [flowPublic, setFlowPublic] = useState(false)
   const [videoInput, setVideoInput] = useState('')
   const [videoTitle, setVideoTitle] = useState('')
   const [videoError, setVideoError] = useState('')
@@ -46,7 +48,7 @@ export default function PageDesignSettings() {
       setUserId(data.user.id)
       const { data: profile } = await supabase
         .from('profiles')
-        .select('page_background, cover_image_url, portfolio_videos, commission_flow')
+        .select('page_background, cover_image_url, portfolio_videos, commission_flow, commission_flow_public')
         .eq('user_id', data.user.id)
         .maybeSingle()
       if (profile) {
@@ -54,6 +56,7 @@ export default function PageDesignSettings() {
         setCoverUrl(profile.cover_image_url || null)
         setVideos(normalizeVideos(profile.portfolio_videos))
         setCommissionFlow(normalizeFlowSteps(profile.commission_flow))
+        setFlowPublic(profile.commission_flow_public === true)
       }
       setLoading(false)
     })
@@ -96,7 +99,8 @@ export default function PageDesignSettings() {
     setVideos(next)
   }
 
-  const handleSave = async () => {
+  // nextFlowPublic を渡すと、ご依頼の流れの公開・非公開もいっしょに切り替えて保存する（公開ボタン用）
+  const handleSave = async (nextFlowPublic: boolean = flowPublic) => {
     if (!userId) return
     setSaving(true)
     setMessage(null)
@@ -107,6 +111,7 @@ export default function PageDesignSettings() {
         cover_image_url: coverUrl,
         portfolio_videos: videos,
         commission_flow: cleanFlowSteps(commissionFlow),
+        commission_flow_public: nextFlowPublic,
       })
       .eq('user_id', userId)
     setSaving(false)
@@ -115,7 +120,16 @@ export default function PageDesignSettings() {
       setMessage({ kind: 'error', text: `保存に失敗しました（${error.message}）` })
       return
     }
-    setMessage({ kind: 'ok', text: '保存しました！ポートフォリオページで確認してみましょう。' })
+    const flowChanged = nextFlowPublic !== flowPublic
+    setFlowPublic(nextFlowPublic)
+    setMessage({
+      kind: 'ok',
+      text: flowChanged
+        ? nextFlowPublic
+          ? 'ご依頼の流れを公開しました！ポートフォリオページで確認してみましょう。'
+          : 'ご依頼の流れを非公開にしました。'
+        : '保存しました！ポートフォリオページで確認してみましょう。',
+    })
   }
 
   const previewStyle = backgroundStyle(background)
@@ -345,9 +359,41 @@ export default function PageDesignSettings() {
 
             {/* ご依頼の流れ */}
             <section className="bg-white/95 rounded-3xl p-6 border border-white/70 shadow-sm space-y-3">
-              <div>
-                <h2 className="text-sm font-black text-slate-800">ご依頼の流れ</h2>
-                <p className="text-[11px] text-slate-500">ポートフォリオの「料金」の下に表示されます。支払いのタイミングや確認の回数など、あなたの進め方に合わせて変えられます。</p>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                    ご依頼の流れ
+                    {flowPublic ? (
+                      <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">● 公開中</span>
+                    ) : (
+                      <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">非公開</span>
+                    )}
+                  </h2>
+                  <p className="text-[11px] text-slate-500">
+                    {flowPublic
+                      ? 'ポートフォリオの「料金」の下に表示されています。編集したら下の「保存する」で反映されます。'
+                      : 'まだポートフォリオには表示されていません。内容を確認・編集してから「公開する」を押してください。'}
+                  </p>
+                </div>
+                {flowPublic ? (
+                  <button
+                    type="button"
+                    onClick={() => handleSave(false)}
+                    disabled={saving || uploading !== null}
+                    className="shrink-0 px-4 py-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold disabled:opacity-50 cursor-pointer"
+                  >
+                    非公開にする
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleSave(true)}
+                    disabled={saving || uploading !== null}
+                    className="shrink-0 px-5 py-2 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black shadow-sm disabled:opacity-50 cursor-pointer"
+                  >
+                    {saving ? '保存中...' : 'ポートフォリオに公開する'}
+                  </button>
+                )}
               </div>
               <FlowStepsEditor
                 title="ステップ"
@@ -375,7 +421,7 @@ export default function PageDesignSettings() {
                 </Link>
               )}
               <button
-                onClick={handleSave}
+                onClick={() => handleSave()}
                 disabled={saving || uploading !== null}
                 className="px-6 py-2.5 rounded-full bg-sky-500 hover:bg-sky-600 text-white text-xs font-black shadow-sm disabled:opacity-50 cursor-pointer"
               >

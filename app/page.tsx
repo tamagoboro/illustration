@@ -14,6 +14,7 @@ import NotificationBell from '@/components/NotificationBell'
 import RecentlyViewedCreators from '@/components/RecentlyViewedCreators'
 import { isCampaignActive, applyDiscount, formatDiscountBadge, Campaign } from '@/lib/discount'
 import { UPDATES } from '@/lib/updates'
+import { getSoulStatus } from '@/lib/soulListings'
 import { TOP_BANNER } from '@/lib/banner'
 
 // メニュー項目の型定義
@@ -39,6 +40,8 @@ type ProfileWithImage = Profile & {
   ai_learning_allowed?: boolean | null
   r18_allowed?: boolean | null
   campaign_enabled?: boolean | null
+  active_projects_count?: number | null
+  max_projects_capacity?: number | null
   campaign_label?: string | null
   campaign_discount_type?: 'percent' | 'fixed' | null
   campaign_discount_value?: number | null
@@ -97,6 +100,62 @@ function StarRating({ stats }: { stats?: { avg: number; count: number } }) {
   )
 }
 
+// ===== 絞り込みの選択肢 =====
+// 予算・納期はタップで選ぶボタン式（数字を打たなくていいように）
+const PRICE_OPTIONS = [3000, 5000, 10000, 20000, 30000]
+const LEAD_TIME_OPTIONS = [7, 14, 30]
+
+// こだわり条件（タップで複数選べる。選んだ条件をすべて満たす人だけを表示）
+type ConditionKey =
+  | 'commercial'
+  | 'handDrawn'
+  | 'express'
+  | 'freeRevision'
+  | 'copyright'
+  | 'r18'
+  | 'campaign'
+  | 'capacity'
+  | 'soul'
+  | 'newcomer'
+  | 'rated4'
+  | 'hasReview'
+
+const CONDITION_GROUPS: { title: string; items: { key: ConditionKey; label: string }[] }[] = [
+  {
+    title: 'おすすめ',
+    items: [
+      { key: 'campaign', label: '🎉 キャンペーン中' },
+      { key: 'capacity', label: '🟢 空き枠あり' },
+      { key: 'soul', label: '🎭 魂募集中' },
+      { key: 'newcomer', label: '🌱 新着（30日以内）' },
+    ],
+  },
+  {
+    title: '評価',
+    items: [
+      { key: 'rated4', label: '★4以上' },
+      { key: 'hasReview', label: 'レビューあり' },
+    ],
+  },
+  {
+    title: 'こだわり条件',
+    items: [
+      { key: 'commercial', label: '商用利用OK' },
+      { key: 'handDrawn', label: '完全手描き' },
+      { key: 'express', label: '特急対応' },
+      { key: 'freeRevision', label: '無料リテイク' },
+      { key: 'copyright', label: '著作権譲渡' },
+      { key: 'r18', label: 'R-18対応' },
+    ],
+  },
+]
+const CONDITION_LABELS = Object.fromEntries(CONDITION_GROUPS.flatMap((g) => g.items.map((i) => [i.key, i.label]))) as Record<
+  ConditionKey,
+  string
+>
+
+const STATUS_LABELS: Record<string, string> = { available: '即対応可', busy: '相談受付中' }
+
 // 24時間以内に作成・更新されたか判定する関数
 const isRecentlyUpdated = (updatedAt?: string | null) => {
   if (!updatedAt) return false
@@ -121,13 +180,12 @@ export default function Home() {
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [maxLeadTime, setMaxLeadTime] = useState<number | ''>('')
   const [maxPrice, setMaxPrice] = useState<number | ''>('')
-  const [commercialOnly, setCommercialOnly] = useState(false)
-  const [expressOnly, setExpressOnly] = useState(false)
-  const [r18Only, setR18Only] = useState(false)
-  const [handDrawnOnly, setHandDrawnOnly] = useState(false)
-  const [copyrightTransferOnly, setCopyrightTransferOnly] = useState(false)
-  const [freeRevisionOnly, setFreeRevisionOnly] = useState(false)
-  const [sortOption, setSortOption] = useState<'random' | 'price_asc' | 'price_desc' | 'likes_desc' | 'likes_asc' | 'rating_desc'>('random')
+  const [conditions, setConditions] = useState<ConditionKey[]>([])
+  // スマホでは絞り込み欄を折りたたんでおく（PCでは常に表示）
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  // 魂募集を掲載中（掲載期間内で募集中）のクリエイター
+  const [soulCreatorIds, setSoulCreatorIds] = useState<Set<string>>(new Set())
+  const [sortOption, setSortOption] = useState<'random' | 'price_asc' | 'price_desc' | 'likes_desc' | 'rating_desc'>('random')
   const [visibleCount, setVisibleCount] = useState(10)
 
   // お気に入りステート
@@ -261,11 +319,20 @@ export default function Home() {
 
           // リング取得とバッジ取得は互いに独立しているので、直列にawaitせず並行実行して
           // 待ち時間を短縮する（バッジがキャッシュ済みならRPC自体を呼ばない）
-          const [ringsResult, badgeResult, reviewsResult] = await Promise.all([
+          const [ringsResult, badgeResult, reviewsResult, soulsResult] = await Promise.all([
             supabase.from('public_equipped_rings').select('user_id, equipped_ring_id').in('user_id', userIds),
             cachedBadges ? Promise.resolve({ data: cachedBadges }) : supabase.rpc('get_public_creator_badges'),
             supabase.from('reviews').select('creator_id, rating').in('creator_id', userIds),
+            supabase.from('soul_listings').select('user_id, starts_at, ends_at, is_closed').in('user_id', userIds),
           ])
+
+          setSoulCreatorIds(
+            new Set(
+              (soulsResult.data || [])
+                .filter((row: { starts_at: string | null; ends_at: string | null; is_closed: boolean }) => getSoulStatus(row) === 'open')
+                .map((row: { user_id: string }) => row.user_id)
+            )
+          )
 
           const stats: Record<string, { sum: number; count: number }> = {}
           ;(reviewsResult.data || []).forEach((r: { creator_id: string; rating: number }) => {
@@ -367,6 +434,22 @@ export default function Home() {
     )
   }
 
+  // クリエイターページのタグ（/?tag=○○）や、検索エンジンからのキーワード（/?q=○○）で来たときは、その条件で絞り込んでおく
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const tag = params.get('tag')
+    const q = params.get('q')
+    if (tag) {
+      setSelectedTastes([tag])
+      setFiltersOpen(true)
+    }
+    if (q) setSearchTerm(q)
+    if (tag || q) document.getElementById('search')?.scrollIntoView({ block: 'start' })
+  }, [])
+
+  const toggleCondition = (key: ConditionKey) =>
+    setConditions((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]))
+
   const resetFilters = () => {
     setSearchTerm('')
     setSelectedTastes([])
@@ -374,12 +457,7 @@ export default function Home() {
     setStatusFilter('ALL')
     setMaxLeadTime('')
     setMaxPrice('')
-    setCommercialOnly(false)
-    setExpressOnly(false)
-    setR18Only(false)
-    setHandDrawnOnly(false)
-    setCopyrightTransferOnly(false)
-    setFreeRevisionOnly(false)
+    setConditions([])
     setShowFavoritesOnly(false)
     setSortOption('random')
   }
@@ -404,23 +482,46 @@ export default function Home() {
       const matchesPrice =
         maxPrice === '' || (profile.price_min !== null && profile.price_min !== undefined && profile.price_min <= Number(maxPrice))
 
-      const matchesCommercial =
-        !commercialOnly || profile.commercial_use_allowed === true
-
-      const matchesExpress =
-        !expressOnly || profile.express_option_available === true
-
-      const matchesR18 =
-        !r18Only || profile.r18_allowed === true
-
-      const matchesHandDrawn =
-        !handDrawnOnly || profile.ai_usage === 'none'
-
-      const matchesCopyrightTransfer =
-        !copyrightTransferOnly || profile.copyright_transfer_available === true
-
-      const matchesFreeRevision =
-        !freeRevisionOnly || (typeof profile.free_revision_count === 'number' && profile.free_revision_count >= 1)
+      const matchesConditions = conditions.every((key) => {
+        const review = reviewStats[profile.user_id]
+        switch (key) {
+          case 'commercial':
+            return profile.commercial_use_allowed === true
+          case 'handDrawn':
+            return profile.ai_usage === 'none'
+          case 'express':
+            return profile.express_option_available === true
+          case 'freeRevision':
+            return typeof profile.free_revision_count === 'number' && profile.free_revision_count >= 1
+          case 'copyright':
+            return profile.copyright_transfer_available === true
+          case 'r18':
+            return profile.r18_allowed === true
+          case 'campaign':
+            return isCampaignActive({
+              enabled: profile.campaign_enabled,
+              discountType: profile.campaign_discount_type,
+              discountValue: profile.campaign_discount_value,
+              startAt: profile.campaign_start_at,
+              endAt: profile.campaign_end_at,
+            })
+          case 'capacity':
+            return (
+              typeof profile.max_projects_capacity === 'number' &&
+              (profile.active_projects_count ?? 0) < profile.max_projects_capacity
+            )
+          case 'soul':
+            return soulCreatorIds.has(profile.user_id)
+          case 'newcomer':
+            return !!profile.created_at && Date.now() - new Date(profile.created_at).getTime() <= 30 * 24 * 60 * 60 * 1000
+          case 'rated4':
+            return !!review && review.avg >= 4
+          case 'hasReview':
+            return !!review && review.count > 0
+          default:
+            return true
+        }
+      })
 
       const matchesFavorite =
         !showFavoritesOnly || favorites.includes(profile.user_id)
@@ -431,12 +532,7 @@ export default function Home() {
         matchesStatus &&
         matchesLeadTime &&
         matchesPrice &&
-        matchesCommercial &&
-        matchesExpress &&
-        matchesR18 &&
-        matchesHandDrawn &&
-        matchesCopyrightTransfer &&
-        matchesFreeRevision &&
+        matchesConditions &&
         matchesFavorite
       )
     })
@@ -450,9 +546,6 @@ export default function Home() {
       }
       if (sortOption === 'likes_desc') {
         return (b.likes_count ?? 0) - (a.likes_count ?? 0)
-      }
-      if (sortOption === 'likes_asc') {
-        return (a.likes_count ?? 0) - (b.likes_count ?? 0)
       }
       if (sortOption === 'rating_desc') {
         // 平均が同じなら件数が多い方を上に。レビューが無い人は一番下
@@ -469,12 +562,12 @@ export default function Home() {
       }
       return 0
     })
-  }, [profiles, searchTerm, selectedTastes, statusFilter, maxLeadTime, maxPrice, commercialOnly, expressOnly, r18Only, handDrawnOnly, copyrightTransferOnly, freeRevisionOnly, showFavoritesOnly, favorites, sortOption, reviewStats])
+  }, [profiles, searchTerm, selectedTastes, statusFilter, maxLeadTime, maxPrice, conditions, soulCreatorIds, showFavoritesOnly, favorites, sortOption, reviewStats])
 
   // 検索条件・並び順を変えたら表示件数を最初の10件に戻す
   useEffect(() => {
     setVisibleCount(10)
-  }, [searchTerm, selectedTastes, statusFilter, maxLeadTime, maxPrice, commercialOnly, expressOnly, r18Only, handDrawnOnly, copyrightTransferOnly, freeRevisionOnly, showFavoritesOnly, sortOption])
+  }, [searchTerm, selectedTastes, statusFilter, maxLeadTime, maxPrice, conditions, showFavoritesOnly, sortOption])
 
   const visibleProfiles = useMemo(
     () => filteredProfiles.slice(0, visibleCount),
@@ -497,14 +590,31 @@ export default function Home() {
       .slice(0, 3)
   }, [profiles])
 
+  // ジャンル：そのジャンルのクリエイターが多い順に、人数つきで表示する
   const displayedTastes = useMemo(() => {
-    return Array.from(new Set(profiles.flatMap((p) => p.tastes || [])))
-      .filter((taste: string) => !HIDDEN_TASTES.has(taste))
-      .filter((taste: string) =>
-        taste.toLowerCase().includes(tasteSearch.toLowerCase())
-      )
-      .slice(0, 20)
+    const counts: Record<string, number> = {}
+    profiles.forEach((p) => {
+      new Set(p.tastes || []).forEach((taste: string) => {
+        counts[taste] = (counts[taste] || 0) + 1
+      })
+    })
+    return Object.entries(counts)
+      .filter(([taste]) => !HIDDEN_TASTES.has(taste))
+      .filter(([taste]) => taste.toLowerCase().includes(tasteSearch.toLowerCase()))
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 24)
   }, [profiles, tasteSearch])
+
+  // 今かかっている条件（一覧の上にチップで並べ、✕で個別に解除できる）
+  const activeFilterChips: { key: string; label: string; clear: () => void }[] = [
+    ...(searchTerm ? [{ key: 'q', label: `「${searchTerm}」`, clear: () => setSearchTerm('') }] : []),
+    ...(maxPrice !== '' ? [{ key: 'price', label: `¥${maxPrice.toLocaleString()}以下`, clear: () => setMaxPrice('') }] : []),
+    ...(maxLeadTime !== '' ? [{ key: 'lead', label: `${maxLeadTime}日以内`, clear: () => setMaxLeadTime('') }] : []),
+    ...(statusFilter !== 'ALL' ? [{ key: 'status', label: STATUS_LABELS[statusFilter] || statusFilter, clear: () => setStatusFilter('ALL') }] : []),
+    ...conditions.map((key) => ({ key, label: CONDITION_LABELS[key], clear: () => toggleCondition(key) })),
+    ...selectedTastes.map((taste) => ({ key: `t-${taste}`, label: `#${taste}`, clear: () => toggleTaste(taste) })),
+    ...(showFavoritesOnly ? [{ key: 'fav', label: '♥ お気に入り', clear: () => setShowFavoritesOnly(false) }] : []),
+  ]
 
   return (
     <div
@@ -868,12 +978,21 @@ export default function Home() {
           {/* サイドバー */}
           <aside className="lg:col-span-1 space-y-6">
             <div className="bg-white/80 backdrop-blur-md rounded-3xl border border-sky-100/80 shadow-sm shadow-sky-100/40 overflow-hidden">
-              {/* ヘッダー */}
+              {/* ヘッダー（スマホではここを押して開閉） */}
               <div className="flex justify-between items-center px-5 py-4 bg-gradient-to-r from-sky-500 via-sky-400 to-cyan-400">
-                <div className="flex items-center gap-2 text-white">
+                <button
+                  type="button"
+                  onClick={() => setFiltersOpen(!filtersOpen)}
+                  className="flex items-center gap-2 text-white lg:cursor-default cursor-pointer"
+                  aria-expanded={filtersOpen}
+                >
                   <SlidersHorizontal size={14} strokeWidth={2.5} />
                   <h2 className="font-black text-xs tracking-wider">絞り込み検索</h2>
-                </div>
+                  {activeFilterChips.length > 0 && (
+                    <span className="px-1.5 py-0.5 rounded-full bg-white text-sky-600 text-[10px] font-black">{activeFilterChips.length}</span>
+                  )}
+                  <span className="lg:hidden text-[10px] font-bold text-white/90">{filtersOpen ? '▲ 閉じる' : '▼ 開く'}</span>
+                </button>
                 <button
                   onClick={resetFilters}
                   className="flex items-center gap-1 text-[11px] text-white/90 hover:text-white font-bold cursor-pointer transition-colors"
@@ -882,7 +1001,7 @@ export default function Home() {
                 </button>
               </div>
 
-              <div className="p-5 space-y-5">
+              <div className={`p-5 space-y-5 ${filtersOpen ? 'block' : 'hidden'} lg:block`}>
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1.5">
                     <Search size={12} className="text-sky-400" /> キーワード
@@ -896,172 +1015,100 @@ export default function Home() {
                   />
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1.5">
-                    <Wallet size={12} className="text-sky-400" /> 予算上限
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      step="1000"
-                      placeholder="指定なし"
-                      value={maxPrice}
-                      onChange={(e) => setMaxPrice(e.target.value ? Number(e.target.value) : '')}
-                      className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50/70 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:bg-white focus:border-sky-300 transition-all"
-                    />
-                    <span className="text-xs text-slate-500 font-bold whitespace-nowrap">以下</span>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1.5">
-                    <Clock size={12} className="text-sky-400" /> 希望納期
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      placeholder="指定なし"
-                      value={maxLeadTime}
-                      onChange={(e) => setMaxLeadTime(e.target.value ? Number(e.target.value) : '')}
-                      className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50/70 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:bg-white focus:border-sky-300 transition-all"
-                    />
-                    <span className="text-xs text-slate-500 font-bold whitespace-nowrap">日以内</span>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-slate-500 block">受付状況</label>
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50/70 text-xs text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-sky-400 focus:bg-white focus:border-sky-300 transition-all cursor-pointer"
-                  >
-                    <option value="ALL">すべて表示</option>
-                    <option value="available">即対応可のみ</option>
-                    <option value="busy">相談受付中</option>
-                  </select>
-                </div>
-
+                {/* 予算 */}
                 <div className="space-y-2">
-                  <label className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-sky-50/70 border border-sky-100 cursor-pointer">
-                    <span className="text-[11px] font-bold text-slate-600">商用利用可能のみ</span>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={commercialOnly}
-                      onClick={() => setCommercialOnly(!commercialOnly)}
-                      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-200 cursor-pointer ${
-                        commercialOnly ? 'bg-sky-500' : 'bg-slate-300'
-                      }`}
-                    >
-                      <span
-                        className={`pointer-events-none absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-md transition-transform duration-200 ${
-                          commercialOnly ? 'translate-x-4' : 'translate-x-0.5'
-                        }`}
-                      />
-                    </button>
+                  <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1.5">
+                    <Wallet size={12} className="text-sky-400" /> 予算（最安価格）
                   </label>
-
-                  <label className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-sky-50/70 border border-sky-100 cursor-pointer">
-                    <span className="text-[11px] font-bold text-slate-600">急ぎ・特急対応のみ</span>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={expressOnly}
-                      onClick={() => setExpressOnly(!expressOnly)}
-                      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-200 cursor-pointer ${
-                        expressOnly ? 'bg-sky-500' : 'bg-slate-300'
-                      }`}
-                    >
-                      <span
-                        className={`pointer-events-none absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-md transition-transform duration-200 ${
-                          expressOnly ? 'translate-x-4' : 'translate-x-0.5'
-                        }`}
-                      />
-                    </button>
-                  </label>
-
-                  <label className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-rose-50/70 border border-rose-100 cursor-pointer">
-                    <span className="text-[11px] font-bold text-slate-600">R-18（成人向け）対応のみ</span>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={r18Only}
-                      onClick={() => setR18Only(!r18Only)}
-                      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-200 cursor-pointer ${
-                        r18Only ? 'bg-rose-500' : 'bg-slate-300'
-                      }`}
-                    >
-                      <span
-                        className={`pointer-events-none absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-md transition-transform duration-200 ${
-                          r18Only ? 'translate-x-4' : 'translate-x-0.5'
-                        }`}
-                      />
-                    </button>
-                  </label>
-
-                  <label className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-sky-50/70 border border-sky-100 cursor-pointer">
-                    <span className="text-[11px] font-bold text-slate-600">完全手描きのみ</span>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={handDrawnOnly}
-                      onClick={() => setHandDrawnOnly(!handDrawnOnly)}
-                      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-200 cursor-pointer ${
-                        handDrawnOnly ? 'bg-sky-500' : 'bg-slate-300'
-                      }`}
-                    >
-                      <span
-                        className={`pointer-events-none absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-md transition-transform duration-200 ${
-                          handDrawnOnly ? 'translate-x-4' : 'translate-x-0.5'
-                        }`}
-                      />
-                    </button>
-                  </label>
-
-                  <label className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-sky-50/70 border border-sky-100 cursor-pointer">
-                    <span className="text-[11px] font-bold text-slate-600">著作権譲渡可能のみ</span>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={copyrightTransferOnly}
-                      onClick={() => setCopyrightTransferOnly(!copyrightTransferOnly)}
-                      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-200 cursor-pointer ${
-                        copyrightTransferOnly ? 'bg-sky-500' : 'bg-slate-300'
-                      }`}
-                    >
-                      <span
-                        className={`pointer-events-none absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-md transition-transform duration-200 ${
-                          copyrightTransferOnly ? 'translate-x-4' : 'translate-x-0.5'
-                        }`}
-                      />
-                    </button>
-                  </label>
-
-                  <label className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-sky-50/70 border border-sky-100 cursor-pointer">
-                    <span className="text-[11px] font-bold text-slate-600">無料リテイクありのみ</span>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={freeRevisionOnly}
-                      onClick={() => setFreeRevisionOnly(!freeRevisionOnly)}
-                      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-200 cursor-pointer ${
-                        freeRevisionOnly ? 'bg-sky-500' : 'bg-slate-300'
-                      }`}
-                    >
-                      <span
-                        className={`pointer-events-none absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-md transition-transform duration-200 ${
-                          freeRevisionOnly ? 'translate-x-4' : 'translate-x-0.5'
-                        }`}
-                      />
-                    </button>
-                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {PRICE_OPTIONS.map((price) => (
+                      <button
+                        key={price}
+                        type="button"
+                        onClick={() => setMaxPrice(maxPrice === price ? '' : price)}
+                        className={`px-3 py-1.5 rounded-full text-[11px] font-extrabold transition-all cursor-pointer border ${maxPrice === price ? 'bg-sky-500 text-white border-sky-500 shadow-sm shadow-sky-200' : 'bg-white text-slate-600 border-slate-200 hover:border-sky-300 hover:text-sky-600'}`}
+                      >
+                        〜¥{price.toLocaleString()}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
+                {/* 納期 */}
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1.5">
+                    <Clock size={12} className="text-sky-400" /> 納期
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {LEAD_TIME_OPTIONS.map((days) => (
+                      <button
+                        key={days}
+                        type="button"
+                        onClick={() => setMaxLeadTime(maxLeadTime === days ? '' : days)}
+                        className={`px-3 py-1.5 rounded-full text-[11px] font-extrabold transition-all cursor-pointer border ${maxLeadTime === days ? 'bg-sky-500 text-white border-sky-500 shadow-sm shadow-sky-200' : 'bg-white text-slate-600 border-slate-200 hover:border-sky-300 hover:text-sky-600'}`}
+                      >
+                        {days}日以内
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 受付状況 */}
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold text-slate-500 block">受付状況</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { value: 'ALL', label: 'すべて' },
+                      { value: 'available', label: '即対応可' },
+                      { value: 'busy', label: '相談受付中' },
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setStatusFilter(option.value)}
+                        className={`px-3 py-1.5 rounded-full text-[11px] font-extrabold transition-all cursor-pointer border ${statusFilter === option.value ? 'bg-sky-500 text-white border-sky-500 shadow-sm shadow-sky-200' : 'bg-white text-slate-600 border-slate-200 hover:border-sky-300 hover:text-sky-600'}`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* おすすめ・評価・こだわり条件 */}
+                {CONDITION_GROUPS.map((group) => (
+                  <div key={group.title} className="space-y-2">
+                    <label className="text-[11px] font-bold text-slate-500 block">{group.title}</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {group.items.map((item) => {
+                        const selected = conditions.includes(item.key)
+                        const isR18 = item.key === 'r18'
+                        return (
+                          <button
+                            key={item.key}
+                            type="button"
+                            aria-pressed={selected}
+                            onClick={() => toggleCondition(item.key)}
+                            className={`px-3 py-1.5 rounded-full text-[11px] font-extrabold transition-all cursor-pointer border ${
+                              selected
+                                ? isR18
+                                  ? 'bg-rose-500 text-white border-rose-500 shadow-sm'
+                                  : 'bg-sky-500 text-white border-sky-500 shadow-sm shadow-sky-200'
+                                : 'bg-white text-slate-600 border-slate-200 hover:border-sky-300 hover:text-sky-600'
+                            }`}
+                          >
+                            {item.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+
+                {/* ジャンル */}
                 <div className="space-y-2.5 pt-4 border-t border-slate-100">
                   <div className="flex items-center justify-between">
                     <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1.5">
-                      <Tag size={12} className="text-sky-400" /> テイスト（最大20個）
+                      <Tag size={12} className="text-sky-400" /> ジャンル（人気順）
                     </label>
                     {selectedTastes.length > 0 && (
                       <button
@@ -1075,19 +1122,17 @@ export default function Home() {
 
                   <input
                     type="text"
-                    placeholder="テイストを検索..."
+                    placeholder="ジャンルを検索..."
                     value={tasteSearch}
                     onChange={(e) => setTasteSearch(e.target.value)}
                     className="w-full px-3.5 py-2 text-[11px] rounded-xl border border-slate-200 bg-slate-50/70 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:bg-white focus:border-sky-300 transition-all"
                   />
 
-                  <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto pt-1">
+                  <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto pt-1">
                     {displayedTastes.length === 0 ? (
-                      <p className="text-[10px] text-slate-400 py-1 font-bold">
-                        一致するテイストが見つかりません
-                      </p>
+                      <p className="text-[10px] text-slate-400 py-1 font-bold">一致するジャンルが見つかりません</p>
                     ) : (
-                      displayedTastes.map((taste) => {
+                      displayedTastes.map(([taste, count]) => {
                         const isSelected = selectedTastes.includes(taste)
                         return (
                           <button
@@ -1100,6 +1145,7 @@ export default function Home() {
                             }`}
                           >
                             #{taste}
+                            <span className={`ml-1 ${isSelected ? 'text-sky-100' : 'text-slate-400'}`}>{count}</span>
                           </button>
                         )
                       })
@@ -1128,11 +1174,34 @@ export default function Home() {
                   <option value="price_asc">価格が安い順</option>
                   <option value="price_desc">価格が高い順</option>
                   <option value="likes_desc">いいねが多い順</option>
-                  <option value="likes_asc">いいねが少ない順</option>
                   <option value="rating_desc">評価が高い順</option>
                 </select>
               </div>
             </div>
+
+            {activeFilterChips.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 px-1">
+                {activeFilterChips.map((chip) => (
+                  <button
+                    key={chip.key}
+                    type="button"
+                    onClick={chip.clear}
+                    className="group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/90 backdrop-blur border border-sky-200 text-[11px] font-black text-sky-700 shadow-2xs hover:bg-sky-50 cursor-pointer"
+                    aria-label={`${chip.label} の条件を外す`}
+                  >
+                    {chip.label}
+                    <span className="text-slate-400 group-hover:text-rose-500">✕</span>
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  className="px-3 py-1.5 text-[11px] font-bold text-slate-600 hover:text-rose-500 cursor-pointer drop-shadow-xs"
+                >
+                  すべてクリア
+                </button>
+              </div>
+            )}
 
             {loading ? (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
