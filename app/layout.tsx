@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import { serializeJsonLd } from '@/lib/safeUrl'
 import LoginBonusPopup from '@/components/LoginBonusPopup'
+import SiteFooter from '@/components/SiteFooter'
 
 const rawSiteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://drawker.com'
 const siteUrl = rawSiteUrl.startsWith('http') ? rawSiteUrl : `https://${rawSiteUrl}`
@@ -101,6 +102,7 @@ export default function RootLayout({
       </head>
       <body>
         {children}
+        <SiteFooter />
         <LoginBonusPopup />
       </body>
     </html>

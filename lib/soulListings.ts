@@ -139,7 +139,8 @@ export function buildSoulShareText(listing: Pick<SoulListing, 'title' | 'prices'
     listing.ends_at ? `📅 ${listing.ends_at.replace(/-/g, '/')}まで募集` : '',
     `🎨 ${creatorName}`,
     '',
-    '#魂募集 #VTuber #Drawker',
+    // ハッシュタグは2個まで（Xは3個以上付けると検索に出にくくなると言われているため）。流入が見込める順に並べる
+    '#魂募集 #VTuber',
   ]
   return lines.filter((l, i) => l !== '' || i === 4).join('\n')
 }

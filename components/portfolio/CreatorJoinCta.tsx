@@ -21,6 +21,7 @@ export default function CreatorJoinCta() {
             <ul className="text-xs sm:text-sm font-bold text-white/90 space-y-1 pt-1">
               <li>🎨 背景やカバー画像を選んで、自分らしいページに</li>
               <li>🧮 料金表・見積もりフォームで依頼がスムーズに</li>
+              <li>📊 ページが見られた回数・見積もりされた回数が、ダッシュボードで分かる</li>
               <li>💸 掲載料・仲介手数料はずっと0円</li>
             </ul>
           </div>
