@@ -61,7 +61,7 @@ export default function GuidePage() {
         <div className="bg-white rounded-3xl p-6 shadow-sm border border-sky-100/60 space-y-2">
           <h2 className="text-sm font-black text-slate-700">💡 なぜ手数料が0円なの？</h2>
           <p className="text-xs text-slate-500 leading-relaxed">
-            一般的なスキルマーケットは、決済を仲介する分だけ手数料（10〜20%程度）が発生します。Drawkerは決済そのものを仲介せず、クリエイターと依頼者が直接条件をすり合わせて取引する仕組みのため、掲載・利用ともに手数料は0円です。
+            一般的なスキルマーケットは、決済を仲介する分だけ手数料（10〜20%程度）が発生します。Drawkerは決済そのものを仲介せず、クリエイターと依頼者が直接条件をすり合わせて取引する仕組みのため、取引に仲介手数料はかかりません。
             その分、料金や納期の交渉、支払い方法の合意はご自身で行っていただく必要があります。
           </p>
         </div>
@@ -112,7 +112,7 @@ export default function GuidePage() {
 
         <div className="text-center bg-gradient-to-r from-sky-500/90 via-sky-400/90 to-cyan-400/90 rounded-3xl p-6 text-white space-y-2">
           <h2 className="text-base font-black">クリエイターとして活動しませんか？</h2>
-          <p className="text-xs text-sky-50">ポートフォリオと料金メニューを登録するだけで、今日から依頼を受け付けられます。掲載手数料は0円です。掲載後は、ページが見られた回数・見積もりされた回数・お気に入り数をダッシュボードで確認できます。</p>
+          <p className="text-xs text-sky-50">ポートフォリオと料金メニューを登録するだけで、今日から依頼を受け付けられます。現在、掲載は無料です。掲載後は、ページが見られた回数・見積もりされた回数・お気に入り数をダッシュボードで確認できます。</p>
           <Link
             href="/login?signup=creator"
             className="inline-block mt-1 px-5 py-2.5 rounded-xl bg-white text-sky-600 font-black text-xs shadow-sm hover:brightness-105 transition-all"

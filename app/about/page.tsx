@@ -34,10 +34,10 @@ const SECTIONS: { emoji: string; title: string; body: React.ReactNode }[] = [
     title: '掲載・利用の料金',
     body: (
       <>
-        掲載・利用ともに手数料は0円です。Drawkerは決済そのものを仲介せず、クリエイターと依頼者が直接条件をすり合わせて取引する仕組みのため、
+        現在、掲載・利用は無料です。Drawkerは決済そのものを仲介せず、クリエイターと依頼者が直接条件をすり合わせて取引する仕組みのため、
         取引金額から手数料を差し引くことはありません。詳しくは
         <Link href="/guide" className="text-sky-600 underline font-bold">使い方ガイド</Link>
-        をご覧ください。
+        をご覧ください。なお、将来、一部の掲載枠などに有料のオプションを設ける可能性があります。
       </>
     ),
   },
