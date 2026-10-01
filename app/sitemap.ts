@@ -54,9 +54,24 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.6,
   }))
 
+  // 公開中の記事
+  const { data: articles } = await supabase
+    .from('articles')
+    .select('slug, updated_at')
+    .eq('status', 'published')
+    .order('published_at', { ascending: false })
+    .limit(500)
+  const articleUrls: MetadataRoute.Sitemap = (articles || []).map((article) => ({
+    url: `${baseUrl}/articles/${article.slug}`,
+    lastModified: new Date(article.updated_at || Date.now()),
+    changeFrequency: 'monthly',
+    priority: 0.7,
+  }))
+
   // 検索に出したい固定ページ（一覧・読みもの）。本人専用のページやログイン画面は載せない
   const staticPages: { path: string; changeFrequency: 'daily' | 'weekly' | 'monthly'; priority: number }[] = [
     { path: '/wanted', changeFrequency: 'daily', priority: 0.8 },
+    { path: '/articles', changeFrequency: 'weekly', priority: 0.8 },
     { path: '/gallery', changeFrequency: 'daily', priority: 0.7 },
     { path: '/feed', changeFrequency: 'daily', priority: 0.7 },
     { path: '/ranking', changeFrequency: 'weekly', priority: 0.7 },
@@ -88,6 +103,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.5,
     },
     ...staticUrls,
+    ...articleUrls,
     ...wantedUrls,
     ...creatorUrls,
   ]

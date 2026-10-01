@@ -162,6 +162,12 @@ export default function AdminImagesPage() {
             <Link href="/admin/reports" className="text-[11px] font-bold text-slate-400 hover:text-sky-600 transition-colors">
               通報管理
             </Link>
+            <Link href="/admin/articles" className="text-[11px] font-bold text-slate-400 hover:text-sky-600 transition-colors">
+              記事
+            </Link>
+            <Link href="/admin/inquiries" className="text-[11px] font-bold text-slate-400 hover:text-sky-600 transition-colors">
+              お問い合わせ
+            </Link>
             <Link href="/admin/users" className="text-[11px] font-bold text-slate-400 hover:text-sky-600 transition-colors">
               ユーザー管理
             </Link>

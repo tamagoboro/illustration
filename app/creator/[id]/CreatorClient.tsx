@@ -28,6 +28,7 @@ import CreatorJoinCta from '@/components/portfolio/CreatorJoinCta'
 import CreatorRecentPosts from '@/components/portfolio/CreatorRecentPosts'
 import { normalizeBackground, backgroundStyle, isDarkBackground, normalizeVideos } from '@/lib/portfolioDesign'
 import { ItemDiscountConfig, Campaign, isCampaignActive, resolveDiscount, applyDiscount, formatDiscountBadge, formatSavingsBadge } from '@/lib/discount'
+import { copyTextOrShow } from '@/lib/clipboard'
 
 type Option = {
   label: string
@@ -879,7 +880,7 @@ const themeColor = useMemo(() => {
     if (currentUserId !== id) {
       await trackEstimateCalc()
     }
-    navigator.clipboard.writeText(generatedSpec)
+    if (!(await copyTextOrShow(generatedSpec))) return
     setCopied(true)
     if (selectedFormId) clearDraft(`estimate_${id}_${selectedFormId}`)
     setTimeout(() => setCopied(false), 2000)
@@ -1052,8 +1053,8 @@ const themeColor = useMemo(() => {
   }, [id, profile?.updated_at])
   const shareText = `${profile?.display_name || 'クリエイター'}さんのポートフォリオ・見積もりページ`
 
-  const handleCopyShareUrl = () => {
-    navigator.clipboard.writeText(sharePageUrl)
+  const handleCopyShareUrl = async () => {
+    if (!(await copyTextOrShow(sharePageUrl))) return
     setShareCopied(true)
     setTimeout(() => setShareCopied(false), 2000)
   }

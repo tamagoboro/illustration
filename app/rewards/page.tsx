@@ -8,6 +8,7 @@ import AvatarRing from '@/components/AvatarRing'
 import NotificationBell from '@/components/NotificationBell'
 import RecentlyViewedCreators from '@/components/RecentlyViewedCreators'
 import { backgroundImageStyle } from '@/lib/background'
+import { copyTextOrShow } from '@/lib/clipboard'
 
 export default function RewardsPage() {
   const iconRings = useIconRings()
@@ -164,9 +165,9 @@ export default function RewardsPage() {
     ? `${window.location.origin}/login?ref=${userId}`
     : ''
 
-  const handleCopyReferralLink = () => {
+  const handleCopyReferralLink = async () => {
     if (!referralLink) return
-    navigator.clipboard.writeText(referralLink)
+    if (!(await copyTextOrShow(referralLink))) return
     setLinkCopied(true)
     setTimeout(() => setLinkCopied(false), 2000)
   }

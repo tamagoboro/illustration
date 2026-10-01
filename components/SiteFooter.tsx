@@ -2,13 +2,15 @@ import Link from 'next/link'
 
 const FOOTER_LINKS = [
   { href: '/guide', label: '使い方ガイド' },
+  { href: '/articles', label: '記事（はじめての依頼ガイド）' },
   { href: '/client-guidelines', label: '依頼者向けの注意事項' },
   { href: '/faq', label: 'よくある質問' },
   { href: '/updates', label: 'お知らせ' },
   { href: '/ranking', label: '注目クリエイター' },
   { href: '/wanted', label: '募集ボード' },
   { href: '/favorites', label: 'お気に入り一覧' },
-  { href: '/about', label: '運営者情報・お問い合わせ' },
+  { href: '/about', label: '運営者情報' },
+  { href: '/contact', label: 'お問い合わせ' },
   { href: '/terms', label: '利用規約' },
   { href: '/privacy', label: 'プライバシーポリシー' },
 ]

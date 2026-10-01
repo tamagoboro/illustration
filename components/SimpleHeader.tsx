@@ -14,6 +14,7 @@ const NAV_LINKS = [
   { href: '/', label: 'ホーム' },
   { href: '/wanted', label: '募集ボード' },
   { href: '/feed', label: 'フィード' },
+  { href: '/articles', label: '記事' },
   { href: '/ranking', label: '注目クリエイター' },
   { href: '/gallery', label: '新着作品' },
   { href: '/market', label: '相場マップ' },

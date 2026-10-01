@@ -10,6 +10,7 @@ import NotificationBell from '@/components/NotificationBell'
 import { backgroundImageStyle } from '@/lib/background'
 import QuickStartPanel from '@/components/dashboard/QuickStartPanel'
 import { PRESET_TASTES } from '@/lib/tastes'
+import { copyTextOrShow } from '@/lib/clipboard'
 
 const SNS_PLATFORMS = [
   { id: 'twitter', label: '𝕏 (Twitter)' },
@@ -470,8 +471,8 @@ export default function Dashboard() {
     )
   }
 
-  const handleCopy = (text: string, type: 'portfolio' | 'form') => {
-    navigator.clipboard.writeText(text)
+  const handleCopy = async (text: string, type: 'portfolio' | 'form') => {
+    if (!(await copyTextOrShow(text))) return
     setCopiedType(type)
     setTimeout(() => setCopiedType(null), 2000)
   }

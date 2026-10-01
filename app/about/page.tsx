@@ -119,7 +119,10 @@ export default function AboutPage() {
             <div className="flex gap-3">
               <dt className="shrink-0 w-24 font-bold text-slate-400">お問い合わせ</dt>
               <dd>
-                公式X（旧Twitter）アカウント{' '}
+                <Link href="/contact" className="text-sky-600 underline font-bold">
+                  お問い合わせフォーム
+                </Link>
+                、または公式X（旧Twitter）アカウント{' '}
                 <a
                   href={OFFICIAL_X_URL}
                   target="_blank"

@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { saveReturnPath } from '@/lib/returnPath'
 
 // 初期設定（表示名・利用方法）が済んでいなくても開けるページ
-const SETUP_EXEMPT_PREFIXES = ['/welcome', '/login', '/reset-password', '/auth', '/terms', '/privacy']
+const SETUP_EXEMPT_PREFIXES = ['/welcome', '/login', '/reset-password', '/auth', '/terms', '/privacy', '/about', '/contact']
 
 const profileReadyKey = (userId: string) => `drawker:profileReady:${userId}`
 

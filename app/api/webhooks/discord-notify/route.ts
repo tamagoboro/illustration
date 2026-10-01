@@ -36,7 +36,8 @@ export async function POST(req: Request) {
   // 設定の行が無い＝初期設定のまま（全種類オン）
   const enabled = settings?.discord_enabled ?? true
   const types: string[] = settings?.discord_types ?? ALL_NOTIFICATION_TYPES
-  if (!enabled || !types.includes(record.type)) {
+  // お問い合わせ（管理者だけに届く）は種類の設定画面に出していないので、Discord連携がオンなら常に送る
+  if (!enabled || (record.type !== 'inquiry' && !types.includes(record.type))) {
     return NextResponse.json({ message: 'Disabled by user setting' })
   }
 
