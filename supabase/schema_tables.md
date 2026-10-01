@@ -164,6 +164,7 @@ DBを変更したら、この記録も更新すること。
 - is_public: boolean not null default true
 - likes_count: integer default 0
 - menu_items: jsonb default '[]'::jsonb
+- price_menu_images: ARRAY not null default '{}'::text[]（料金表の画像。入っていれば menu_items の代わりに表示。add_price_menu_images.sql）
 - ai_usage: text default 'none'::text
 - ai_learning_allowed: boolean default false
 - express_option_available: boolean default false

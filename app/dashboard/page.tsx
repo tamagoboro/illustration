@@ -61,6 +61,9 @@ type MenuItem = {
   discount?: ItemDiscountConfig
 }
 
+// 料金表（おしながき）の画像は3枚まで
+const PRICE_MENU_IMAGE_LIMIT = 3
+
 const safeParseInt = (val: any): number | null => {
   if (val === null || val === undefined || typeof val === 'object') return null
   const str = String(val).trim()
@@ -190,6 +193,14 @@ export default function Dashboard() {
   ])
   const [expandedDiscountRows, setExpandedDiscountRows] = useState<Set<number>>(new Set())
 
+  // 料金メニューの載せ方。文字で1項目ずつ入力するか、手持ちの料金表（おしながき）の画像を載せるかを選べる。
+  // 入力の手間が登録のハードルになっていたため、画像を上げるだけでも掲載できるようにしている。
+  // どちらで載せているかは、保存された画像（profiles.price_menu_images）があるかどうかで決まる。
+  const [priceMenuMode, setPriceMenuMode] = useState<'text' | 'image'>('text')
+  const [priceMenuImages, setPriceMenuImages] = useState<string[]>([])
+  const [uploadingPriceMenu, setUploadingPriceMenu] = useState(false)
+  const savedPriceMenuImagesRef = useRef<string[]>([])
+
   // 離脱防止アラート
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -261,6 +272,13 @@ export default function Dashboard() {
               }))
             )
           }
+
+          const savedPriceMenuImages: string[] = Array.isArray(profileData.price_menu_images)
+            ? profileData.price_menu_images.filter((u: any) => typeof u === 'string' && u.trim() !== '')
+            : []
+          setPriceMenuImages(savedPriceMenuImages)
+          savedPriceMenuImagesRef.current = savedPriceMenuImages
+          if (savedPriceMenuImages.length > 0) setPriceMenuMode('image')
 
           setCampaignEnabled(profileData.campaign_enabled ?? false)
           setCampaignLabel(profileData.campaign_label || '')
@@ -682,6 +700,50 @@ export default function Dashboard() {
     }
   }
 
+  // 料金表（おしながき）の画像をアップロードする。文字が読めるよう、作品画像より大きめ・高画質で保存する
+  const handlePriceMenuImageUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    // 同じファイルを選び直しても反応するように、選択状態を戻しておく
+    e.target.value = ''
+    if (!file || !user) return
+    if (priceMenuImages.length >= PRICE_MENU_IMAGE_LIMIT) return
+
+    let compressed
+    try {
+      // 第2引数は「作品の1枚目だけJPEGにする」ための番号なので、WebPで保存される 'avatar' を渡す
+      compressed = await validateAndCompressImage(file, 'avatar', 1600, 0.9)
+    } catch (error: any) {
+      alert(error.message || '画像の読み込みに失敗しました。別の画像でもう一度お試しください。')
+      return
+    }
+
+    try {
+      setUploadingPriceMenu(true)
+      const fileName = `${user.id}/price_menu_${Date.now()}.${compressed.extension}`
+
+      const { error: uploadError } = await supabase.storage
+        .from('portfolios')
+        .upload(fileName, compressed.blob, { contentType: compressed.mimeType })
+
+      if (uploadError) throw uploadError
+
+      const { data: publicUrlData } = supabase.storage.from('portfolios').getPublicUrl(fileName)
+
+      setPriceMenuImages((prev) => [...prev, normalizeStorageUrl(publicUrlData.publicUrl)])
+      setIsDirty(true)
+    } catch (error: any) {
+      console.error('料金表画像アップロードエラー:', error)
+      alert('料金表の画像のアップロードに失敗しました。時間をおいて再度お試しください。')
+    } finally {
+      setUploadingPriceMenu(false)
+    }
+  }
+
+  const handleRemovePriceMenuImage = (index: number) => {
+    setPriceMenuImages((prev) => prev.filter((_, i) => i !== index))
+    setIsDirty(true)
+  }
+
   const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>, index: number) => {
     const file = e.target.files?.[0]
     if (!file || !user) return
@@ -763,6 +825,12 @@ export default function Dashboard() {
           discount: item.discount || { mode: 'inherit' },
         }))
 
+      const finalPriceMenuImages = priceMenuMode === 'image' ? priceMenuImages : []
+      if (priceMenuMode === 'image' && finalPriceMenuImages.length === 0) {
+        alert('料金表の画像を1枚以上アップロードするか、料金メニューを「文字で入力」に切り替えてから保存してください。')
+        return
+      }
+
       const finalCampaignDiscountValue = cleanInteger(campaignDiscountValue)
 
       const cleanSnsLinks = snsLinks
@@ -786,7 +854,9 @@ export default function Dashboard() {
         status_comment: statusComment ? statusComment.trim() : null,
         theme_color: themeColor,
         tastes: cleanTastes,
-        menu_items: cleanMenuItems,
+        // 料金メニューは「文字」か「画像」のどちらか一方だけを保存する（選んでいない方は空にする）
+        menu_items: priceMenuMode === 'image' ? [] : cleanMenuItems,
+        price_menu_images: finalPriceMenuImages,
         sns_links: cleanSnsLinks,
         lead_time_days: finalLeadTimeDays,
         price_min: finalPriceMin,
@@ -821,9 +891,22 @@ export default function Dashboard() {
         updated_at: new Date().toISOString(),
       }
 
-      const { error } = await supabase
+      let { error } = await supabase
         .from('profiles')
         .upsert(profilePayload, { onConflict: 'user_id' })
+
+      // price_menu_images 列がまだDBに無い場合（supabase/add_price_menu_images.sql が未適用）。
+      // 文字で入力している人の保存まで巻き添えで失敗させないよう、その列を外して保存し直す
+      if (error?.code === 'PGRST204' && error.message?.includes('price_menu_images')) {
+        if (priceMenuMode === 'image') {
+          alert('料金表の画像はまだご利用いただけません。お手数ですが、料金メニューを「文字で入力」に切り替えて保存してください。')
+          return
+        }
+        const { price_menu_images: _unsupported, ...payloadWithoutPriceMenuImages } = profilePayload
+        ;({ error } = await supabase
+          .from('profiles')
+          .upsert(payloadWithoutPriceMenuImages, { onConflict: 'user_id' }))
+      }
 
       if (error) {
         console.error('保存エラー詳細:', JSON.stringify(error, null, 2))
@@ -843,6 +926,21 @@ export default function Dashboard() {
           }
         }
         savedAvatarUrlRef.current = newAvatarUrl
+
+        // 料金表の画像も同じく、保存が成功した後で、使われなくなったファイルだけを削除する
+        const removedPriceMenuPaths = savedPriceMenuImagesRef.current
+          .filter((url) => !finalPriceMenuImages.includes(url))
+          .map((url) => extractStoragePath(url))
+          .filter((path): path is string => !!path)
+        if (removedPriceMenuPaths.length > 0) {
+          supabase.storage
+            .from('portfolios')
+            .remove(removedPriceMenuPaths)
+            .then(({ error: removeError }) => {
+              if (removeError) console.error('古い料金表画像の削除エラー:', removeError)
+            })
+        }
+        savedPriceMenuImagesRef.current = finalPriceMenuImages
 
         showSuccessToast('プロフィール情報を更新しました！')
         setIsDirty(false)
@@ -949,7 +1047,10 @@ export default function Dashboard() {
       { label: '得意なタグを1つ以上設定する', done: tastes.length > 0, tab: 'contact' },
       {
         label: '料金メニューを1つ以上設定する',
-        done: menuItems.some((item) => item.title.trim() !== '' && item.price !== ''),
+        done:
+          priceMenuMode === 'image'
+            ? priceMenuImages.length > 0
+            : menuItems.some((item) => item.title.trim() !== '' && item.price !== ''),
         tab: 'pricing',
       },
       { label: '参考最低価格を設定する', done: priceMin.trim() !== '' && Number(priceMin) > 0, tab: 'pricing' },
@@ -961,7 +1062,7 @@ export default function Dashboard() {
     const doneCount = items.filter((i) => i.done).length
     const percent = Math.round((doneCount / items.length) * 100)
     return { items, percent }
-  }, [avatarUrl, statusComment, tastes, menuItems, priceMin, leadTimeDays, snsLinks, portfolioUrls, hasEstimateForm])
+  }, [avatarUrl, statusComment, tastes, menuItems, priceMenuMode, priceMenuImages, priceMin, leadTimeDays, snsLinks, portfolioUrls, hasEstimateForm])
 
   const handleLogout = async () => {
     if (isDirty) {
@@ -1710,18 +1811,89 @@ export default function Dashboard() {
                   <div className="flex justify-between items-center">
                     <div>
                       <label className="text-xs font-bold text-slate-700 block">料金メニュー設定</label>
-                      <p className="text-[11px] text-slate-400 mt-0.5">一覧カードや比較画面で表示される主な料金ラインナップです</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        文字で入力するか、お手持ちの料金表（おしながき）の画像を載せるかを選べます
+                      </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleAddMenuItem}
-                      className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1"
-                    >
-                      ＋ メニューを追加
-                    </button>
+                    {priceMenuMode === 'text' && (
+                      <button
+                        type="button"
+                        onClick={handleAddMenuItem}
+                        className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1 shrink-0"
+                      >
+                        ＋ メニューを追加
+                      </button>
+                    )}
                   </div>
 
-                  <div className="space-y-3">
+                  {/* 載せ方の切り替え（文字 / 画像） */}
+                  <div className="flex p-1 bg-slate-200/60 rounded-2xl">
+                    {[
+                      { value: 'text' as const, label: '✏️ 文字で入力する' },
+                      { value: 'image' as const, label: '🖼 料金表の画像を載せる' },
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => {
+                          if (priceMenuMode === option.value) return
+                          setPriceMenuMode(option.value)
+                          setIsDirty(true)
+                        }}
+                        className={`flex-1 py-2 px-2 text-[11px] sm:text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                          priceMenuMode === option.value ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {priceMenuMode === 'image' && (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {priceMenuImages.map((url, idx) => (
+                          <div key={url} className="relative rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+                            <img src={url} alt={`料金表 ${idx + 1}枚目`} className="w-full aspect-[3/4] object-contain" />
+                            <button
+                              type="button"
+                              onClick={() => handleRemovePriceMenuImage(idx)}
+                              aria-label={`料金表 ${idx + 1}枚目を削除`}
+                              className="absolute top-1.5 right-1.5 bg-slate-900/60 hover:bg-slate-900 text-white rounded-full w-6 h-6 text-[10px] font-bold flex items-center justify-center transition cursor-pointer"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                        {priceMenuImages.length < PRICE_MENU_IMAGE_LIMIT && (
+                          <label
+                            className={`flex flex-col items-center justify-center gap-1.5 aspect-[3/4] rounded-xl border-2 border-dashed border-slate-200 text-slate-400 text-[11px] font-bold transition-colors ${
+                              uploadingPriceMenu ? 'opacity-60 cursor-wait' : 'hover:border-indigo-300 hover:text-indigo-500 cursor-pointer'
+                            }`}
+                          >
+                            <span className="text-xl">＋</span>
+                            <span>{uploadingPriceMenu ? 'アップロード中...' : '画像を追加'}</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handlePriceMenuImageUpload}
+                              disabled={uploadingPriceMenu}
+                              className="hidden"
+                            />
+                          </label>
+                        )}
+                      </div>
+                      <ul className="text-[11px] text-slate-400 leading-relaxed list-disc list-inside space-y-0.5">
+                        <li>画像は{PRICE_MENU_IMAGE_LIMIT}枚まで。公開ページの「料金」にそのまま表示されます。</li>
+                        <li>
+                          金額での絞り込み・並び替えには、上の「参考最低価格」が使われます。画像の中の金額は読み取られないので、参考最低価格も入力してください。
+                        </li>
+                        <li>画像で載せている間は、文字のメニューとメニューごとの割引表示は公開ページに出ません。</li>
+                      </ul>
+                    </div>
+                  )}
+
+                  <div className={`space-y-3 ${priceMenuMode === 'image' ? 'hidden' : ''}`}>
                     {menuItems.map((item, idx) => {
                       const discount = item.discount || { mode: 'inherit' }
                       return (

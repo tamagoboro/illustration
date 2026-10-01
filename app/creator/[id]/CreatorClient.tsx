@@ -128,6 +128,8 @@ type ExtendedProfile = Profile & {
   is_public?: boolean | null
   likes_count?: number | null
   menu_items?: MenuItem[] | null
+  // 料金表（おしながき）の画像。入っているときは、文字のメニューの代わりにこの画像を見せる
+  price_menu_images?: string[] | null
   ai_usage?: 'none' | 'partial' | 'full' | string | null
   ai_learning_allowed?: boolean | null
   express_option_available?: boolean | null
@@ -1119,11 +1121,16 @@ const themeColor = useMemo(() => {
   const showCommissionFlow = profile.commission_flow_public === true
   const sectionTitleClass = `text-lg sm:text-xl font-black tracking-tight ${isDarkPage ? 'text-white' : 'text-sky-950'} drop-shadow-sm`
 
+  // 料金表（おしながき）の画像。クリエイターが「画像で載せる」を選んでいるときだけ入っている
+  const priceMenuImages = (profile.price_menu_images || []).filter(Boolean)
+
   // ページ内メニュー（中身があるセクションだけ）
   const navItems = [
     { id: 'works', label: '作品' },
     ...(portfolioVideos.length > 0 ? [{ id: 'videos', label: '動画' }] : []),
-    ...(profile.menu_items && profile.menu_items.length > 0 ? [{ id: 'price', label: '料金' }] : []),
+    ...(priceMenuImages.length > 0 || (profile.menu_items && profile.menu_items.length > 0)
+      ? [{ id: 'price', label: '料金' }]
+      : []),
     ...(showCommissionFlow ? [{ id: 'flow', label: '依頼の流れ' }] : []),
     { id: 'conditions', label: '受付条件' },
     { id: 'reviews', label: `レビュー${reviews.length > 0 ? `（${reviews.length}）` : ''}` },
@@ -1622,8 +1629,39 @@ const themeColor = useMemo(() => {
         )}
 
         <div id="price" className="scroll-mt-32">
+        {/* 料金表の画像（クリエイターが「画像で載せる」を選んでいるとき） */}
+        {priceMenuImages.length > 0 && (
+          <Reveal>
+          <section className="bg-white/75 backdrop-blur-xl p-6 sm:p-7 rounded-3xl shadow-xl border border-white/80 space-y-5">
+            <h2 className="text-xs font-black text-sky-900 uppercase tracking-widest flex items-center gap-2">
+              <span className="p-1.5 bg-white rounded-lg text-xs shadow-2xs">🏷️</span> 料金表
+            </h2>
+            <div className={`grid gap-3 ${priceMenuImages.length > 1 ? 'sm:grid-cols-2' : ''}`}>
+              {priceMenuImages.map((url, index) => (
+                <a
+                  key={url}
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block rounded-2xl overflow-hidden border border-white/80 bg-white shadow-2xs hover:shadow-md transition-shadow"
+                >
+                  <img
+                    src={url}
+                    alt={`${profile.display_name}の料金表（${index + 1}枚目）`}
+                    loading="lazy"
+                    decoding="async"
+                    className="block w-full h-auto"
+                  />
+                </a>
+              ))}
+            </div>
+            <p className="text-[10px] font-bold text-sky-400">画像を押すと、大きく表示できます</p>
+          </section>
+          </Reveal>
+        )}
+
         {/* 料金メニュー */}
-        {profile.menu_items && profile.menu_items.length > 0 && (
+        {priceMenuImages.length === 0 && profile.menu_items && profile.menu_items.length > 0 && (
           <Reveal>
           <section className="bg-white/75 backdrop-blur-xl p-6 sm:p-7 rounded-3xl shadow-xl border border-white/80 space-y-5">
             <h2 className="text-xs font-black text-sky-900 uppercase tracking-widest flex items-center gap-2">

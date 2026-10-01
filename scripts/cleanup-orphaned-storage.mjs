@@ -23,9 +23,12 @@
 //     bg.png（サイト背景画像）や rings/ 配下（アイコンリング画像）のような
 //     ルート直下・固定パスのファイルは、ユーザーがアップロードし直す対象ではないため
 //     最初から削除候補にすら入れない。
-//   - profiles.avatar_url / portfolio_items.image_url / reviews.image_urls /
-//     requests.image_urls / posts.image_urls / icon_rings.image_url のいずれかから
-//     参照されているファイルは、どれだけ古くても削除しない。
+//   - 次のいずれかから参照されているファイルは、どれだけ古くても削除しない。
+//       profiles（avatar_url / cover_image_url / page_background / price_menu_images）
+//       portfolio_items（image_url / before_image_url）、soul_listings（image_url / image_urls）
+//       reviews.image_urls / requests.image_urls / posts.image_urls / icon_rings.image_url
+//     画像を保存する列を増やしたら、必ずここ（collectReferencedPaths）にも足すこと。
+//     足し忘れると、その列で使っている掲載中の画像が「孤立ファイル」として消されてしまう。
 
 import { createClient } from '@supabase/supabase-js'
 
@@ -44,7 +47,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
 
 // 公開URLから「バケット内のパス」だけを取り出す
 function extractPath(url) {
-  if (!url) return null
+  if (!url || typeof url !== 'string') return null
   const marker = `/storage/v1/object/public/${BUCKET}/`
   const idx = url.indexOf(marker)
   if (idx === -1) return null
@@ -61,21 +64,48 @@ async function collectReferencedPaths() {
     if (Array.isArray(urls)) urls.forEach(add)
   }
 
-  const [profiles, portfolioItems, reviews, requests, posts, iconRings] = await Promise.all([
-    supabase.from('profiles').select('avatar_url'),
-    supabase.from('portfolio_items').select('image_url'),
-    supabase.from('reviews').select('image_urls'),
-    supabase.from('requests').select('image_urls'),
-    supabase.from('posts').select('image_urls'),
-    supabase.from('icon_rings').select('image_url'),
-  ])
+  const queries = {
+    profiles: supabase.from('profiles').select('avatar_url, cover_image_url, page_background, price_menu_images'),
+    portfolioItems: supabase.from('portfolio_items').select('image_url, before_image_url'),
+    reviews: supabase.from('reviews').select('image_urls'),
+    requests: supabase.from('requests').select('image_urls'),
+    posts: supabase.from('posts').select('image_urls'),
+    soulListings: supabase.from('soul_listings').select('image_url, image_urls'),
+    iconRings: supabase.from('icon_rings').select('image_url'),
+  }
+  const names = Object.keys(queries)
+  const results = await Promise.all(Object.values(queries))
 
-  ;(profiles.data || []).forEach((r) => add(r.avatar_url))
-  ;(portfolioItems.data || []).forEach((r) => add(r.image_url))
-  ;(reviews.data || []).forEach((r) => addArray(r.image_urls))
-  ;(requests.data || []).forEach((r) => addArray(r.image_urls))
-  ;(posts.data || []).forEach((r) => addArray(r.image_urls))
-  ;(iconRings.data || []).forEach((r) => add(r.image_url))
+  // 参照の取得に1つでも失敗したら、何も消さずに止める。
+  // 失敗を「参照なし」として扱うと、そのテーブルが使っている画像をすべて孤立ファイルと誤判定して消してしまう
+  // （列を追加するSQLが未適用のまま実行した場合など）。
+  const rows = {}
+  results.forEach((result, i) => {
+    if (result.error) {
+      throw new Error(`${names[i]} の参照を取得できませんでした: ${result.error.message}`)
+    }
+    rows[names[i]] = result.data || []
+  })
+
+  rows.profiles.forEach((r) => {
+    add(r.avatar_url)
+    add(r.cover_image_url)
+    // 背景に画像を選んでいる場合は value に画像URLが入っている（lib/portfolioDesign.ts）
+    add(r.page_background?.value)
+    addArray(r.price_menu_images)
+  })
+  rows.portfolioItems.forEach((r) => {
+    add(r.image_url)
+    add(r.before_image_url)
+  })
+  rows.reviews.forEach((r) => addArray(r.image_urls))
+  rows.requests.forEach((r) => addArray(r.image_urls))
+  rows.posts.forEach((r) => addArray(r.image_urls))
+  rows.soulListings.forEach((r) => {
+    add(r.image_url)
+    addArray(r.image_urls)
+  })
+  rows.iconRings.forEach((r) => add(r.image_url))
 
   return referenced
 }
