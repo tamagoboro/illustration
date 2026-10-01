@@ -49,6 +49,17 @@ type ActionTarget =
 const FEED_PAGE_SIZE = 30
 // supabase/improve_feed.sql の posts_content_length / post_comments_content_length と合わせる
 const POST_MAX_LENGTH = 500
+
+// 「何を書けばいいか分からない」を減らすための話題。押すと本文の末尾にハッシュタグが付き、入力欄の例文が変わる
+const POST_TOPICS = [
+  { tag: '#制作中', label: '🎨 今やってること', placeholder: '今描いているもの、作業の進み具合、こだわっているところなど' },
+  { tag: '#質問', label: '❓ わからないこと', placeholder: '例：IRIAMの立ち絵を頼まれたけど、パーツ分けって必要？みんなは料金どうしてる？' },
+  { tag: '#依頼募集中', label: '📮 依頼がほしい', placeholder: '例：アイコン・立ち絵の依頼を受付中です！得意な絵柄や料金、空き枠を書いておくと見つけてもらいやすくなります' },
+  { tag: '#依頼したい', label: '🙋 描いてほしい', placeholder: '例：VTuberデビュー用の立ち絵を描いてくれる方を探しています。ふんわりした雰囲気が好きです' },
+  { tag: '#雑談', label: '☕ 雑談', placeholder: '最近うれしかったこと、使っている画材やソフト、なんでもどうぞ' },
+  { tag: '#はじめまして', label: '👋 自己紹介', placeholder: '例：はじめまして！普段はSDキャラを描いています。仲良くしてください' },
+]
+const DEFAULT_PLACEHOLDER = 'わからないこと、依頼がほしい、今描いているもの…なんでも気軽にどうぞ！（#ハッシュタグ も使えます）'
 const COMMENT_MAX_LENGTH = 500
 // 「人気のタグ」を数える対象（タグ付きの新しい投稿から何件まで見るか）
 const POPULAR_TAG_SAMPLE_SIZE = 200
@@ -107,6 +118,7 @@ export default function FeedClient({ postId }: { postId?: string }) {
 
   // 新規投稿ステート
   const [content, setContent] = useState('')
+  const postInputRef = useRef<HTMLTextAreaElement>(null)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [previewUrls, setPreviewUrls] = useState<string[]>([])
   const [isSensitive, setIsSensitive] = useState(false)
@@ -743,7 +755,7 @@ export default function FeedClient({ postId }: { postId?: string }) {
                 <p className="text-[10px] font-black text-sky-600 tracking-[0.2em] drop-shadow-xs">FEED</p>
                 <h1 className="text-2xl font-black text-slate-800 tracking-tight drop-shadow-sm">みんなの制作日記</h1>
                 <p className="text-[11px] text-slate-600 font-medium drop-shadow-xs">
-                  クリエイターの制作中の作品や近況をチェックしよう
+                  わからないこと・依頼がほしい・今描いているもの。なんでも気軽に書き込もう
                 </p>
               </div>
             </div>
@@ -760,10 +772,35 @@ export default function FeedClient({ postId }: { postId?: string }) {
                       {myAvatarUrl && <img src={myAvatarUrl} alt="" className="w-full h-full object-cover" />}
                     </div>
                     <div className="flex-1 min-w-0 space-y-3">
+                      <div className="flex gap-1.5 overflow-x-auto -mx-1 px-1 pb-0.5">
+                        {POST_TOPICS.map((topic) => {
+                          const active = content.includes(topic.tag)
+                          return (
+                            <button
+                              key={topic.tag}
+                              type="button"
+                              onClick={() => {
+                                setContent((prev) =>
+                                  active
+                                    ? prev.replace(new RegExp(`\\s*${topic.tag}(?![^\\s#])`, 'g'), '').trimStart()
+                                    : `${prev.trimEnd()}${prev.trim() ? ' ' : ''}${topic.tag} `
+                                )
+                                postInputRef.current?.focus()
+                              }}
+                              className={`shrink-0 whitespace-nowrap text-[11px] font-bold px-3 py-1.5 rounded-full border transition cursor-pointer ${
+                                active ? 'bg-sky-500 border-sky-500 text-white' : 'bg-white border-slate-200 text-slate-600 hover:border-sky-300 hover:text-sky-600'
+                              }`}
+                            >
+                              {topic.label}
+                            </button>
+                          )
+                        })}
+                      </div>
                       <textarea
+                        ref={postInputRef}
                         rows={3}
                         maxLength={POST_MAX_LENGTH}
-                        placeholder="いまどんな作品を描いてる？（#ハッシュタグ も使えます）"
+                        placeholder={POST_TOPICS.find((t) => content.includes(t.tag))?.placeholder || DEFAULT_PLACEHOLDER}
                         value={content}
                         onChange={(e) => setContent(e.target.value)}
                         className="w-full text-sm text-slate-800 placeholder-slate-400 bg-transparent resize-none border-none focus:outline-none focus:ring-0 leading-relaxed pt-2"
@@ -836,9 +873,10 @@ export default function FeedClient({ postId }: { postId?: string }) {
                   </form>
                 ) : (
                   <div className="flex flex-col sm:flex-row items-center justify-between gap-3 py-1">
-                    <p className="text-xs font-bold text-slate-600 text-center sm:text-left">
-                      ログインすると作品の投稿や「いいね」、コメントができます
-                    </p>
+                    <div className="text-center sm:text-left space-y-0.5">
+                      <p className="text-xs font-black text-slate-700">わからないこと・依頼がほしい・今描いているもの、気軽に書き込もう</p>
+                      <p className="text-[11px] font-bold text-slate-500">ログインすると、投稿・「いいね」・コメントができます</p>
+                    </div>
                     <Link
                       href="/login"
                       className="shrink-0 text-xs font-black text-white bg-sky-500 hover:bg-sky-600 px-5 py-2.5 rounded-full shadow-sm transition"
@@ -938,7 +976,11 @@ export default function FeedClient({ postId }: { postId?: string }) {
               ) : (
                 <>
                   <p className="text-sm font-black text-slate-600">まだ投稿がありません</p>
-                  {currentUser && <p className="text-[11px] text-slate-400 font-bold">最初の投稿をしてみましょう！</p>}
+                  {currentUser && (
+                    <p className="text-[11px] text-slate-400 font-bold">
+                      「はじめまして」や「今描いているもの」など、最初のひとことを書いてみませんか？
+                    </p>
+                  )}
                 </>
               )}
             </div>

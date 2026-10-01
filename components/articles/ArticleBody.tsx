@@ -38,6 +38,22 @@ function remarkCallouts() {
   return (tree: any) => walk(tree)
 }
 
+// Enter で改行したところを、そのまま改行として表示する
+// （Markdown は本来、空行をあけないと改行にならない。書いたとおりに表示されるほうが分かりやすいので変えている）
+function remarkLineBreaks() {
+  const walk = (node: any) => {
+    if (!Array.isArray(node.children)) return
+    node.children = node.children.flatMap((child: any) => {
+      if (child.type !== 'text' || !String(child.value).includes('\n')) return [child]
+      return String(child.value)
+        .split('\n')
+        .flatMap((line: string, i: number) => [...(i > 0 ? [{ type: 'break' }] : []), ...(line ? [{ type: 'text', value: line }] : [])])
+    })
+    node.children.forEach(walk)
+  }
+  return (tree: any) => walk(tree)
+}
+
 // 見出しの中身（太字やリンクが混ざっていても）を文字だけにして、目次と同じidを作る
 function textOf(children: ReactNode): string {
   if (typeof children === 'string' || typeof children === 'number') return String(children)
@@ -163,7 +179,7 @@ const components: Components = {
 export default function ArticleBody({ body }: { body: string }) {
   return (
     <div className="text-[15px] sm:text-base break-words">
-      <ReactMarkdown remarkPlugins={[remarkGfm, remarkCallouts]} components={components}>
+      <ReactMarkdown remarkPlugins={[remarkGfm, remarkCallouts, remarkLineBreaks]} components={components}>
         {body}
       </ReactMarkdown>
     </div>

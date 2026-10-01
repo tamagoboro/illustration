@@ -453,7 +453,7 @@ export default function ArticleEditor({ id }: { id: string }) {
                 <p><code className="text-sky-700">![説明](画像URL)</code> … 画像（説明は画像の下に表示）。画像は貼り付け・ドラッグでも入ります</p>
                 <p>1行に <code className="text-sky-700">URLだけ</code> … YouTube・ニコニコ・Vimeoは動画、それ以外はリンクカード</p>
                 <p><code className="text-sky-700">&gt; [!POINT]</code>（TIP / WARNING / NOTE）… 色付きの囲み。次の行から <code>&gt; </code> を付けて書く</p>
-                <p>段落を分けるときは、空行を1行あけます</p>
+                <p>Enterで改行できます。段落を分けて間をあけたいときは、空行を1行あけます</p>
               </div>
             )}
 
