@@ -24,6 +24,7 @@ import PortfolioNav from '@/components/portfolio/PortfolioNav'
 import MobileActionBar from '@/components/portfolio/MobileActionBar'
 import YouTubeGallery from '@/components/portfolio/YouTubeGallery'
 import CreatorJoinCta from '@/components/portfolio/CreatorJoinCta'
+import CreatorRecentPosts from '@/components/portfolio/CreatorRecentPosts'
 import { normalizeBackground, backgroundStyle, isDarkBackground, normalizeVideos } from '@/lib/portfolioDesign'
 import { ItemDiscountConfig, Campaign, isCampaignActive, resolveDiscount, applyDiscount, formatDiscountBadge, formatSavingsBadge } from '@/lib/discount'
 
@@ -1768,6 +1769,9 @@ const themeColor = useMemo(() => {
 
         {/* 魂募集 */}
         <SoulListingSection creatorId={id} creatorName={profile.display_name} listings={initialSouls} />
+
+        {/* 最近の投稿（フィード） */}
+        <CreatorRecentPosts creatorId={id} creatorName={profile.display_name} titleClassName={sectionTitleClass} />
 
         <div id="reviews" className="scroll-mt-32">
         {/* レビュー・評価 */}

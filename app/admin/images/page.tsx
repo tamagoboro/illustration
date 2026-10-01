@@ -20,6 +20,7 @@ const ACTION_LABELS: Record<string, string> = {
   remove_before_image: 'ビフォー画像を削除',
   replace_avatar: 'アイコンを差し替え',
   remove_avatar: 'アイコンを削除',
+  remove_post: 'フィード投稿を削除',
 }
 
 // 画像の削除・差し替え専用ページ。ユーザー管理の一覧（名前をクリックで開くパネル）でも同じ操作ができる。

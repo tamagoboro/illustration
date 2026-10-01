@@ -124,7 +124,7 @@ DBを変更したら、この記録も更新すること。
 - id: uuid not null default gen_random_uuid()
 - post_id: uuid not null
 - user_id: uuid not null
-- content: text not null
+- content: text not null（500文字まで。improve_feed.sql）
 - created_at: timestamp with time zone default now()
 
 ## post_likes
@@ -196,7 +196,7 @@ DBを変更したら、この記録も更新すること。
 ## reports
 - id: uuid not null default gen_random_uuid()
 - reporter_id: uuid
-- target_type: text not null
+- target_type: text not null（'profile' / 'portfolio_item' / 'post'＝フィードの投稿。improve_feed.sql）
 - target_id: text not null
 - creator_id: uuid not null
 - reason: text not null

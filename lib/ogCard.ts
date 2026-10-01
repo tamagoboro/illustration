@@ -8,6 +8,10 @@
 
 export const OG_CARD_DESIGN_VERSION = 3
 
+// 専用のカード画像が無いページで使う、サイト共通のカード画像（app/layout.tsx のXカード用と同じもの）
+export const DEFAULT_OG_IMAGE_URL =
+  'https://qcklfkslqtjnxufqcqyi.supabase.co/storage/v1/object/public/portfolios/OGP-production-itinose.jpg'
+
 export const getOgCardVersion = (updatedAt?: string | null) =>
   `${updatedAt ? new Date(updatedAt).getTime() : 0}-${OG_CARD_DESIGN_VERSION}`
 

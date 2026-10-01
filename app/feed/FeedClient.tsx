@@ -1,11 +1,13 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { convertToWebp } from '@/lib/imageUtils'
+import { extractStoragePath } from '@/lib/storageUtils'
 import AvatarRing from '@/components/AvatarRing'
 import ProtectedImage from '@/components/ProtectedImage'
+import PostReportModal from '@/components/PostReportModal'
 import { backgroundImageStyle } from '@/lib/background'
 import SimpleHeader from '@/components/SimpleHeader'
 
@@ -17,7 +19,7 @@ type Comment = {
   profiles: {
     display_name: string
     avatar_url: string | null
-  }
+  } | null
 }
 
 type PostWithAuthor = {
@@ -30,13 +32,46 @@ type PostWithAuthor = {
   profiles: {
     display_name: string
     avatar_url: string | null
-  }
-  likes_count?: number
-  is_liked_by_me?: boolean
-  post_comments?: Comment[]
+  } | null
+  likes_count: number
+  comments_count: number
+  is_liked_by_me: boolean
 }
 
+type FeedTab = 'all' | 'following'
+
 const FEED_PAGE_SIZE = 30
+const POST_MAX_LENGTH = 200
+// supabase/improve_feed.sql の post_comments_content_length と合わせる
+const COMMENT_MAX_LENGTH = 500
+// 「人気のタグ」を数える対象（タグ付きの新しい投稿から何件まで見るか）
+const POPULAR_TAG_SAMPLE_SIZE = 200
+
+// 一覧では、いいね・コメントは件数だけを取る（全行を取ると投稿や反応が増えるほど重くなるため）。
+// コメントの本文は、コメント欄を開いたときにその投稿の分だけ読み込む。
+const POST_SELECT_WITH_COUNTS = `
+  *,
+  profiles:user_id (display_name, avatar_url),
+  post_likes (count),
+  post_comments (count)
+`
+// 件数だけの取得ができない環境向けの予備（行を取って数える）
+const POST_SELECT_WITH_ROWS = `
+  *,
+  profiles:user_id (display_name, avatar_url),
+  post_likes (user_id),
+  post_comments (id)
+`
+const COMMENT_SELECT = 'id, user_id, content, created_at, profiles:user_id (display_name, avatar_url)'
+
+// 件数だけ取った場合は [{ count: n }]、行を取った場合は行の配列で返ってくる。どちらでも件数にする
+const countOf = (rel: any): number => {
+  if (!Array.isArray(rel)) return 0
+  return typeof rel[0]?.count === 'number' ? rel[0].count : rel.length
+}
+
+// ilike の検索文字列で特別な意味を持つ文字（% _ \）を、文字そのものとして扱わせる
+const escapeLikePattern = (text: string) => text.replace(/[\\%_]/g, '\\$&')
 
 // 「3分前」「2日前」のような相対表記。1週間以上前は日付で表示する
 const formatRelativeTime = (iso: string) => {
@@ -48,7 +83,10 @@ const formatRelativeTime = (iso: string) => {
   return new Date(iso).toLocaleDateString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
-export default function FeedPage() {
+// フィードの画面本体。postId を渡すと、その投稿1件だけを表示する個別ページ（/feed/[postId]）になる。
+// 投稿の表示・いいね・コメント・編集の処理を一覧と個別ページで二重に持たないよう、同じ部品を使い回している。
+export default function FeedClient({ postId }: { postId?: string }) {
+  const isSinglePost = !!postId
   const [currentUser, setCurrentUser] = useState<any>(null)
   // いいねの連打で二重送信になったり、失敗時に表示だけ変わってDBと食い違ったりするのを防ぐ
   const [likingPostIds, setLikingPostIds] = useState<Set<string>>(new Set())
@@ -58,25 +96,42 @@ export default function FeedPage() {
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
   const [ringMap, setRingMap] = useState<Record<string, string | null>>({})
+  // 絞り込みを続けて切り替えたとき、先に出した古い読み込みの結果で画面を上書きしないための通し番号
+  const requestSeq = useRef(0)
 
   // 新規投稿ステート
   const [content, setContent] = useState('')
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [previewUrls, setPreviewUrls] = useState<string[]>([])
+  const [isSensitive, setIsSensitive] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // 絞り込みステート（どれもサーバー側で絞り込むので、読み込み済みの投稿だけでなく全投稿が対象になる）
+  const [feedTab, setFeedTab] = useState<FeedTab>('all')
   const [searchTag, setSearchTag] = useState('')
+  const [imagesOnly, setImagesOnly] = useState(false)
+  // フォロー中の人数（「フォロー中」タブを開くまでは null）
+  const [followingCount, setFollowingCount] = useState<number | null>(null)
+  const [popularTags, setPopularTags] = useState<[string, number][]>([])
 
   // 編集ステート
   const [editingPostId, setEditingPostId] = useState<string | null>(null)
   const [editContent, setEditContent] = useState('')
+  const [editSensitive, setEditSensitive] = useState(false)
 
   // コメント展開・入力ステート
-  const [openCommentPostId, setOpenCommentPostId] = useState<string | null>(null)
+  // 個別ページでは最初からコメント欄を開いておく
+  const [openCommentPostId, setOpenCommentPostId] = useState<string | null>(postId ?? null)
   const [commentInput, setCommentInput] = useState('')
+  const [commentsByPost, setCommentsByPost] = useState<Record<string, Comment[]>>({})
+  const [isSendingComment, setIsSendingComment] = useState(false)
+
+  // 「リンク」を押してURLをコピーした直後の投稿（ボタンの表示を一時的に切り替える）
+  const [copiedPostId, setCopiedPostId] = useState<string | null>(null)
+  const [reportTarget, setReportTarget] = useState<PostWithAuthor | null>(null)
 
   // 表示まわりのステート
   const [myAvatarUrl, setMyAvatarUrl] = useState<string | null>(null)
-  const [imagesOnly, setImagesOnly] = useState(false)
   const [revealedPostIds, setRevealedPostIds] = useState<Set<string>>(new Set())
   const [lightbox, setLightbox] = useState<{ urls: string[]; index: number; name: string } | null>(null)
 
@@ -92,8 +147,22 @@ export default function FeedPage() {
         setMyAvatarUrl(me?.avatar_url ?? null)
       }
     })
-    fetchPosts()
+    if (isSinglePost) return
+    // 個別ページのハッシュタグから /feed?tag=... で来たときは、そのタグで絞り込んだ状態で開く
+    const tag = new URLSearchParams(window.location.search).get('tag')
+    if (tag) setSearchTag(tag)
+    fetchPopularTags()
   }, [])
+
+  // 最初の表示と、絞り込み（タブ・タグ・画像つき）を変えたときに1ページ目から読み込む
+  useEffect(() => {
+    fetchPosts()
+  }, [feedTab, searchTag, imagesOnly])
+
+  // コメント欄を開いたときに、その投稿のコメントを読み込む
+  useEffect(() => {
+    if (openCommentPostId && !commentsByPost[openCommentPostId]) fetchComments(openCommentPostId)
+  }, [openCommentPostId])
 
   // 拡大表示中は背景スクロールを止め、Esc/←/→ で操作できるようにする
   useEffect(() => {
@@ -113,74 +182,147 @@ export default function FeedPage() {
     }
   }, [lightbox])
 
+  // 装着中のアイコンリングをまとめて取得して ringMap に足す
+  const fetchRings = async (userIds: string[]) => {
+    if (userIds.length === 0) return
+    const { data: ringsData } = await supabase
+      .from('public_equipped_rings')
+      .select('user_id, equipped_ring_id')
+      .in('user_id', userIds)
+    setRingMap((prev) => {
+      const merged = { ...prev }
+      ;(ringsData || []).forEach((r: any) => {
+        merged[r.user_id] = r.equipped_ring_id
+      })
+      return merged
+    })
+  }
+
   const fetchPosts = async (pageToLoad = 0, append = false) => {
+    const seq = ++requestSeq.current
     if (append) setLoadingMore(true)
     else setLoading(true)
+
+    const finish = (rows: PostWithAuthor[], more: boolean) => {
+      if (seq !== requestSeq.current) {
+        // 途中で絞り込みが変わり、新しい読み込みに置き換わった。結果は捨てる
+        if (append) setLoadingMore(false)
+        return
+      }
+      setPosts((prev) => (append ? [...prev, ...rows] : rows))
+      setPage(pageToLoad)
+      setHasMore(more)
+      if (append) setLoadingMore(false)
+      else setLoading(false)
+    }
 
     const { data: userResp } = await supabase.auth.getUser()
     const activeUserId = userResp.user?.id
 
+    // 「フォロー中」タブ：フォローしているクリエイターの投稿だけに絞る
+    let followingIds: string[] | null = null
+    if (!postId && feedTab === 'following') {
+      if (!activeUserId) return finish([], false)
+      const { data: follows } = await supabase
+        .from('creator_follows')
+        .select('creator_id')
+        .eq('follower_id', activeUserId)
+      followingIds = (follows || []).map((f: any) => f.creator_id as string)
+      if (seq === requestSeq.current) setFollowingCount(followingIds.length)
+      if (followingIds.length === 0) return finish([], false)
+    }
+
     const from = pageToLoad * FEED_PAGE_SIZE
     const to = from + FEED_PAGE_SIZE - 1
 
-    const { data, error } = await supabase
-      .from('posts')
-      .select(`
-        *,
-        profiles:user_id (display_name, avatar_url),
-        post_likes (user_id),
-        post_comments (
-          id,
-          user_id,
-          content,
-          created_at,
-          profiles:user_id (display_name, avatar_url)
-        )
-      `)
-      .order('created_at', { ascending: false })
-      .range(from, to)
-
-    if (!error && data) {
-      const formatted = data.map((post: any) => ({
-        ...post,
-        likes_count: post.post_likes?.length || 0,
-        is_liked_by_me: activeUserId
-          ? post.post_likes?.some((l: any) => l.user_id === activeUserId)
-          : false,
-      }))
-
-      setPosts((prev) => (append ? [...prev, ...formatted] : formatted))
-      setPage(pageToLoad)
-      setHasMore(data.length === FEED_PAGE_SIZE)
-
-      // 投稿者・コメント投稿者の装着中アイコンリングをまとめて取得
-      const userIds = new Set<string>()
-      formatted.forEach((post: any) => {
-        userIds.add(post.user_id)
-        post.post_comments?.forEach((c: any) => userIds.add(c.user_id))
-      })
-      if (userIds.size > 0) {
-        const { data: ringsData } = await supabase
-          .from('public_equipped_rings')
-          .select('user_id, equipped_ring_id')
-          .in('user_id', Array.from(userIds))
-        setRingMap((prev) => {
-          const merged = append ? { ...prev } : {}
-          ;(ringsData || []).forEach((r: any) => {
-            merged[r.user_id] = r.equipped_ring_id
-          })
-          return merged
-        })
-      }
+    const runQuery = (select: string) => {
+      let query = supabase.from('posts').select(select)
+      if (postId) return query.eq('id', postId)
+      if (followingIds) query = query.in('user_id', followingIds)
+      if (searchTag) query = query.ilike('content', `%${escapeLikePattern(searchTag)}%`)
+      if (imagesOnly) query = query.neq('image_urls', '{}')
+      return query.order('created_at', { ascending: false }).range(from, to)
     }
 
-    if (append) setLoadingMore(false)
-    else setLoading(false)
+    let { data, error } = await runQuery(POST_SELECT_WITH_COUNTS)
+    if (error) {
+      console.error('投稿の取得エラー（件数のみの取得に失敗したため、行を取得して数えます）:', error)
+      ;({ data, error } = await runQuery(POST_SELECT_WITH_ROWS))
+    }
+    if (error || !data) {
+      console.error('投稿の取得エラー:', error)
+      return finish([], false)
+    }
+
+    const rows = data as unknown as any[]
+    const postIds = rows.map((p) => p.id as string)
+
+    // 自分がいいね済みの投稿
+    const likedIds = new Set<string>()
+    if (activeUserId && postIds.length > 0) {
+      const { data: myLikes } = await supabase
+        .from('post_likes')
+        .select('post_id')
+        .eq('user_id', activeUserId)
+        .in('post_id', postIds)
+      ;(myLikes || []).forEach((l: any) => likedIds.add(l.post_id))
+    }
+
+    const formatted: PostWithAuthor[] = rows.map(({ post_likes, post_comments, ...post }) => ({
+      ...post,
+      image_urls: post.image_urls || [],
+      likes_count: countOf(post_likes),
+      comments_count: countOf(post_comments),
+      is_liked_by_me: likedIds.has(post.id),
+    }))
+
+    finish(formatted, !postId && rows.length === FEED_PAGE_SIZE)
+    fetchRings(Array.from(new Set(formatted.map((p) => p.user_id))))
   }
 
   const handleLoadMore = () => {
     if (loadingMore || !hasMore) return
     fetchPosts(page + 1, true)
+  }
+
+  // よく使われているハッシュタグ。タグ付きの新しい投稿から数える（絞り込み中でも中身は変わらない）
+  const fetchPopularTags = async () => {
+    const { data } = await supabase
+      .from('posts')
+      .select('content')
+      .like('content', '%#%')
+      .order('created_at', { ascending: false })
+      .limit(POPULAR_TAG_SAMPLE_SIZE)
+
+    const counts: Record<string, number> = {}
+    ;(data || []).forEach((p: any) => {
+      new Set<string>((p.content as string).match(/#[^\s#]+/g) || []).forEach((tag) => {
+        counts[tag] = (counts[tag] || 0) + 1
+      })
+    })
+    setPopularTags(
+      Object.entries(counts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 12)
+    )
+  }
+
+  const fetchComments = async (targetPostId: string) => {
+    const { data, error } = await supabase
+      .from('post_comments')
+      .select(COMMENT_SELECT)
+      .eq('post_id', targetPostId)
+      .order('created_at', { ascending: true })
+
+    if (error) {
+      console.error('コメントの取得エラー:', error)
+      return
+    }
+    const comments = (data || []) as unknown as Comment[]
+    setCommentsByPost((prev) => ({ ...prev, [targetPostId]: comments }))
+    // 一覧の件数は読み込み時点のものなので、実際の件数に合わせ直す
+    setPosts((prev) => prev.map((p) => (p.id === targetPostId ? { ...p, comments_count: comments.length } : p)))
+    fetchRings(Array.from(new Set(comments.map((c) => c.user_id))))
   }
 
   // 画像選択処理
@@ -202,6 +344,7 @@ export default function FeedPage() {
     const updatedFiles = selectedFiles.filter((_, i) => i !== index)
     setSelectedFiles(updatedFiles)
     setPreviewUrls(updatedFiles.map((file) => URL.createObjectURL(file)))
+    if (updatedFiles.length === 0) setIsSensitive(false)
   }
 
   // 新規投稿
@@ -209,7 +352,7 @@ export default function FeedPage() {
     e.preventDefault()
     if (!currentUser) return alert('投稿するにはログインが必要です')
     if (!content.trim() && selectedFiles.length === 0) return
-    if (content.length > 200) return alert('文字数は200文字までにしてください')
+    if (content.length > POST_MAX_LENGTH) return alert(`文字数は${POST_MAX_LENGTH}文字までにしてください`)
 
     setIsSubmitting(true)
     try {
@@ -236,6 +379,8 @@ export default function FeedPage() {
         user_id: currentUser.id,
         content: content.trim(),
         image_urls: uploadedImageUrls,
+        // ぼかすのは画像だけなので、画像が無い投稿には付けない
+        is_sensitive: isSensitive && uploadedImageUrls.length > 0,
       })
 
       if (insertError) throw insertError
@@ -243,7 +388,9 @@ export default function FeedPage() {
       setContent('')
       setSelectedFiles([])
       setPreviewUrls([])
+      setIsSensitive(false)
       fetchPosts()
+      fetchPopularTags()
     } catch (err) {
       console.error(err)
       alert('投稿に失敗しました')
@@ -253,14 +400,21 @@ export default function FeedPage() {
   }
 
   // 投稿削除
-  const handleDeletePost = async (postId: string) => {
+  const handleDeletePost = async (post: PostWithAuthor) => {
     if (!confirm('この投稿を削除してもよろしいですか？')) return
 
-    const { error } = await supabase.from('posts').delete().eq('id', postId)
-    if (!error) {
-      setPosts((prev) => prev.filter((p) => p.id !== postId))
-    } else {
+    const { error } = await supabase.from('posts').delete().eq('id', post.id)
+    if (error) {
       alert('削除に失敗しました')
+      return
+    }
+    setPosts((prev) => prev.filter((p) => p.id !== post.id))
+
+    // 投稿の画像ファイルもストレージから消す。失敗しても投稿の削除自体は完了しているので、記録だけ残す
+    const paths = post.image_urls.map((u) => extractStoragePath(u)).filter((p): p is string => !!p)
+    if (paths.length > 0) {
+      const { error: removeError } = await supabase.storage.from('portfolios').remove(paths)
+      if (removeError) console.error('画像ファイルの削除エラー:', removeError)
     }
   }
 
@@ -268,24 +422,25 @@ export default function FeedPage() {
   const startEdit = (post: PostWithAuthor) => {
     setEditingPostId(post.id)
     setEditContent(post.content)
+    setEditSensitive(post.is_sensitive)
   }
 
   // 投稿編集の保存
-  const handleUpdatePost = async (postId: string) => {
-    if (!editContent.trim()) return alert('内容を入力してください')
-    if (editContent.length > 200) return alert('200文字以内で入力してください')
+  const handleUpdatePost = async (post: PostWithAuthor) => {
+    const hasImages = post.image_urls.length > 0
+    if (!editContent.trim() && !hasImages) return alert('内容を入力してください')
+    if (editContent.length > POST_MAX_LENGTH) return alert(`${POST_MAX_LENGTH}文字以内で入力してください`)
 
-    const { error } = await supabase
-      .from('posts')
-      .update({ content: editContent.trim() })
-      .eq('id', postId)
+    const changes = { content: editContent.trim(), is_sensitive: editSensitive && hasImages }
+    const { error } = await supabase.from('posts').update(changes).eq('id', post.id)
 
-    if (!error) {
-      setEditingPostId(null)
-      fetchPosts()
-    } else {
+    if (error) {
       alert('更新に失敗しました')
+      return
     }
+    // 一覧を読み込み直すと先頭に戻ってしまうので、その投稿だけ書き換える
+    setEditingPostId(null)
+    setPosts((prev) => prev.map((p) => (p.id === post.id ? { ...p, ...changes } : p)))
   }
 
   // いいね機能
@@ -317,7 +472,7 @@ export default function FeedPage() {
           return {
             ...p,
             is_liked_by_me: !wasLiked,
-            likes_count: (p.likes_count || 0) + (wasLiked ? -1 : 1),
+            likes_count: Math.max(0, p.likes_count + (wasLiked ? -1 : 1)),
           }
         }
         return p
@@ -326,28 +481,97 @@ export default function FeedPage() {
   }
 
   // コメント送信
-  const handleAddComment = async (postId: string) => {
+  const handleAddComment = async (targetPostId: string) => {
     if (!currentUser) return alert('コメントをするにはログインが必要です')
-    if (!commentInput.trim()) return
+    if (!commentInput.trim() || isSendingComment) return
+    if (commentInput.length > COMMENT_MAX_LENGTH) return alert(`コメントは${COMMENT_MAX_LENGTH}文字以内で入力してください`)
 
+    setIsSendingComment(true)
     const { error } = await supabase.from('post_comments').insert({
-      post_id: postId,
+      post_id: targetPostId,
       user_id: currentUser.id,
       content: commentInput.trim(),
     })
+    setIsSendingComment(false)
 
-    if (!error) {
-      setCommentInput('')
-      fetchPosts()
-    } else {
+    if (error) {
       alert('コメントの送信に失敗しました')
+      return
     }
+    setCommentInput('')
+    // 一覧を読み込み直すと先頭に戻ってしまうので、その投稿のコメントだけ取り直す
+    fetchComments(targetPostId)
+  }
+
+  // 自分のコメントを削除
+  const handleDeleteComment = async (targetPostId: string, commentId: string) => {
+    if (!confirm('このコメントを削除してもよろしいですか？')) return
+
+    const { error } = await supabase.from('post_comments').delete().eq('id', commentId)
+    if (error) {
+      alert('コメントの削除に失敗しました')
+      return
+    }
+    setCommentsByPost((prev) => ({
+      ...prev,
+      [targetPostId]: (prev[targetPostId] || []).filter((c) => c.id !== commentId),
+    }))
+    setPosts((prev) =>
+      prev.map((p) => (p.id === targetPostId ? { ...p, comments_count: Math.max(0, p.comments_count - 1) } : p))
+    )
+  }
+
+  // 投稿の個別ページ（/feed/[postId]）のURLを共有する。SNSに貼ると投稿の画像がカードとして表示される。
+  // スマホでは端末の共有メニュー（LINEなどへ直接送れる）を開き、PCではURLをコピーする
+  const handleSharePostLink = async (post: PostWithAuthor) => {
+    const url = `${window.location.origin}/feed/${post.id}`
+
+    if (typeof navigator.share === 'function' && window.matchMedia('(pointer: coarse)').matches) {
+      try {
+        await navigator.share({ title: `${post.profiles?.display_name || 'クリエイター'}さんの投稿｜Drawker`, url })
+        return
+      } catch (e: any) {
+        // 共有メニューを閉じただけなら何もしない。それ以外の失敗はコピーに切り替える
+        if (e?.name === 'AbortError') return
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopiedPostId(post.id)
+      setTimeout(() => setCopiedPostId((prev) => (prev === post.id ? null : prev)), 2000)
+    } catch {
+      // クリップボードが使えない環境（権限なし・古いブラウザなど）では、URLを表示して手でコピーしてもらう
+      window.prompt('コピーできませんでした。下のURLを選択してコピーしてください。', url)
+    }
+  }
+
+  const handleSharePostOnX = (post: PostWithAuthor) => {
+    const url = `${window.location.origin}/feed/${post.id}`
+    const text = `${post.profiles?.display_name || 'クリエイター'}さんの投稿｜Drawker`
+    window.open(
+      `https://x.com/intent/post?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`,
+      '_blank',
+      'noopener,noreferrer'
+    )
   }
 
   const renderFormattedContent = (text: string) => {
     const parts = text.split(/(#[^\s#]+)/g)
     return parts.map((part, i) => {
       if (part.startsWith('#')) {
+        // 個別ページには絞り込む対象の一覧が無いので、フィードの一覧へ移動してそのタグで絞り込む
+        if (isSinglePost) {
+          return (
+            <Link
+              key={i}
+              href={`/feed?tag=${encodeURIComponent(part)}`}
+              className="text-pink-500 font-bold hover:underline transition-colors"
+            >
+              {part}
+            </Link>
+          )
+        }
         return (
           <button
             key={i}
@@ -362,27 +586,6 @@ export default function FeedPage() {
     })
   }
 
-  const filteredPosts = useMemo(() => {
-    return posts.filter(
-      (p) =>
-        (!searchTag || p.content.includes(searchTag)) &&
-        (!imagesOnly || (p.image_urls && p.image_urls.length > 0))
-    )
-  }, [posts, searchTag, imagesOnly])
-
-  // 読み込み済みの投稿でよく使われているハッシュタグ
-  const popularTags = useMemo(() => {
-    const counts: Record<string, number> = {}
-    posts.forEach((p) => {
-      new Set(p.content.match(/#[^\s#]+/g) || []).forEach((tag) => {
-        counts[tag] = (counts[tag] || 0) + 1
-      })
-    })
-    return Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 12)
-  }, [posts])
-
   const getImageGridClass = (count: number) => {
     if (count === 1) return 'grid-cols-1'
     if (count === 3) return 'grid-cols-2 [&>*:first-child]:col-span-2'
@@ -396,8 +599,11 @@ export default function FeedPage() {
     return 'aspect-square'
   }
 
-  const revealPost = (postId: string) =>
-    setRevealedPostIds((prev) => new Set(prev).add(postId))
+  const revealPost = (id: string) => setRevealedPostIds((prev) => new Set(prev).add(id))
+
+  const isFiltered = !!searchTag || imagesOnly
+  // 「フォロー中」タブはログインしていないと使えない
+  const needsLoginForTab = feedTab === 'following' && !currentUser
 
   return (
     <div className="min-h-screen pb-24 relative bg-cover bg-center" style={backgroundImageStyle}>
@@ -407,134 +613,174 @@ export default function FeedPage() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-8 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px] gap-6 items-start">
         {/* メインカラム */}
         <div className="space-y-5 min-w-0">
-          {/* タイトル */}
-          <div className="flex items-end justify-between gap-3 px-1">
-            <div>
-              <p className="text-[10px] font-black text-sky-600 tracking-[0.2em] drop-shadow-xs">FEED</p>
-              <h1 className="text-2xl font-black text-slate-800 tracking-tight drop-shadow-sm">みんなの制作日記</h1>
-              <p className="text-[11px] text-slate-600 font-medium drop-shadow-xs">
-                クリエイターの制作中の作品や近況をチェックしよう
-              </p>
+          {/* タイトル（個別ページでは一覧へ戻るリンク） */}
+          {isSinglePost ? (
+            <div className="px-1">
+              <Link
+                href="/feed"
+                className="inline-flex items-center gap-1.5 text-[11px] font-black text-sky-700 bg-white/90 hover:bg-white border border-white/70 px-4 py-2 rounded-full shadow-2xs transition"
+              >
+                ← フィードに戻る
+              </Link>
             </div>
-          </div>
-
-          {/* 新規投稿フォーム */}
-          <div className="bg-white/90 backdrop-blur-md rounded-3xl p-4 sm:p-5 border border-white/70 shadow-sm transition-all focus-within:shadow-md focus-within:ring-2 focus-within:ring-sky-200">
-            {currentUser ? (
-              <form onSubmit={handleSubmit} className="flex gap-3">
-                <div className="shrink-0 w-10 h-10 rounded-full overflow-hidden bg-sky-100 border border-sky-100">
-                  {myAvatarUrl && <img src={myAvatarUrl} alt="" className="w-full h-full object-cover" />}
-                </div>
-                <div className="flex-1 min-w-0 space-y-3">
-                  <textarea
-                    rows={3}
-                    maxLength={200}
-                    placeholder="いまどんな作品を描いてる？（#ハッシュタグ も使えます）"
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    className="w-full text-sm text-slate-800 placeholder-slate-400 bg-transparent resize-none border-none focus:outline-none focus:ring-0 leading-relaxed pt-2"
-                  />
-
-                  {previewUrls.length > 0 && (
-                    <div className="grid grid-cols-4 gap-2">
-                      {previewUrls.map((url, i) => (
-                        <div key={i} className="relative aspect-square rounded-xl overflow-hidden bg-slate-100 border border-slate-200/60">
-                          <img src={url} alt="" className="w-full h-full object-cover" />
-                          <button
-                            type="button"
-                            onClick={() => removeFile(i)}
-                            className="absolute top-1 right-1 bg-slate-900/60 hover:bg-slate-900 text-white rounded-full w-6 h-6 text-[10px] font-bold flex items-center justify-center transition cursor-pointer"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                    <div className="flex items-center gap-3">
-                      <label
-                        className={`flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-full transition ${
-                          selectedFiles.length >= 4
-                            ? 'text-slate-300 bg-slate-50 cursor-not-allowed'
-                            : 'text-sky-600 bg-sky-50 hover:bg-sky-100 cursor-pointer'
-                        }`}
-                      >
-                        <span>🖼</span>
-                        <span>画像 {selectedFiles.length}/4</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          onChange={handleFileChange}
-                          className="hidden"
-                          disabled={selectedFiles.length >= 4}
-                        />
-                      </label>
-                      <span className={`text-[11px] font-bold tabular-nums ${content.length >= 190 ? 'text-rose-500' : 'text-slate-300'}`}>
-                        {content.length}/200
-                      </span>
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={isSubmitting || (!content.trim() && selectedFiles.length === 0)}
-                      className="bg-gradient-to-r from-sky-500 to-cyan-500 hover:brightness-105 text-white font-black text-xs px-6 py-2.5 rounded-full shadow-sm hover:shadow-md disabled:opacity-40 disabled:shadow-none transition-all active:scale-95 cursor-pointer"
-                    >
-                      {isSubmitting ? '送信中...' : '投稿する'}
-                    </button>
-                  </div>
-                </div>
-              </form>
-            ) : (
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 py-1">
-                <p className="text-xs font-bold text-slate-600 text-center sm:text-left">
-                  ログインすると作品の投稿や「いいね」、コメントができます
+          ) : (
+            <div className="flex items-end justify-between gap-3 px-1">
+              <div>
+                <p className="text-[10px] font-black text-sky-600 tracking-[0.2em] drop-shadow-xs">FEED</p>
+                <h1 className="text-2xl font-black text-slate-800 tracking-tight drop-shadow-sm">みんなの制作日記</h1>
+                <p className="text-[11px] text-slate-600 font-medium drop-shadow-xs">
+                  クリエイターの制作中の作品や近況をチェックしよう
                 </p>
-                <Link
-                  href="/login"
-                  className="shrink-0 text-xs font-black text-white bg-sky-500 hover:bg-sky-600 px-5 py-2.5 rounded-full shadow-sm transition"
-                >
-                  ログインして参加する
-                </Link>
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* 絞り込みバー */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex bg-white/85 backdrop-blur-md rounded-full p-1 border border-white/70 shadow-2xs">
-              {[
-                { value: false, label: 'すべて' },
-                { value: true, label: '画像つき' },
-              ].map((tab) => (
+          {/* 新規投稿フォーム・絞り込みバーは一覧のときだけ */}
+          {!isSinglePost && (
+            <>
+              {/* 新規投稿フォーム */}
+              <div className="bg-white/90 backdrop-blur-md rounded-3xl p-4 sm:p-5 border border-white/70 shadow-sm transition-all focus-within:shadow-md focus-within:ring-2 focus-within:ring-sky-200">
+                {currentUser ? (
+                  <form onSubmit={handleSubmit} className="flex gap-3">
+                    <div className="shrink-0 w-10 h-10 rounded-full overflow-hidden bg-sky-100 border border-sky-100">
+                      {myAvatarUrl && <img src={myAvatarUrl} alt="" className="w-full h-full object-cover" />}
+                    </div>
+                    <div className="flex-1 min-w-0 space-y-3">
+                      <textarea
+                        rows={3}
+                        maxLength={POST_MAX_LENGTH}
+                        placeholder="いまどんな作品を描いてる？（#ハッシュタグ も使えます）"
+                        value={content}
+                        onChange={(e) => setContent(e.target.value)}
+                        className="w-full text-sm text-slate-800 placeholder-slate-400 bg-transparent resize-none border-none focus:outline-none focus:ring-0 leading-relaxed pt-2"
+                      />
+
+                      {previewUrls.length > 0 && (
+                        <div className="grid grid-cols-4 gap-2">
+                          {previewUrls.map((url, i) => (
+                            <div key={i} className="relative aspect-square rounded-xl overflow-hidden bg-slate-100 border border-slate-200/60">
+                              <img src={url} alt="" className="w-full h-full object-cover" />
+                              <button
+                                type="button"
+                                onClick={() => removeFile(i)}
+                                className="absolute top-1 right-1 bg-slate-900/60 hover:bg-slate-900 text-white rounded-full w-6 h-6 text-[10px] font-bold flex items-center justify-center transition cursor-pointer"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* センシティブ指定（ぼかすのは画像なので、画像を選んだときだけ出す） */}
+                      {selectedFiles.length > 0 && (
+                        <label className="flex items-center gap-2 text-[11px] font-bold text-slate-500 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={isSensitive}
+                            onChange={(e) => setIsSensitive(e.target.checked)}
+                            className="w-3.5 h-3.5 accent-sky-500"
+                          />
+                          センシティブな内容を含む（画像をぼかして表示し、タップで見られるようにします）
+                        </label>
+                      )}
+
+                      <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                        <div className="flex items-center gap-3">
+                          <label
+                            className={`flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-full transition ${
+                              selectedFiles.length >= 4
+                                ? 'text-slate-300 bg-slate-50 cursor-not-allowed'
+                                : 'text-sky-600 bg-sky-50 hover:bg-sky-100 cursor-pointer'
+                            }`}
+                          >
+                            <span>🖼</span>
+                            <span>画像 {selectedFiles.length}/4</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              multiple
+                              onChange={handleFileChange}
+                              className="hidden"
+                              disabled={selectedFiles.length >= 4}
+                            />
+                          </label>
+                          <span className={`text-[11px] font-bold tabular-nums ${content.length >= POST_MAX_LENGTH - 10 ? 'text-rose-500' : 'text-slate-300'}`}>
+                            {content.length}/{POST_MAX_LENGTH}
+                          </span>
+                        </div>
+
+                        <button
+                          type="submit"
+                          disabled={isSubmitting || (!content.trim() && selectedFiles.length === 0)}
+                          className="bg-gradient-to-r from-sky-500 to-cyan-500 hover:brightness-105 text-white font-black text-xs px-6 py-2.5 rounded-full shadow-sm hover:shadow-md disabled:opacity-40 disabled:shadow-none transition-all active:scale-95 cursor-pointer"
+                        >
+                          {isSubmitting ? '送信中...' : '投稿する'}
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 py-1">
+                    <p className="text-xs font-bold text-slate-600 text-center sm:text-left">
+                      ログインすると作品の投稿や「いいね」、コメントができます
+                    </p>
+                    <Link
+                      href="/login"
+                      className="shrink-0 text-xs font-black text-white bg-sky-500 hover:bg-sky-600 px-5 py-2.5 rounded-full shadow-sm transition"
+                    >
+                      ログインして参加する
+                    </Link>
+                  </div>
+                )}
+              </div>
+
+              {/* 絞り込みバー */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex bg-white/85 backdrop-blur-md rounded-full p-1 border border-white/70 shadow-2xs">
+                  {[
+                    { value: 'all' as const, label: 'すべて' },
+                    { value: 'following' as const, label: 'フォロー中' },
+                  ].map((tab) => (
+                    <button
+                      key={tab.value}
+                      onClick={() => setFeedTab(tab.value)}
+                      className={`px-4 py-1.5 rounded-full text-[11px] font-black transition cursor-pointer ${
+                        feedTab === tab.value ? 'bg-sky-500 text-white shadow-2xs' : 'text-slate-500 hover:text-sky-600'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
                 <button
-                  key={tab.label}
-                  onClick={() => setImagesOnly(tab.value)}
-                  className={`px-4 py-1.5 rounded-full text-[11px] font-black transition cursor-pointer ${
-                    imagesOnly === tab.value ? 'bg-sky-500 text-white shadow-2xs' : 'text-slate-500 hover:text-sky-600'
+                  onClick={() => setImagesOnly((v) => !v)}
+                  aria-pressed={imagesOnly}
+                  className={`text-[11px] font-black px-4 py-2 rounded-full border transition cursor-pointer shadow-2xs ${
+                    imagesOnly
+                      ? 'bg-sky-500 text-white border-sky-500'
+                      : 'bg-white/85 text-slate-500 border-white/70 hover:text-sky-600'
                   }`}
                 >
-                  {tab.label}
+                  🖼 画像つきのみ
                 </button>
-              ))}
-            </div>
-            {searchTag && (
-              <button
-                onClick={() => setSearchTag('')}
-                className="text-[11px] font-black text-sky-700 bg-white/90 border border-sky-200 px-3 py-1.5 rounded-full hover:bg-sky-50 transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
-              >
-                <span>{searchTag}</span>
-                <span className="text-slate-400">✕</span>
-              </button>
-            )}
-          </div>
+                {searchTag && (
+                  <button
+                    onClick={() => setSearchTag('')}
+                    className="text-[11px] font-black text-sky-700 bg-white/90 border border-sky-200 px-3 py-1.5 rounded-full hover:bg-sky-50 transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  >
+                    <span>{searchTag}</span>
+                    <span className="text-slate-400">✕</span>
+                  </button>
+                )}
+              </div>
+            </>
+          )}
 
           {/* タイムライン */}
           {loading ? (
             <div className="space-y-4">
-              {[1, 2, 3].map((n) => (
+              {(isSinglePost ? [1] : [1, 2, 3]).map((n) => (
                 <div key={n} className="bg-white/85 rounded-3xl p-5 space-y-3 animate-pulse border border-white/70">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-sky-100" />
@@ -548,23 +794,48 @@ export default function FeedPage() {
                 </div>
               ))}
             </div>
-          ) : filteredPosts.length === 0 ? (
-            <div className="text-center py-16 bg-white/85 backdrop-blur-md rounded-3xl border border-white/70 space-y-2">
+          ) : posts.length === 0 ? (
+            <div className="text-center py-16 px-4 bg-white/85 backdrop-blur-md rounded-3xl border border-white/70 space-y-2">
               <p className="text-3xl">🎨</p>
-              <p className="text-sm font-black text-slate-600">
-                {searchTag || imagesOnly ? '条件に合う投稿がありません' : 'まだ投稿がありません'}
-              </p>
-              {currentUser && !searchTag && !imagesOnly && (
-                <p className="text-[11px] text-slate-400 font-bold">最初の投稿をしてみましょう！</p>
+              {isSinglePost ? (
+                <>
+                  <p className="text-sm font-black text-slate-600">この投稿は見つかりませんでした</p>
+                  <p className="text-[11px] text-slate-400 font-bold">削除されたか、URLが間違っている可能性があります</p>
+                </>
+              ) : needsLoginForTab ? (
+                <>
+                  <p className="text-sm font-black text-slate-600">フォロー中のクリエイターの投稿を見るにはログインが必要です</p>
+                  <Link
+                    href="/login"
+                    className="inline-block mt-1 text-xs font-black text-white bg-sky-500 hover:bg-sky-600 px-5 py-2.5 rounded-full shadow-sm transition"
+                  >
+                    ログインする
+                  </Link>
+                </>
+              ) : feedTab === 'following' && followingCount === 0 ? (
+                <>
+                  <p className="text-sm font-black text-slate-600">まだ誰もフォローしていません</p>
+                  <p className="text-[11px] text-slate-400 font-bold">
+                    クリエイターのページで「フォロー」を押すと、その人の投稿がここに並びます
+                  </p>
+                </>
+              ) : isFiltered || feedTab === 'following' ? (
+                <p className="text-sm font-black text-slate-600">条件に合う投稿がありません</p>
+              ) : (
+                <>
+                  <p className="text-sm font-black text-slate-600">まだ投稿がありません</p>
+                  {currentUser && <p className="text-[11px] text-slate-400 font-bold">最初の投稿をしてみましょう！</p>}
+                </>
               )}
             </div>
           ) : (
             <div className="space-y-4">
-              {filteredPosts.map((post) => {
+              {posts.map((post) => {
                 const isMyPost = currentUser?.id === post.user_id
-                const images = post.image_urls || []
+                const images = post.image_urls
                 const isHidden = post.is_sensitive && !revealedPostIds.has(post.id)
                 const authorName = post.profiles?.display_name || 'クリエイター'
+                const comments = commentsByPost[post.id]
 
                 return (
                   <article
@@ -573,8 +844,8 @@ export default function FeedPage() {
                   >
                     {/* 投稿者 */}
                     <div className="flex items-center justify-between gap-2">
-                      <Link href={`/creator/${post.user_id}`} className="flex items-center gap-3 group min-w-0">
-                        <div className="shrink-0 group-hover:scale-105 transition-transform">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Link href={`/creator/${post.user_id}`} className="shrink-0 hover:scale-105 transition-transform">
                           <AvatarRing
                             src={post.profiles?.avatar_url}
                             alt={authorName}
@@ -586,20 +857,24 @@ export default function FeedPage() {
                               </div>
                             }
                           />
-                        </div>
+                        </Link>
                         <div className="min-w-0">
-                          <h2 className="text-sm font-black text-slate-800 group-hover:text-sky-600 transition-colors truncate">
-                            {authorName}
+                          <h2 className="text-sm font-black text-slate-800 truncate">
+                            <Link href={`/creator/${post.user_id}`} className="hover:text-sky-600 transition-colors">
+                              {authorName}
+                            </Link>
                           </h2>
-                          <time
-                            dateTime={post.created_at}
-                            title={new Date(post.created_at).toLocaleString('ja-JP')}
-                            className="text-[10px] text-slate-400 font-bold"
+                          {/* 投稿時刻は、その投稿の個別ページへのリンク */}
+                          <Link
+                            href={`/feed/${post.id}`}
+                            className="text-[10px] text-slate-400 font-bold hover:text-sky-600 hover:underline"
                           >
-                            {formatRelativeTime(post.created_at)}
-                          </time>
+                            <time dateTime={post.created_at} title={new Date(post.created_at).toLocaleString('ja-JP')}>
+                              {formatRelativeTime(post.created_at)}
+                            </time>
+                          </Link>
                         </div>
-                      </Link>
+                      </div>
 
                       <div className="flex items-center gap-1 shrink-0">
                         {isMyPost && (
@@ -611,7 +886,7 @@ export default function FeedPage() {
                               編集
                             </button>
                             <button
-                              onClick={() => handleDeletePost(post.id)}
+                              onClick={() => handleDeletePost(post)}
                               className="text-[11px] font-bold text-rose-400 hover:text-rose-600 hover:bg-rose-50 px-2 py-1 rounded-lg transition cursor-pointer"
                             >
                               削除
@@ -619,12 +894,20 @@ export default function FeedPage() {
                           </>
                         )}
                         {!isMyPost && (
-                          <Link
-                            href={`/creator/${post.user_id}`}
-                            className="text-[11px] font-black text-sky-600 bg-sky-50 hover:bg-sky-100 px-3 py-1.5 rounded-full transition"
-                          >
-                            依頼する →
-                          </Link>
+                          <>
+                            <button
+                              onClick={() => setReportTarget(post)}
+                              className="text-[11px] font-bold text-slate-300 hover:text-rose-500 hover:bg-rose-50 px-2 py-1 rounded-lg transition cursor-pointer"
+                            >
+                              通報
+                            </button>
+                            <Link
+                              href={`/creator/${post.user_id}`}
+                              className="text-[11px] font-black text-sky-600 bg-sky-50 hover:bg-sky-100 px-3 py-1.5 rounded-full transition"
+                            >
+                              依頼する →
+                            </Link>
+                          </>
                         )}
                       </div>
                     </div>
@@ -634,11 +917,22 @@ export default function FeedPage() {
                       <div className="space-y-2 bg-sky-50/60 p-3 rounded-2xl border border-sky-100">
                         <textarea
                           rows={3}
-                          maxLength={200}
+                          maxLength={POST_MAX_LENGTH}
                           value={editContent}
                           onChange={(e) => setEditContent(e.target.value)}
                           className="w-full text-sm text-slate-800 bg-transparent resize-none focus:outline-none"
                         />
+                        {images.length > 0 && (
+                          <label className="flex items-center gap-2 text-[11px] font-bold text-slate-500 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={editSensitive}
+                              onChange={(e) => setEditSensitive(e.target.checked)}
+                              className="w-3.5 h-3.5 accent-sky-500"
+                            />
+                            センシティブな内容を含む（画像をぼかして表示）
+                          </label>
+                        )}
                         <div className="flex justify-end gap-2">
                           <button
                             onClick={() => setEditingPostId(null)}
@@ -647,7 +941,7 @@ export default function FeedPage() {
                             キャンセル
                           </button>
                           <button
-                            onClick={() => handleUpdatePost(post.id)}
+                            onClick={() => handleUpdatePost(post)}
                             className="text-xs font-bold bg-sky-500 hover:bg-sky-600 text-white px-4 py-1.5 rounded-lg cursor-pointer"
                           >
                             保存
@@ -712,7 +1006,7 @@ export default function FeedPage() {
                         }`}
                       >
                         <span className="text-sm">{post.is_liked_by_me ? '♥' : '♡'}</span>
-                        <span className="tabular-nums">{post.likes_count || 0}</span>
+                        <span className="tabular-nums">{post.likes_count}</span>
                       </button>
 
                       <button
@@ -725,16 +1019,38 @@ export default function FeedPage() {
                         }`}
                       >
                         <span>💬</span>
-                        <span className="tabular-nums">{post.post_comments?.length || 0}</span>
+                        <span className="tabular-nums">{post.comments_count}</span>
                       </button>
+
+                      {/* 共有：投稿の個別ページ（/feed/[postId]）のURL */}
+                      <div className="flex items-center gap-1 ml-auto">
+                        <button
+                          onClick={() => handleSharePostLink(post)}
+                          className={`flex items-center gap-1.5 text-[11px] font-black px-3 py-1.5 rounded-full transition cursor-pointer ${
+                            copiedPostId === post.id ? 'text-sky-600 bg-sky-50' : 'text-slate-400 hover:text-sky-600 hover:bg-sky-50'
+                          }`}
+                        >
+                          <span>🔗</span>
+                          <span>{copiedPostId === post.id ? 'コピー済み' : 'リンク'}</span>
+                        </button>
+                        <button
+                          onClick={() => handleSharePostOnX(post)}
+                          className="flex items-center gap-1.5 text-[11px] font-black px-3 py-1.5 rounded-full text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition cursor-pointer"
+                        >
+                          <span>𝕏</span>
+                          <span>シェア</span>
+                        </button>
+                      </div>
                     </div>
 
                     {/* コメント */}
                     {openCommentPostId === post.id && (
                       <div className="pt-3 border-t border-slate-100 space-y-3">
-                        {post.post_comments && post.post_comments.length > 0 ? (
+                        {!comments ? (
+                          <p className="text-[11px] text-slate-400 font-bold text-center py-1">コメントを読み込み中...</p>
+                        ) : comments.length > 0 ? (
                           <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
-                            {post.post_comments.map((comment) => (
+                            {comments.map((comment) => (
                               <div key={comment.id} className="flex gap-2.5">
                                 <Link href={`/creator/${comment.user_id}`} className="shrink-0 pt-0.5">
                                   <AvatarRing
@@ -753,8 +1069,16 @@ export default function FeedPage() {
                                     <span className="text-[9px] text-slate-400 font-bold shrink-0">
                                       {formatRelativeTime(comment.created_at)}
                                     </span>
+                                    {currentUser?.id === comment.user_id && (
+                                      <button
+                                        onClick={() => handleDeleteComment(post.id, comment.id)}
+                                        className="text-[9px] font-bold text-rose-400 hover:text-rose-600 hover:underline shrink-0 cursor-pointer"
+                                      >
+                                        削除
+                                      </button>
+                                    )}
                                   </div>
-                                  <p className="text-xs text-slate-600 break-words">{comment.content}</p>
+                                  <p className="text-xs text-slate-600 whitespace-pre-wrap break-words">{comment.content}</p>
                                 </div>
                               </div>
                             ))}
@@ -771,22 +1095,31 @@ export default function FeedPage() {
                               e.preventDefault()
                               handleAddComment(post.id)
                             }}
-                            className="flex gap-2"
+                            className="space-y-1"
                           >
-                            <input
-                              type="text"
-                              placeholder="コメントを入力..."
-                              value={commentInput}
-                              onChange={(e) => setCommentInput(e.target.value)}
-                              className="flex-1 min-w-0 text-xs px-4 py-2 rounded-full bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-400/50 focus:bg-white"
-                            />
-                            <button
-                              type="submit"
-                              disabled={!commentInput.trim()}
-                              className="bg-sky-500 hover:bg-sky-600 disabled:opacity-40 text-white text-xs font-black px-4 py-2 rounded-full transition cursor-pointer"
-                            >
-                              送信
-                            </button>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                maxLength={COMMENT_MAX_LENGTH}
+                                placeholder="コメントを入力..."
+                                value={commentInput}
+                                onChange={(e) => setCommentInput(e.target.value)}
+                                className="flex-1 min-w-0 text-xs px-4 py-2 rounded-full bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-400/50 focus:bg-white"
+                              />
+                              <button
+                                type="submit"
+                                disabled={!commentInput.trim() || isSendingComment}
+                                className="bg-sky-500 hover:bg-sky-600 disabled:opacity-40 text-white text-xs font-black px-4 py-2 rounded-full transition cursor-pointer"
+                              >
+                                送信
+                              </button>
+                            </div>
+                            {/* 上限が近づいたときだけ文字数を出す */}
+                            {commentInput.length >= COMMENT_MAX_LENGTH - 50 && (
+                              <p className={`text-[10px] font-bold tabular-nums text-right pr-1 ${commentInput.length >= COMMENT_MAX_LENGTH ? 'text-rose-500' : 'text-slate-400'}`}>
+                                {commentInput.length}/{COMMENT_MAX_LENGTH}
+                              </p>
+                            )}
                           </form>
                         ) : (
                           <p className="text-[10px] text-slate-400 text-center font-bold">
@@ -802,8 +1135,20 @@ export default function FeedPage() {
             </div>
           )}
 
-          {/* もっと見る（タグ検索中は表示しない） */}
-          {!loading && !searchTag && hasMore && posts.length > 0 && (
+          {/* 個別ページ：ほかの投稿への導線 */}
+          {isSinglePost && !loading && (
+            <div className="text-center pt-2">
+              <Link
+                href="/feed"
+                className="inline-block px-8 py-2.5 bg-white/90 hover:bg-white border border-white/70 text-sky-700 font-black text-xs rounded-full transition shadow-sm"
+              >
+                ほかの投稿も見る →
+              </Link>
+            </div>
+          )}
+
+          {/* もっと見る */}
+          {!loading && hasMore && posts.length > 0 && (
             <div className="text-center pt-2">
               <button
                 onClick={handleLoadMore}
@@ -818,29 +1163,31 @@ export default function FeedPage() {
 
         {/* サイドバー（PCのみ） */}
         <aside className="hidden lg:block space-y-4 sticky top-20">
-          <div className="bg-white/90 backdrop-blur-md rounded-3xl p-5 border border-white/70 shadow-sm space-y-3">
-            <h2 className="text-xs font-black text-slate-700 tracking-wider"># 人気のタグ</h2>
-            {popularTags.length === 0 ? (
-              <p className="text-[11px] text-slate-400 font-bold">まだタグ付きの投稿がありません</p>
-            ) : (
-              <div className="flex flex-wrap gap-1.5">
-                {popularTags.map(([tag, count]) => (
-                  <button
-                    key={tag}
-                    onClick={() => setSearchTag(searchTag === tag ? '' : tag)}
-                    className={`text-[11px] font-bold px-2.5 py-1 rounded-full border transition cursor-pointer ${
-                      searchTag === tag
-                        ? 'bg-sky-500 text-white border-sky-500'
-                        : 'bg-sky-50 text-sky-700 border-sky-100 hover:bg-sky-100'
-                    }`}
-                  >
-                    {tag}
-                    <span className={`ml-1 ${searchTag === tag ? 'text-sky-100' : 'text-sky-400'}`}>{count}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          {!isSinglePost && (
+            <div className="bg-white/90 backdrop-blur-md rounded-3xl p-5 border border-white/70 shadow-sm space-y-3">
+              <h2 className="text-xs font-black text-slate-700 tracking-wider"># 人気のタグ</h2>
+              {popularTags.length === 0 ? (
+                <p className="text-[11px] text-slate-400 font-bold">まだタグ付きの投稿がありません</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {popularTags.map(([tag, count]) => (
+                    <button
+                      key={tag}
+                      onClick={() => setSearchTag(searchTag === tag ? '' : tag)}
+                      className={`text-[11px] font-bold px-2.5 py-1 rounded-full border transition cursor-pointer ${
+                        searchTag === tag
+                          ? 'bg-sky-500 text-white border-sky-500'
+                          : 'bg-sky-50 text-sky-700 border-sky-100 hover:bg-sky-100'
+                      }`}
+                    >
+                      {tag}
+                      <span className={`ml-1 ${searchTag === tag ? 'text-sky-100' : 'text-sky-400'}`}>{count}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="bg-gradient-to-br from-sky-500 to-cyan-400 rounded-3xl p-5 text-white shadow-sm space-y-2">
             <p className="text-sm font-black">お気に入りの絵柄を見つけたら</p>
@@ -908,6 +1255,9 @@ export default function FeedPage() {
           </div>
         </div>
       )}
+
+      {/* 通報モーダル */}
+      {reportTarget && <PostReportModal post={reportTarget} onClose={() => setReportTarget(null)} />}
     </div>
   )
 }

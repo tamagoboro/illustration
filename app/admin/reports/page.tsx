@@ -4,11 +4,12 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { backgroundImageStyle } from '@/lib/background'
+import { extractStoragePath } from '@/lib/storageUtils'
 
 type ReportRow = {
   id: string
   reporter_id: string | null
-  target_type: 'profile' | 'portfolio_item'
+  target_type: 'profile' | 'portfolio_item' | 'post'
   target_id: string
   creator_id: string
   reason: string
@@ -92,6 +93,46 @@ export default function AdminReportsPage() {
       return
     }
     setReports((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)))
+  }
+
+  // 通報されたフィード投稿を削除する（admin_remove_post / supabase/improve_feed.sql）。
+  // 投稿・いいね・コメントが消え、投稿者には理由つきで通知され、操作は admin_audit_log に残る。
+  // その投稿への未対応の通報は、まとめて「対応済み」になる。
+  const removeReportedPost = async (report: ReportRow) => {
+    const reason = window.prompt('この投稿を削除します。理由を入力してください（投稿者に通知されます）。', report.reason)
+    if (reason === null) return
+    if (!reason.trim()) {
+      alert('理由を入力してください。')
+      return
+    }
+
+    setBusyId(report.id)
+    const { data, error } = await supabase.rpc('admin_remove_post', {
+      p_post_id: report.target_id,
+      p_reason: reason.trim(),
+      p_notify: true,
+    })
+    setBusyId(null)
+    if (error) {
+      console.error('投稿削除エラー:', error)
+      alert('削除に失敗しました。' + error.message)
+      return
+    }
+
+    // 投稿の画像ファイルをストレージから削除する。失敗しても投稿の削除自体は完了しているので、記録だけ残す
+    const paths = ((data || []) as string[]).map((u) => extractStoragePath(u)).filter((p): p is string => !!p)
+    if (paths.length > 0) {
+      const { error: removeError } = await supabase.storage.from('portfolios').remove(paths)
+      if (removeError) console.error('画像ファイルの削除エラー:', removeError)
+    }
+
+    setReports((prev) =>
+      prev.map((r) =>
+        r.target_type === 'post' && r.target_id === report.target_id && r.status === 'open'
+          ? { ...r, status: 'reviewed' as const }
+          : r
+      )
+    )
   }
 
   // 同じクリエイターに、別々の人からの未対応通報が複数件来ている場合に目立たせる。
@@ -268,12 +309,22 @@ export default function AdminReportsPage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <Link
-                      href={`/admin/images?user=${r.creator_id}`}
-                      className="text-[11px] font-bold text-rose-600 hover:underline"
-                    >
-                      画像を管理 →
-                    </Link>
+                    {r.target_type === 'post' ? (
+                      <Link
+                        href={`/feed/${r.target_id}`}
+                        target="_blank"
+                        className="text-[11px] font-bold text-rose-600 hover:underline"
+                      >
+                        投稿を見る →
+                      </Link>
+                    ) : (
+                      <Link
+                        href={`/admin/images?user=${r.creator_id}`}
+                        className="text-[11px] font-bold text-rose-600 hover:underline"
+                      >
+                        画像を管理 →
+                      </Link>
+                    )}
                     <Link
                       href={`/creator/${r.creator_id}`}
                       target="_blank"
@@ -285,7 +336,12 @@ export default function AdminReportsPage() {
                 </div>
 
                 <p className="text-xs font-bold text-slate-800">
-                  {r.target_type === 'profile' ? 'プロフィール全体' : `作品 (ID: ${r.target_id})`} / {r.reason}
+                  {r.target_type === 'profile'
+                    ? 'プロフィール全体'
+                    : r.target_type === 'post'
+                      ? `フィード投稿 (ID: ${r.target_id})`
+                      : `作品 (ID: ${r.target_id})`}{' '}
+                  / {r.reason}
                 </p>
                 {r.comment && (
                   <p className="text-xs text-slate-500 bg-slate-50 p-2.5 rounded-xl whitespace-pre-wrap">{r.comment}</p>
@@ -310,6 +366,15 @@ export default function AdminReportsPage() {
                     >
                       却下する
                     </button>
+                    {r.target_type === 'post' && (
+                      <button
+                        onClick={() => removeReportedPost(r)}
+                        disabled={busyId === r.id}
+                        className="px-3 py-1.5 bg-rose-500 hover:bg-rose-600 text-white font-bold text-[11px] rounded-lg cursor-pointer disabled:opacity-50"
+                      >
+                        投稿を削除する
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

@@ -3,6 +3,8 @@
 -- どのトリガーがどの関数を呼ぶかは schema_triggers.md を参照。DBを変更したらこの記録も更新すること。
 -- 最終確認: harden_security.sql / remove_duplicate_request_notifications.sql /
 --           fix_starter_bonus_and_cleanup_duplicates.sql の適用後。
+-- improve_feed.sql の変更（投稿への通知のリンク先・通報の通知文）は下の定義に反映済み。
+-- admin_remove_post は improve_feed.sql が正なのでここには含めていない。
 
 CREATE OR REPLACE FUNCTION public.admin_adjust_points(p_user_id uuid, p_amount integer, p_reason text DEFAULT NULL::text)
  RETURNS integer
@@ -408,6 +410,7 @@ begin
     '🚨 新しい通報がありました',
     case
       when new.target_type = 'profile' then 'プロフィール全体 / ' || new.reason
+      when new.target_type = 'post' then 'フィード投稿 / ' || new.reason
       else '作品 / ' || new.reason
     end,
     '/admin/reports'
@@ -438,7 +441,7 @@ begin
     'post_comment',
     '💬 投稿にコメントが届きました',
     left(new.content, 60),
-    '/feed'
+    '/feed/' || new.post_id::text
   );
   return new;
 end;
@@ -466,7 +469,7 @@ begin
     'post_like',
     '❤️ 投稿にいいねがつきました',
     null,
-    '/feed'
+    '/feed/' || new.post_id::text
   );
   return new;
 end;
