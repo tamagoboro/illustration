@@ -3,6 +3,7 @@ import {
   createServiceClient,
   encryptSecret,
   decryptSecret,
+  getServerConfigError,
   getUserFromRequest,
   isDiscordWebhookUrl,
   maskWebhookUrl,
@@ -15,8 +16,28 @@ export const runtime = 'nodejs'
 
 const unauthorized = () => NextResponse.json({ error: 'ログインが必要です' }, { status: 401 })
 
+// 想定外のエラーでも、画面に原因の分かる説明を返す（以前は500のHTMLが返り「通信に失敗しました」としか出なかった）
+const withErrorHandling =
+  (label: string, handler: (req: Request) => Promise<Response>) =>
+  async (req: Request) => {
+    try {
+      const configError = getServerConfigError()
+      if (configError) {
+        console.error(`Discord Webhook ${label}: ${configError}`)
+        return NextResponse.json({ error: configError }, { status: 500 })
+      }
+      return await handler(req)
+    } catch (e) {
+      console.error(`Discord Webhook ${label} エラー:`, e)
+      return NextResponse.json(
+        { error: `${label}に失敗しました（${(e as Error)?.message || '不明なエラー'}）。時間をおいて再度お試しください。` },
+        { status: 500 }
+      )
+    }
+  }
+
 // 登録（保存前にテスト送信して、正しく届くURLかを確かめる）
-export async function POST(req: Request) {
+export const POST = withErrorHandling('連携', async (req: Request) => {
   const user = await getUserFromRequest(req)
   if (!user) return unauthorized()
 
@@ -53,14 +74,16 @@ export async function POST(req: Request) {
   ])
   if (saveError || settingsError) {
     console.error('Discord Webhook 保存エラー:', saveError || settingsError)
-    return NextResponse.json({ error: '保存に失敗しました。時間をおいて再度お試しください。' }, { status: 500 })
+    // テーブルが無い（SQL未実行）などの原因が分かるよう、DBのエラー文も添える（秘密の値は含まれない）
+    const reason = (saveError || settingsError)?.message
+    return NextResponse.json({ error: `保存に失敗しました（${reason}）。` }, { status: 500 })
   }
 
   return NextResponse.json({ ok: true, hint })
-}
+})
 
 // テスト送信（保存済みのWebhookに送る）
-export async function PUT(req: Request) {
+export const PUT = withErrorHandling('テスト送信', async (req: Request) => {
   const user = await getUserFromRequest(req)
   if (!user) return unauthorized()
 
@@ -80,10 +103,10 @@ export async function PUT(req: Request) {
     )
   }
   return NextResponse.json({ ok: true })
-}
+})
 
 // 解除
-export async function DELETE(req: Request) {
+export const DELETE = withErrorHandling('解除', async (req: Request) => {
   const user = await getUserFromRequest(req)
   if (!user) return unauthorized()
 
@@ -93,4 +116,4 @@ export async function DELETE(req: Request) {
     admin.from('notification_settings').update({ discord_webhook_hint: null }).eq('user_id', user.id),
   ])
   return NextResponse.json({ ok: true })
-}
+})

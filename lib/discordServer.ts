@@ -25,6 +25,20 @@ const getKey = () => {
   return key
 }
 
+// サーバー側の設定（環境変数）がそろっているかを確認する。問題があれば画面に出せる説明文を返す
+// （値そのものは返さない）
+export function getServerConfigError(): string | null {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return 'サーバーの設定が未完了です（SUPABASE_SERVICE_ROLE_KEY が見つかりません）。環境変数を追加した後に再デプロイしたか確認してください。'
+  }
+  try {
+    getKey()
+  } catch (e) {
+    return `サーバーの設定が未完了です（${(e as Error).message}）。環境変数を追加した後に再デプロイしたか確認してください。`
+  }
+  return null
+}
+
 export function encryptSecret(plain: string) {
   const iv = randomBytes(12)
   const cipher = createCipheriv(ALGORITHM, getKey(), iv)
