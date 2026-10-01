@@ -15,8 +15,10 @@ export default function FlowStepsEditor({
   defaultSteps: FlowStep[]
   title: string
 }) {
-  const inputClass =
-    'w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-300/50 focus:border-amber-300'
+  // 幅は入れない（w-full と固定幅を同時に付けると、スマホで固定幅が効かずに横にはみ出すため）
+  const baseInput =
+    'py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-300/50 focus:border-amber-300'
+  const inputClass = `w-full px-3.5 ${baseInput}`
 
   const update = (index: number, patch: Partial<FlowStep>) => onChange(steps.map((x, j) => (j === index ? { ...x, ...patch } : x)))
 
@@ -60,23 +62,9 @@ export default function FlowStepsEditor({
         <>
           {steps.map((step, i) => (
             <div key={i} className="bg-white rounded-xl p-3 border border-amber-100 space-y-1.5">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-black text-amber-600 shrink-0 w-12">STEP {i + 1}</span>
-                <input
-                  className={`${inputClass} w-14 shrink-0 text-center px-1`}
-                  maxLength={4}
-                  placeholder="😀"
-                  aria-label="絵文字"
-                  value={step.emoji}
-                  onChange={(e) => update(i, { emoji: e.target.value })}
-                />
-                <input
-                  className={inputClass}
-                  maxLength={30}
-                  placeholder="見出し（例：ヒアリング）"
-                  value={step.title}
-                  onChange={(e) => update(i, { title: e.target.value })}
-                />
+              {/* 1行目：ステップ番号と並べ替え・削除 */}
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] font-black text-amber-600">STEP {i + 1}</span>
                 <div className="flex gap-1 shrink-0">
                   <button type="button" onClick={() => move(i, -1)} disabled={i === 0} className="w-7 h-7 rounded-lg bg-slate-50 text-xs disabled:opacity-30 cursor-pointer" aria-label="上へ">
                     ↑
@@ -100,8 +88,26 @@ export default function FlowStepsEditor({
                   </button>
                 </div>
               </div>
+              {/* 2行目：絵文字と見出し */}
+              <div className="flex items-center gap-2">
+                <input
+                  className={`w-14 shrink-0 text-center px-1 ${baseInput}`}
+                  maxLength={4}
+                  placeholder="😀"
+                  aria-label="絵文字"
+                  value={step.emoji}
+                  onChange={(e) => update(i, { emoji: e.target.value })}
+                />
+                <input
+                  className={`flex-1 min-w-0 px-3.5 ${baseInput}`}
+                  maxLength={30}
+                  placeholder="見出し（例：ヒアリング）"
+                  value={step.title}
+                  onChange={(e) => update(i, { title: e.target.value })}
+                />
+              </div>
               <textarea
-                rows={2}
+                rows={3}
                 className={inputClass}
                 maxLength={200}
                 placeholder="説明（例：ご希望の雰囲気や用途をお伺いします）"

@@ -463,14 +463,14 @@ export default function DashboardSoulsPage() {
               {form.prices.map((p, i) => (
                 <div key={i} className="flex gap-2">
                   <input
-                    className={inputClass}
+                    className={`${inputClass} min-w-0`}
                     placeholder="例：立ち絵のみ / Live2D用パーツ分け込み / 著作権譲渡込み"
                     value={p.label}
                     onChange={(e) =>
                       updateForm({ prices: form.prices.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)) })
                     }
                   />
-                  <div className="relative w-36 shrink-0">
+                  <div className="relative w-28 sm:w-36 shrink-0">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">¥</span>
                     <input
                       className={`${inputClass} pl-7`}
@@ -532,7 +532,7 @@ export default function DashboardSoulsPage() {
               {form.deliverables.map((d, i) => (
                 <div key={i} className="flex gap-2">
                   <input
-                    className={inputClass}
+                    className={`${inputClass} min-w-0`}
                     maxLength={60}
                     placeholder="例：表情差分 ×5"
                     value={d}
@@ -577,7 +577,7 @@ export default function DashboardSoulsPage() {
               {form.characterProfile.map((item, i) => (
                 <div key={i} className="flex gap-2">
                   <input
-                    className={`${inputClass} w-32 shrink-0`}
+                    className={`${inputClass.replace('w-full', '')} w-24 sm:w-32 shrink-0`}
                     maxLength={20}
                     placeholder="項目"
                     value={item.label}
@@ -588,7 +588,7 @@ export default function DashboardSoulsPage() {
                     }
                   />
                   <input
-                    className={inputClass}
+                    className={`${inputClass} min-w-0`}
                     maxLength={100}
                     placeholder="内容（例：158cm）"
                     value={item.value}
