@@ -1,5 +1,6 @@
 'use client'
 
+import { useBrokenImages } from './useBrokenImages'
 import ProtectedImage from '@/components/ProtectedImage'
 import Reveal from '@/components/Reveal'
 
@@ -17,7 +18,9 @@ export default function WorksShowcase<T extends ShowcaseWork>({
   watermarkText: string
   onSelect: (work: T) => void
 }) {
-  const items = works.slice(0, 4)
+  // 読み込めない画像（削除済み・URL切れ）は「画像を表示できません」を出さずに外し、残りで並べ直す
+  const { broken, markBroken } = useBrokenImages(works.map((w) => w.image_url))
+  const items = works.filter((w) => !broken.has(w.image_url)).slice(0, 4)
   if (items.length === 0) return null
   const [first, ...rest] = items
 
@@ -36,6 +39,7 @@ export default function WorksShowcase<T extends ShowcaseWork>({
           decoding="async"
           style={{ objectPosition: `${work.focal_x ?? 50}% ${work.focal_y ?? 50}%` }}
           className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.04]"
+          onError={() => markBroken(work.image_url)}
         />
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 p-4 translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">

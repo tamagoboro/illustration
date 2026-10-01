@@ -17,6 +17,7 @@ import ProtectedImage from '@/components/ProtectedImage'
 import NotificationBell from '@/components/NotificationBell'
 import Reveal from '@/components/Reveal'
 import WorksShowcase from '@/components/portfolio/WorksShowcase'
+import CoverMosaic from '@/components/portfolio/CoverMosaic'
 import PortfolioNav from '@/components/portfolio/PortfolioNav'
 import MobileActionBar from '@/components/portfolio/MobileActionBar'
 import YouTubeGallery from '@/components/portfolio/YouTubeGallery'
@@ -1158,20 +1159,7 @@ const themeColor = useMemo(() => {
               />
             </div>
           ) : works.length > 0 ? (
-            <div className={`absolute inset-0 grid gap-0.5 ${['grid-cols-1', 'grid-cols-2', 'grid-cols-3', 'grid-cols-4'][Math.min(works.length, 4) - 1]}`}>
-              {works.slice(0, 4).map((work) => (
-                <div key={work.id} className="relative overflow-hidden">
-                  <ProtectedImage
-                    src={work.image_url}
-                    alt=""
-                    watermarkText={profile.display_name}
-                    style={{ objectPosition: `${work.focal_x ?? 50}% ${work.focal_y ?? 50}%` }}
-                    wrapperClassName="relative w-full h-full"
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              ))}
-            </div>
+            <CoverMosaic works={works} watermarkText={profile.display_name} />
           ) : (
             <div className="absolute inset-0 bg-gradient-to-br from-sky-300 via-violet-200 to-pink-200" />
           )}
@@ -1179,9 +1167,9 @@ const themeColor = useMemo(() => {
         </div>
 
         {/* 名前・アイコン（カバーの左下に重ねる） */}
-        <div className="relative -mt-16 sm:-mt-20 px-3 sm:px-8 flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-5">
+        <div className="relative -mt-12 sm:-mt-20 px-2 sm:px-8 flex flex-row items-end gap-3 sm:gap-5">
           {profile.avatar_url && (
-                  <div className="relative shrink-0 ring-[6px] ring-white shadow-xl rounded-full bg-white">
+                  <div className="relative shrink-0 self-end ring-4 sm:ring-[6px] ring-white shadow-xl rounded-full bg-white">
                     <AvatarRing
                       src={profile.avatar_url}
                       alt={profile.display_name || 'アバター画像'}
