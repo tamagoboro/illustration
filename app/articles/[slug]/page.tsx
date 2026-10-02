@@ -7,6 +7,7 @@ import { createClient } from '@supabase/supabase-js'
 import SimpleHeader from '@/components/SimpleHeader'
 import ArticleBody from '@/components/articles/ArticleBody'
 import ArticleToc from '@/components/articles/ArticleToc'
+import ArticleReactions from '@/components/articles/ArticleReactions'
 import ArticleCard from '@/components/articles/ArticleCard'
 import { backgroundImageStyle } from '@/lib/background'
 import { serializeJsonLd } from '@/lib/safeUrl'
@@ -144,6 +145,8 @@ export default async function ArticlePage({ params }: Props) {
               <ArticleToc items={toc} className="mt-6 lg:hidden" />
 
               <ArticleBody body={article.body} />
+
+              <ArticleReactions articleId={article.id} slug={article.slug} title={article.title} />
             </div>
           </article>
 
