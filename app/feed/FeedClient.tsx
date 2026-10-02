@@ -507,6 +507,12 @@ export default function FeedClient({ postId }: { postId?: string }) {
       console.error('いいねの更新エラー:', error)
       // P0001 はDB側のチェック（投稿者にブロックされている等）が意図的に出したエラーなので、内容をそのまま案内する
       if (error.code === 'P0001' && error.message) alert(error.message)
+      // すでにいいね済み（画面の表示だけが古かった）なら、押した状態に直すだけでよい
+      else if (error.code === '23505') {
+        setPosts((prev) => prev.map((p) => (p.id === post.id ? { ...p, is_liked_by_me: true } : p)))
+      }
+      // それ以外は、黙って何も起きないと原因が分からないので内容を出す
+      else alert(`いいねできませんでした。時間をおいてもう一度お試しください。\n（${error.code || ''} ${error.message || ''}）`)
       return // 失敗時は表示を変えない（DBの状態と食い違わせない）
     }
 

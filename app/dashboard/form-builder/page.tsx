@@ -6,11 +6,12 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { ItemDiscountConfig, Campaign, resolveDiscount, applyDiscount, formatSavingsBadge } from '@/lib/discount'
 import { backgroundImageStyle } from '@/lib/background'
+import { PriceType, computeEstimateTotals, formatOptionPrice, isPercentType } from '@/lib/estimate'
 
 type Option = {
   label: string
   price: number
-  priceType?: 'fixed' | 'percent'
+  priceType?: PriceType
   discount?: ItemDiscountConfig
 }
 
@@ -59,8 +60,8 @@ const FORM_TEMPLATES: Record<string, FormConfig> = {
       { id: 'f_2', label: '基本イラスト制作', type: 'text', price: 10000, required: true },
       { id: 'f_3', label: '描画範囲', type: 'radio', price: 0, options: [{ label: 'バストアップ', price: 0, priceType: 'fixed' }, { label: '太ももまで', price: 3000, priceType: 'fixed' }, { label: '全身', price: 6000, priceType: 'fixed' }], required: true },
       { id: 'f_4', label: '用途・追加オプション', type: 'checkbox', price: 0, options: [
-        { label: '商用利用（基本料金の50%加算）', price: 50, priceType: 'percent' },
-        { label: '著作権譲渡（基本料金の100%加算）', price: 100, priceType: 'percent' },
+        { label: '商用利用（基本料金の50%加算）', price: 50, priceType: 'percent_base' },
+        { label: '著作権譲渡（基本料金の100%加算）', price: 100, priceType: 'percent_base' },
         { label: '人物追加 (+1人)', price: 6000, priceType: 'fixed' },
         { label: '背景描き込み', price: 4000, priceType: 'fixed' }
       ], required: false }
@@ -500,56 +501,10 @@ export default function FormBuilderPage() {
   }
 
   // プレビューの概算合計金額（保存中の内容をその場で試算するだけで、実データには影響しない）
+  // 計算式は lib/estimate.ts（実際のクリエイターページと共通）
   const { previewTotal, previewOriginalTotal } = useMemo(() => {
-    let baseSum = 0
-    let baseSumOriginal = 0
-    config.fields.forEach((field) => {
-      if (field.price && field.type !== 'note' && field.type !== 'faq') {
-        const discount = resolveDiscount(campaign, field.discount)
-        baseSum += applyDiscount(field.price, discount)
-        baseSumOriginal += field.price
-      }
-    })
-
-    let fixedAdditions = 0
-    let fixedAdditionsOriginal = 0
-    let percentAdditions = 0
-    let percentAdditionsOriginal = 0
-    config.fields.forEach((field) => {
-      const answer = previewAnswers[field.id]
-      if (!answer || !field.options) return
-      const addOption = (opt: Option) => {
-        const discount = resolveDiscount(campaign, opt.discount)
-        const effectivePrice = applyDiscount(opt.price, discount)
-        if (opt.priceType === 'percent') {
-          percentAdditions += effectivePrice
-          percentAdditionsOriginal += opt.price
-        } else {
-          fixedAdditions += effectivePrice
-          fixedAdditionsOriginal += opt.price
-        }
-      }
-      if (field.type === 'radio') {
-        const opt = field.options.find((o) => o.label === answer)
-        if (opt) addOption(opt)
-      } else if (field.type === 'checkbox' && Array.isArray(answer)) {
-        answer.forEach((label: string) => {
-          const opt = field.options?.find((o) => o.label === label)
-          if (opt) addOption(opt)
-        })
-      }
-    })
-
-    // %指定のオプション（商用利用の割増など）は、固定料金（基本料金＋各オプションの円指定分）に対して
-    // 加算する。field.price（フィールド自体への固定料金）を基準にしていると、多くのフォームではそれが
-    // 常に0のため「%オプションを選んでも合計に反映されない」ことになっていた（プレビューも実際の
-    // クリエイターページのCreatorClient.tsxと同じ式に揃えている）。
-    const fixedBase = baseSum + fixedAdditions
-    const fixedBaseOriginal = baseSumOriginal + fixedAdditionsOriginal
-    return {
-      previewTotal: fixedBase + Math.round(fixedBase * (percentAdditions / 100)),
-      previewOriginalTotal: fixedBaseOriginal + Math.round(fixedBaseOriginal * (percentAdditionsOriginal / 100)),
-    }
+    const { total, originalTotal } = computeEstimateTotals(config.fields, previewAnswers, campaign)
+    return { previewTotal: total, previewOriginalTotal: originalTotal }
   }, [config, previewAnswers, campaign])
 
   const handlePreviewSelect = (fieldId: string, value: any, isCheckbox = false) => {
@@ -891,20 +846,25 @@ export default function FormBuilderPage() {
                                 placeholder="選択肢名"
                               />
                               <div className="flex bg-slate-100 p-0.5 rounded-lg border">
-                                <button
-                                  type="button"
-                                  onClick={() => updateOption(idx, oIdx, 'priceType', 'fixed')}
-                                  className={`px-1.5 py-0.5 text-[10px] font-black rounded ${opt.priceType !== 'percent' ? 'bg-pink-500 text-white' : 'text-slate-500'}`}
-                                >
-                                  円
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => updateOption(idx, oIdx, 'priceType', 'percent')}
-                                  className={`px-1.5 py-0.5 text-[10px] font-black rounded ${opt.priceType === 'percent' ? 'bg-pink-500 text-white' : 'text-slate-500'}`}
-                                >
-                                  %
-                                </button>
+                                {(
+                                  [
+                                    ['fixed', '円', '決まった金額を足す'],
+                                    ['percent_base', '基本%', '基本料金（オプションを含まない料金）に対する割増'],
+                                    ['percent', '総額%', 'オプションも含めた合計に対する割増'],
+                                  ] as const
+                                ).map(([value, label, title]) => (
+                                  <button
+                                    key={value}
+                                    type="button"
+                                    title={title}
+                                    onClick={() => updateOption(idx, oIdx, 'priceType', value)}
+                                    className={`px-1.5 py-0.5 text-[10px] font-black rounded whitespace-nowrap ${
+                                      (opt.priceType || 'fixed') === value ? 'bg-pink-500 text-white' : 'text-slate-500'
+                                    }`}
+                                  >
+                                    {label}
+                                  </button>
+                                ))}
                               </div>
                               <input
                                 type="number"
@@ -912,7 +872,7 @@ export default function FormBuilderPage() {
                                 onChange={(e) => updateOption(idx, oIdx, 'price', Number(e.target.value))}
                                 className="w-20 px-2 py-1 text-xs border rounded-lg bg-white"
                               />
-                              <span className="text-xs font-bold text-slate-400 w-4">{opt.priceType === 'percent' ? '%' : '円'}</span>
+                              <span className="text-xs font-bold text-slate-400 w-4">{isPercentType(opt.priceType) ? '%' : '円'}</span>
                               <button onClick={() => removeOption(idx, oIdx)} className="text-xs text-red-400 px-1 cursor-pointer">✕</button>
                             </div>
                             <DiscountConfigEditor
@@ -1026,7 +986,7 @@ export default function FormBuilderPage() {
                                     >
                                       <span>{opt.label}</span>
                                       <span className="text-[11px] opacity-80">
-                                        {opt.priceType === 'percent' ? `+${opt.price}%` : opt.price > 0 ? `+¥${opt.price.toLocaleString()}` : '標準'}
+                                        {isPercentType(opt.priceType) || opt.price > 0 ? formatOptionPrice(opt) : '標準'}
                                       </span>
                                     </label>
                                   )
@@ -1052,7 +1012,7 @@ export default function FormBuilderPage() {
                                     >
                                       <span>{opt.label}</span>
                                       <span className="text-[11px] opacity-80">
-                                        {opt.priceType === 'percent' ? `+${opt.price}%` : `+¥${opt.price.toLocaleString()}`}
+                                        {formatOptionPrice(opt)}
                                       </span>
                                     </label>
                                   )

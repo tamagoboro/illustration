@@ -29,11 +29,12 @@ import CreatorRecentPosts from '@/components/portfolio/CreatorRecentPosts'
 import { normalizeBackground, backgroundStyle, isDarkBackground, normalizeVideos } from '@/lib/portfolioDesign'
 import { ItemDiscountConfig, Campaign, isCampaignActive, resolveDiscount, applyDiscount, formatDiscountBadge, formatSavingsBadge } from '@/lib/discount'
 import { copyTextOrShow } from '@/lib/clipboard'
+import { PriceType, computeEstimateTotals, formatOptionPrice } from '@/lib/estimate'
 
 type Option = {
   label: string
   price: number
-  priceType?: 'fixed' | 'percent'
+  priceType?: PriceType
   discount?: ItemDiscountConfig
 }
 
@@ -750,60 +751,11 @@ const themeColor = useMemo(() => {
     })
   }
 
+  // 計算式は lib/estimate.ts（フォーム作成画面のプレビューと共通）
   const { totalPrice, originalTotalPrice } = useMemo(() => {
-    if (!activeFormConfig) return { basePriceTotal: 0, totalPrice: 0, originalTotalPrice: 0 }
-
-    let baseSum = 0
-    let baseSumOriginal = 0
-    let extraFixedPrice = 0
-    let extraFixedPriceOriginal = 0
-    let percentSum = 0
-    let percentSumOriginal = 0
-
-    activeFormConfig.fields.forEach((field) => {
-      if (field.price && field.type !== 'note' && field.type !== 'faq') {
-        const discount = resolveDiscount(campaign, field.discount)
-        baseSum += applyDiscount(field.price, discount)
-        baseSumOriginal += field.price
-      }
-    })
-
-    activeFormConfig.fields.forEach((field) => {
-      const answer = formAnswers[field.id]
-      if (!answer || !field.options) return
-
-      const addOption = (selectedOpt: Option) => {
-        const discount = resolveDiscount(campaign, selectedOpt.discount)
-        const effectivePrice = applyDiscount(selectedOpt.price, discount)
-        if (selectedOpt.priceType === 'percent') {
-          percentSum += effectivePrice
-          percentSumOriginal += selectedOpt.price
-        } else {
-          extraFixedPrice += effectivePrice
-          extraFixedPriceOriginal += selectedOpt.price
-        }
-      }
-
-      if (field.type === 'radio') {
-        const selectedOpt = field.options.find((opt) => opt.label === answer)
-        if (selectedOpt) addOption(selectedOpt)
-      } else if (field.type === 'checkbox' && Array.isArray(answer)) {
-        answer.forEach((selectedLabel) => {
-          const selectedOpt = field.options?.find((opt) => opt.label === selectedLabel)
-          if (selectedOpt) addOption(selectedOpt)
-        })
-      }
-    })
-
-    // %指定のオプション（商用利用の割増など）は、固定料金（基本料金＋描画範囲などの円指定オプション）に
-    // 対して加算する。field.price（フィールド自体への固定料金）を基準にしていると、多くのフォームでは
-    // それが常に0のため「%オプションを選んでも合計に反映されない」ことになっていた。
-    const fixedBase = baseSum + extraFixedPrice
-    const fixedBaseOriginal = baseSumOriginal + extraFixedPriceOriginal
-    const calculatedTotal = fixedBase + Math.round(fixedBase * (percentSum / 100))
-    const calculatedOriginalTotal = fixedBaseOriginal + Math.round(fixedBaseOriginal * (percentSumOriginal / 100))
-
-    return { basePriceTotal: baseSum, totalPrice: calculatedTotal, originalTotalPrice: calculatedOriginalTotal }
+    if (!activeFormConfig) return { totalPrice: 0, originalTotalPrice: 0 }
+    const { total, originalTotal } = computeEstimateTotals(activeFormConfig.fields, formAnswers, campaign)
+    return { totalPrice: total, originalTotalPrice: originalTotal }
   }, [formAnswers, activeFormConfig, campaign])
 
   const handleOpenEstimateWithWork = (work: PortfolioItem) => {
@@ -2191,10 +2143,7 @@ const themeColor = useMemo(() => {
                                         isChecked ? 'bg-white/20 text-white' : 'text-sky-400'
                                       }`}
                                     >
-                                      {opt.price > 0 ? '+' : ''}
-                                      {opt.priceType === 'percent'
-                                        ? `${opt.price}%`
-                                        : `¥${opt.price.toLocaleString()}`}
+                                      {formatOptionPrice(opt)}
                                     </span>
                                   )}
                                 </button>
