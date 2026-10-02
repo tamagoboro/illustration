@@ -10,6 +10,8 @@ import { copyText } from '@/lib/clipboard'
 // 記事ページ本体は5分ごとに作り直す静的なページなので、ここだけブラウザから最新の状態を読み込む。
 
 const COMMENT_MAX_LENGTH = 500
+// Xでシェアしたときにもらえるポイント（supabase/add_article_share_points.sql の claim_article_share と合わせる）
+const SHARE_POINTS = 50
 
 type Comment = {
   id: string
@@ -29,6 +31,8 @@ export default function ArticleReactions({ articleId, slug, title }: { articleId
   const [likeCount, setLikeCount] = useState(0)
   const [liked, setLiked] = useState(false)
   const [liking, setLiking] = useState(false)
+  // この記事のシェアで、もうポイントを受け取ったか（ログインしていないときは null）
+  const [shareClaimed, setShareClaimed] = useState<boolean | null>(null)
   const [comments, setComments] = useState<Comment[] | null>(null)
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -72,18 +76,22 @@ export default function ArticleReactions({ articleId, slug, title }: { articleId
     const init = async () => {
       const { data } = await supabase.auth.getUser()
       const uid = data.user?.id ?? null
-      const [countRes, mineRes, adminRes] = await Promise.all([
+      const [countRes, mineRes, adminRes, shareRes] = await Promise.all([
         supabase.from('article_likes').select('*', { count: 'exact', head: true }).eq('article_id', articleId),
         uid
           ? supabase.from('article_likes').select('article_id').eq('article_id', articleId).eq('user_id', uid).maybeSingle()
           : Promise.resolve({ data: null }),
         uid ? supabase.from('admins').select('user_id').eq('user_id', uid).maybeSingle() : Promise.resolve({ data: null }),
+        uid
+          ? supabase.from('article_shares').select('article_id').eq('article_id', articleId).eq('user_id', uid).maybeSingle()
+          : Promise.resolve({ data: null }),
       ])
       if (!active) return
       setUserId(uid)
       setLikeCount(countRes.count || 0)
       setLiked(!!mineRes.data)
       setIsAdmin(!!adminRes.data)
+      setShareClaimed(uid ? !!shareRes.data : null)
     }
     init()
     loadComments()
@@ -144,6 +152,23 @@ export default function ArticleReactions({ articleId, slug, title }: { articleId
   const shareOnX = () => {
     const text = `${title}｜Drawker`
     window.open(`https://x.com/intent/post?text=${encodeURIComponent(text)}&url=${encodeURIComponent(pageUrl())}`, '_blank', 'noopener,noreferrer')
+    claimSharePoints()
+  }
+
+  // ログイン中なら、シェアのお礼にポイントを付ける（1記事につき1回。二重付与はDB側で防いでいる）
+  const claimSharePoints = async () => {
+    if (!userId || shareClaimed) return
+    const { data, error } = await supabase.rpc('claim_article_share', { p_article_id: articleId })
+    if (error) {
+      console.error('シェアポイントの付与エラー:', error)
+      return
+    }
+    setShareClaimed(true)
+    if (data?.claimed) {
+      flash(`🎉 シェアありがとうございます！${data.points}ptを獲得しました`)
+      // 開いているページ（マイページなど）の残高表示を更新してもらう
+      window.dispatchEvent(new CustomEvent('drawker:points-updated', { detail: { balance: data.balance } }))
+    }
   }
 
   // スマホでは端末の共有メニュー、PCではリンクをコピー
@@ -184,6 +209,9 @@ export default function ArticleReactions({ articleId, slug, title }: { articleId
             className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-black bg-slate-900 text-white hover:bg-slate-700 transition cursor-pointer"
           >
             𝕏 でシェア
+            {shareClaimed !== true && (
+              <span className="px-2 py-0.5 rounded-full bg-amber-300 text-amber-900 text-[10px] font-black">+{SHARE_POINTS}pt</span>
+            )}
           </button>
           <button
             onClick={shareOrCopy}
@@ -192,6 +220,13 @@ export default function ArticleReactions({ articleId, slug, title }: { articleId
             🔗 リンクを共有
           </button>
         </div>
+        <p className="text-center text-[11px] font-bold text-slate-400">
+          {shareClaimed === true
+            ? `この記事のシェアポイント（${SHARE_POINTS}pt）は受け取り済みです`
+            : shareClaimed === false
+              ? `Xでシェアすると ${SHARE_POINTS}pt もらえます（1記事につき1回）`
+              : `ログインしてXでシェアすると ${SHARE_POINTS}pt もらえます（1記事につき1回）`}
+        </p>
         {notice && (
           <p role="status" className="text-center text-xs font-bold text-sky-700">
             {notice}

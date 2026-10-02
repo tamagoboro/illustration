@@ -14,7 +14,7 @@ import NotificationBell from '@/components/NotificationBell'
 import RecentlyViewedCreators from '@/components/RecentlyViewedCreators'
 import WantedTeaser from '@/components/wanted/WantedTeaser'
 import { isCampaignActive, applyDiscount, formatDiscountBadge, Campaign } from '@/lib/discount'
-import { UPDATES } from '@/lib/updates'
+import { RECENT_UPDATES } from '@/lib/updates'
 import { getSoulStatus } from '@/lib/soulListings'
 import { TOP_BANNER } from '@/lib/banner'
 
@@ -66,10 +66,8 @@ const NAV_LINKS = [
 // 「イラストレーター紹介」に表示する人数
 const PICKUP_COUNT = 4
 
-// 最新情報として表示するお知らせ（日付つきで新しい順に平坦化）
-const LATEST_NEWS = UPDATES.flatMap((entry) =>
-  entry.items.map((item) => ({ date: entry.date.replace(/-/g, '.'), text: item }))
-).slice(0, 5)
+// 最新情報として表示するお知らせ（lib/updates.ts の先頭3件＝最近のアップデート）
+const LATEST_NEWS = RECENT_UPDATES
 
 // レビューの★表示（平均を0.5刻みで塗る）と件数。レビューが無いときは控えめに「レビューなし」
 function StarRating({ stats }: { stats?: { avg: number; count: number } }) {
@@ -766,8 +764,7 @@ export default function Home() {
             <span className="shrink-0 px-2 py-0.5 rounded-full bg-sky-500 text-[10px] font-black tracking-wider">
               NEWS
             </span>
-            <span className="shrink-0 text-slate-400">{LATEST_NEWS[0].date}</span>
-            <span className="truncate">{LATEST_NEWS[0].text}</span>
+            <span className="truncate">{LATEST_NEWS[0]}</span>
           </Link>
         </div>
       )}
@@ -891,9 +888,8 @@ export default function Home() {
 
           <ul className="divide-y divide-sky-100">
             {LATEST_NEWS.map((news) => (
-              <li key={news.text} className="py-2.5 first:pt-0 last:pb-0 space-y-1">
-                <span className="text-[10px] font-bold text-slate-400">{news.date}</span>
-                <p className="text-[11px] font-bold text-slate-700 leading-relaxed">{news.text}</p>
+              <li key={news} className="py-2.5 first:pt-0 last:pb-0">
+                <p className="text-[11px] font-bold text-slate-700 leading-relaxed">{news}</p>
               </li>
             ))}
           </ul>

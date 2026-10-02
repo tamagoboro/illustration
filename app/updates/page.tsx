@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import SimpleHeader from '@/components/SimpleHeader'
 import { backgroundImageStyle } from '@/lib/background'
-import { UPDATES } from '@/lib/updates'
+import { PAST_UPDATES, RECENT_UPDATES } from '@/lib/updates'
 import { buildPageMetadata } from '@/lib/pageMetadata'
 
 export const metadata = buildPageMetadata({
@@ -37,20 +37,34 @@ export default function UpdatesPage() {
           </div>
         </div>
 
-        <div className="space-y-6">
-          {UPDATES.map((entry) => (
-            <div key={entry.date} className="bg-white rounded-3xl p-6 shadow-sm border border-sky-100/60">
-              <p className="text-[11px] font-black text-sky-500 tracking-wide mb-3">{entry.date}</p>
-              <ul className="space-y-2">
-                {entry.items.map((item) => (
-                  <li key={item} className="text-xs text-slate-600 leading-relaxed">
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
+        {/* 最近のアップデート（新しい3件） */}
+        <section className="bg-white rounded-3xl p-6 shadow-sm border-2 border-sky-200 space-y-4">
+          <h2 className="text-sm font-black text-slate-800 flex items-center gap-2">
+            <span className="px-2 py-0.5 rounded-full bg-sky-500 text-white text-[10px] font-black tracking-wider">NEW</span>
+            最近のアップデート
+          </h2>
+          <ul className="space-y-3">
+            {RECENT_UPDATES.map((item) => (
+              <li key={item} className="text-sm font-bold text-slate-700 leading-relaxed">
+                {item}
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {/* 過去のアップデート履歴 */}
+        {PAST_UPDATES.length > 0 && (
+          <section className="bg-white rounded-3xl p-6 shadow-sm border border-sky-100/60 space-y-3">
+            <h2 className="text-sm font-black text-slate-700">過去のアップデート履歴</h2>
+            <ul className="space-y-2 divide-y divide-slate-100">
+              {PAST_UPDATES.map((item) => (
+                <li key={item} className="pt-2 first:pt-0 text-xs text-slate-600 leading-relaxed">
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         <div className="bg-white rounded-3xl p-6 shadow-sm border border-sky-100/60 space-y-3">
           <h2 className="text-sm font-black text-slate-700">これまでに追加した主な機能</h2>
