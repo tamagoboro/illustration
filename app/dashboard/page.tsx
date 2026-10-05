@@ -220,6 +220,8 @@ export default function Dashboard() {
     isPublic,
   ]
   const stepDoneCount = stepDone.filter(Boolean).length
+  // 設定が100%のときは一覧をたたんでおく（「プロフィールを編集する」を押すと開く）
+  const [setupListOpen, setSetupListOpen] = useState(false)
 
   // ステップの移動（URLの ?step= も合わせて変え、ブラウザの「戻る」で前の画面に戻れるようにする）
   const changeStep = (next: number | null, { confirmDirty = true } = {}) => {
@@ -387,15 +389,40 @@ export default function Dashboard() {
   const renderSetupOverview = () => {
     const firstUndone = stepDone.findIndex((done) => !done)
     const percent = Math.round((stepDoneCount / SETUP_STEPS.length) * 100)
+    const complete = firstUndone === -1
+    // 全部終わっている人には進み具合を出さず、編集したいときだけ一覧を開けるようにする
+    if (complete && !setupListOpen) {
+      return (
+        <button
+          type="button"
+          onClick={() => setSetupListOpen(true)}
+          className="w-full flex items-center justify-between gap-3 bg-white rounded-2xl border border-slate-200/80 px-4 py-3 shadow-xs text-left hover:border-slate-300 cursor-pointer"
+        >
+          <span className="text-xs font-extrabold text-slate-800">✏️ プロフィールを編集する</span>
+          <span className={`text-[11px] font-bold shrink-0 ${currentThemeObj.text}`}>項目を開く ▼</span>
+        </button>
+      )
+    }
     return (
       <div className="bg-white rounded-3xl border border-slate-200/80 p-4 sm:p-5 shadow-xs space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-xs font-extrabold text-slate-900">📋 プロフィールの設定</h2>
-          <span className={`text-sm font-black ${currentThemeObj.text}`}>{percent}%</span>
-        </div>
-        <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-          <div className={`h-full rounded-full ${currentThemeObj.bg} transition-all duration-500`} style={{ width: `${percent}%` }} />
-        </div>
+        {complete ? (
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-xs font-extrabold text-slate-900">✏️ プロフィールを編集する</h2>
+            <button type="button" onClick={() => setSetupListOpen(false)} className="text-[11px] font-bold text-slate-400 hover:text-slate-700 cursor-pointer">
+              閉じる ▲
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-xs font-extrabold text-slate-900">📋 プロフィールの設定</h2>
+              <span className={`text-sm font-black ${currentThemeObj.text}`}>{percent}%</span>
+            </div>
+            <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+              <div className={`h-full rounded-full ${currentThemeObj.bg} transition-all duration-500`} style={{ width: `${percent}%` }} />
+            </div>
+          </>
+        )}
         <ol className="divide-y divide-slate-100 border border-slate-100 rounded-2xl overflow-hidden">
           {SETUP_STEPS.map((s, i) => (
             <li key={s.short}>
