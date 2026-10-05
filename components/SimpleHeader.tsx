@@ -14,6 +14,7 @@ const NAV_LINKS = [
   { href: '/', label: 'ホーム' },
   { href: '/wanted', label: '募集ボード' },
   { href: '/feed', label: 'フィード' },
+  { href: '/agreements/new', label: '📝 控えの作成' },
   { href: '/articles', label: '記事' },
   { href: '/ranking', label: '注目クリエイター' },
   { href: '/gallery', label: '新着作品' },
@@ -21,9 +22,18 @@ const NAV_LINKS = [
   { href: '/updates', label: 'お知らせ' },
 ]
 
+// スマホでいつも見せる項目（それ以外は「その他」を開くと出る）
+const MOBILE_MAIN_HREFS = ['/', '/wanted', '/feed', '/agreements/new']
+
 export default function SimpleHeader({ label }: { label: string }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
   const pathname = usePathname()
+
+  // ページを移動したら「その他」を閉じる
+  useEffect(() => {
+    setMoreOpen(false)
+  }, [pathname])
 
   useEffect(() => {
     let isMounted = true
@@ -88,20 +98,51 @@ export default function SimpleHeader({ label }: { label: string }) {
         </div>
       </div>
 
-      {/* メニュー（スマホ・タブレット）：横スクロール */}
-      <nav className="lg:hidden max-w-6xl mx-auto flex gap-1.5 overflow-x-auto pt-2 text-[11px] font-bold [scrollbar-width:none]">
-        {NAV_LINKS.map((nav) => (
-          <Link
-            key={nav.href}
-            href={nav.href}
-            className={`px-3 py-1 rounded-full whitespace-nowrap transition-colors ${
-              pathname === nav.href ? 'bg-sky-500 text-white' : 'bg-sky-50/80 text-slate-600 hover:text-sky-600'
-            }`}
-          >
-            {nav.label}
-          </Link>
-        ))}
+      {/* メニュー（スマホ・タブレット）：よく使う4つ＋「その他」 */}
+      <nav className="lg:hidden max-w-6xl mx-auto flex gap-1.5 pt-2 text-[11px] font-bold">
+        {/* 幅の狭い画面では、ここだけ横に送れる（「その他」は右端に固定） */}
+        <div className="flex-1 min-w-0 flex gap-1.5 overflow-x-auto">
+          {NAV_LINKS.filter((nav) => MOBILE_MAIN_HREFS.includes(nav.href)).map((nav) => (
+            <Link
+              key={nav.href}
+              href={nav.href}
+              className={`px-2.5 py-1 rounded-full whitespace-nowrap transition-colors ${
+                pathname === nav.href ? 'bg-sky-500 text-white' : 'bg-sky-50/80 text-slate-600 hover:text-sky-600'
+              }`}
+            >
+              {nav.label}
+            </Link>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => setMoreOpen((v) => !v)}
+          aria-expanded={moreOpen}
+          className={`shrink-0 px-2.5 py-1 rounded-full whitespace-nowrap transition-colors cursor-pointer ${
+            moreOpen ? 'bg-slate-800 text-white' : 'bg-sky-50/80 text-slate-600 hover:text-sky-600'
+          }`}
+        >
+          その他 {moreOpen ? '▲' : '▼'}
+        </button>
       </nav>
+      {moreOpen && (
+        <nav className="lg:hidden max-w-6xl mx-auto grid grid-cols-2 gap-1.5 pt-2 pb-1 text-xs font-bold" aria-label="その他のメニュー">
+          {NAV_LINKS.filter((nav) => !MOBILE_MAIN_HREFS.includes(nav.href)).map((nav) => (
+            <Link
+              key={nav.href}
+              href={nav.href}
+              className={`px-3 py-2.5 rounded-xl transition-colors ${
+                pathname === nav.href ? 'bg-sky-500 text-white' : 'bg-white border border-sky-100 text-slate-700 hover:text-sky-600'
+              }`}
+            >
+              {nav.label}
+            </Link>
+          ))}
+          <Link href="/guide" className="px-3 py-2.5 rounded-xl bg-white border border-sky-100 text-slate-700 hover:text-sky-600">
+            使い方ガイド
+          </Link>
+        </nav>
+      )}
     </header>
   )
 }

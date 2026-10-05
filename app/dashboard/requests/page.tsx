@@ -270,6 +270,15 @@ export default function DashboardRequestsPage() {
                     </p>
                   )
                 )}
+
+                {(r.status === 'pending' || r.status === 'accepted') && (
+                  <Link
+                    href={`/agreements/new?request=${r.id}`}
+                    className="inline-flex items-center gap-1 text-[11px] font-black text-sky-700 bg-sky-50 hover:bg-sky-100 px-3 py-1.5 rounded-lg"
+                  >
+                    📝 合意内容の控えを作る
+                  </Link>
+                )}
               </div>
             ))}
           </div>

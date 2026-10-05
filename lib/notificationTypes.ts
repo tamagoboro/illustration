@@ -10,6 +10,7 @@ export const NOTIFICATION_TYPE_GROUPS: { title: string; items: NotificationTypeO
       { type: 'soul_application', label: '魂募集への応募', description: '魂募集イラストに応募があったとき' },
       { type: 'soul_interest', label: '魂募集の「気になる」', description: '魂募集が「気になる」に追加されたとき' },
       { type: 'request_response', label: 'リクエストへの返信', description: '自分が送ったリクエストが承諾・辞退されたとき' },
+      { type: 'agreement', label: '合意内容の控え', description: '控えが届いたとき・同意してもらったとき' },
       // 募集ボード（add_wanted_board.sql）。あとから足した種類なので、Discordに送るかどうかは各自が設定画面でオンにする
       { type: 'wanted_application', label: '募集への応募', description: '募集ボードに出した募集に応募があったとき' },
       { type: 'new_review', label: 'レビュー', description: 'レビューが投稿されたとき' },

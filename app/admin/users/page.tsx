@@ -182,11 +182,17 @@ export default function AdminUsersPage() {
             <Link href="/admin/reports" className="text-[11px] font-bold text-slate-400 hover:text-sky-600 transition-colors">
               通報管理
             </Link>
+            <Link href="/admin/agreements" className="text-[11px] font-bold text-slate-400 hover:text-sky-600 transition-colors">
+              取引トラブル
+            </Link>
             <Link href="/admin/articles" className="text-[11px] font-bold text-slate-400 hover:text-sky-600 transition-colors">
               記事
             </Link>
             <Link href="/admin/inquiries" className="text-[11px] font-bold text-slate-400 hover:text-sky-600 transition-colors">
               お問い合わせ
+            </Link>
+            <Link href="/admin/maintenance" className="text-[11px] font-bold text-slate-400 hover:text-sky-600 transition-colors">
+              🚧 メンテナンス
             </Link>
           </div>
         </div>

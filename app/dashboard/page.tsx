@@ -8,7 +8,6 @@ import { supabase } from '@/lib/supabase'
 import { ItemDiscountConfig, toDateInputValue, fromDateInputValue } from '@/lib/discount'
 import NotificationBell from '@/components/NotificationBell'
 import { backgroundImageStyle } from '@/lib/background'
-import QuickStartPanel from '@/components/dashboard/QuickStartPanel'
 import { PRESET_TASTES } from '@/lib/tastes'
 import { copyTextOrShow } from '@/lib/clipboard'
 
@@ -94,17 +93,9 @@ export default function Dashboard() {
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null)
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
-  const [activeTab, setActiveTab] = useState<'basic' | 'pricing' | 'contact' | 'portfolio'>('basic')
+  // 開いている設定のステップ（1〜9）。null はホーム。URLの ?step= と連動させる
+  const [step, setStep] = useState<number | null>(null)
   const [user, setUser] = useState<User | null>(null)
-
-  // アクセス解析（PV・見積もり問い合わせ・お気に入り）
-  const [analytics, setAnalytics] = useState<{
-    pvThisWeek: number
-    pvPrevWeek: number
-    pvDaily: { date: string; count: number }[]
-    inquiryThisMonth: number
-    newFavoritesThisWeek: number
-  } | null>(null)
 
   // 未保存変更の管理フラグ
   const [isDirty, setIsDirty] = useState(false)
@@ -179,10 +170,6 @@ export default function Dashboard() {
   // 名前が空の行は保存時に取り除かれるので、空の行はそのまま保存しても公開されない。
   const [menuItems, setMenuItems] = useState<MenuItem[]>([{ title: '', price: '' }])
 
-  // 「かんたん登録」（作品・料金・タグの3つだけを入れる画面）を出すかどうか。
-  // 読み込んだ時点で3つがそろっていない人に出し、保存できたら閉じる
-  const [showQuickStart, setShowQuickStart] = useState(false)
-  const [quickStartShowPublicToggle, setQuickStartShowPublicToggle] = useState(false)
   const [expandedDiscountRows, setExpandedDiscountRows] = useState<Set<number>>(new Set())
 
   // 料金メニューの載せ方。文字で1項目ずつ入力するか、手持ちの料金表（おしながき）の画像を載せるかを選べる。
@@ -205,18 +192,280 @@ export default function Dashboard() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [isDirty])
 
-  // タブ切り替え時の確認ダイアログ
-  const handleTabChange = (targetTab: 'basic' | 'pricing' | 'contact' | 'portfolio') => {
-    if (activeTab === targetTab) return
+  // ---- ガイド付き設定（STEP 1〜9） ----
+  // 1ページの情報量を減らすため、設定をいくつかのステップに分けて1つずつ入力してもらう。
+  // 「次へ」を押すたびにそのステップの内容を保存するので、途中でやめても続きから再開できる。
+  // 初回登録とあとからの変更は同じ画面を使う（ホームの一覧から好きなステップへ直接飛べる）。
+  const SETUP_STEPS = [
+    { short: '基本情報', title: '表示名・アイコン', description: 'ページの顔になる部分です。表示名は必須、アイコンとテーマカラーはあとからでも変えられます。' },
+    { short: 'ジャンル', title: '得意なジャンル・タグ', description: '検索や絞り込みで見つけてもらうためのタグです。描けるものを選んでください。' },
+    { short: '作品', title: '作品を載せる', description: '最大4枚まで。作品が1枚もないと、トップページや検索結果に表示されません。' },
+    { short: '料金', title: '料金・納期', description: '依頼する人がいちばん気にする部分です。料金表の画像をそのまま載せることもできます。' },
+    { short: '制作条件', title: '制作条件・受付状況', description: '商用利用・AI・修正回数など、依頼前に確認されやすい条件です。' },
+    { short: '自己紹介', title: '自己紹介', description: 'どんな絵を描くのか、どんな依頼が得意かを書きましょう。依頼する人が最初に読む文章です。' },
+    { short: 'SNS', title: 'SNS・連絡先', description: 'X・pixiv・メールなど、作品や連絡先のリンクを載せます。依頼する人はここから連絡します。' },
+    { short: '受付方法', title: '依頼の受け付け方', description: '見積もりフォームや、メニューにない依頼のリクエストを受け付けるかを決めます。' },
+    { short: '公開', title: '公開する', description: '設定を確認して、ページを公開しましょう。公開すると、トップページや検索結果に表示されます。' },
+  ]
 
-    if (isDirty) {
-      const confirmLeave = window.confirm(
-        '保存されていない変更があります。保存せずに別のタブへ移動しますか？\n（※移動しても入力内容は保持されますが、保存はされません）'
-      )
-      if (!confirmLeave) return
+  const stepDone = [
+    displayName.trim() !== '' && avatarUrl.trim() !== '',
+    tastes.length > 0,
+    portfolioUrls.some((url) => url.trim() !== ''),
+    ((priceMin.trim() !== '' && Number(priceMin) > 0) || priceMenuImages.length > 0) && leadTimeDays.trim() !== '',
+    freeRevisionCount.trim() !== '' || availableFromText.trim() !== '',
+    statusComment.trim() !== '',
+    snsLinks.some((link) => link.url.trim() !== ''),
+    hasEstimateForm || externalEstimationUrl.trim() !== '',
+    isPublic,
+  ]
+  const stepDoneCount = stepDone.filter(Boolean).length
+
+  // ステップの移動（URLの ?step= も合わせて変え、ブラウザの「戻る」で前の画面に戻れるようにする）
+  const changeStep = (next: number | null, { confirmDirty = true } = {}) => {
+    if (
+      confirmDirty &&
+      isDirty &&
+      !window.confirm('保存されていない変更があります。保存せずに移動しますか？\n（入力内容は残りますが、保存はされません）')
+    ) {
+      return
     }
+    setStep(next)
+    window.history.pushState(null, '', next === null ? '/dashboard' : `/dashboard?step=${next}`)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
-    setActiveTab(targetTab)
+  useEffect(() => {
+    const onPopState = () => {
+      const fromUrl = Number(new URLSearchParams(window.location.search).get('step'))
+      setStep(fromUrl >= 1 && fromUrl <= SETUP_STEPS.length ? fromUrl : null)
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
+  // 「次へ」：今のステップを保存してから次へ。最後のステップならホームに戻る
+  const handleWizardNext = async (e?: FormEvent) => {
+    e?.preventDefault()
+    if (step === null) return
+    const saved = step === 3 ? await handleSavePortfolio() : await handleSaveProfile()
+    if (!saved) return
+    if (step >= SETUP_STEPS.length) {
+      changeStep(null, { confirmDirty: false })
+      showSuccessToast(isPublic ? '設定が完了しました！' : '保存しました（ページは非公開のままです）')
+      return
+    }
+    changeStep(step + 1, { confirmDirty: false })
+  }
+
+  // ステップを開いているときの、上の見出し（どのステップにいるか・ほかのステップへ移動）
+  const renderWizardHeader = () => {
+    if (step === null) return null
+    const info = SETUP_STEPS[step - 1]
+    return (
+      <div className="space-y-3">
+        <button
+          type="button"
+          onClick={() => changeStep(null)}
+          className="text-xs font-bold text-slate-600 bg-white/90 border border-slate-200 px-4 py-2 rounded-full hover:bg-white cursor-pointer"
+        >
+          ← マイページのホームへ
+        </button>
+        <div className="grid grid-cols-9 bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          {SETUP_STEPS.map((s, i) => {
+            const n = i + 1
+            const active = n === step
+            return (
+              <button
+                key={s.short}
+                type="button"
+                onClick={() => n !== step && changeStep(n)}
+                className={`py-2 px-1 border-r last:border-r-0 border-slate-200 flex flex-col items-center gap-0.5 cursor-pointer transition-colors ${
+                  active ? `${currentThemeObj.bg} text-white` : 'hover:bg-slate-50 text-slate-600'
+                }`}
+              >
+                <span className="text-sm font-black leading-none">{stepDone[i] && !active ? '✓' : n}</span>
+                <span className="text-[8px] sm:text-[10px] font-bold leading-tight text-center break-keep">{s.short}</span>
+              </button>
+            )
+          })}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 px-5 py-4">
+          <p className={`text-[10px] font-black tracking-widest ${currentThemeObj.text}`}>STEP {step} / {SETUP_STEPS.length}</p>
+          <h2 className="text-base font-black text-slate-900 mt-0.5">{info.title}</h2>
+          <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">{info.description}</p>
+        </div>
+      </div>
+    )
+  }
+
+  // ステップの下の「戻る・スキップ・次へ」
+  const renderWizardNav = (disabled: boolean) => {
+    if (step === null) return null
+    const isLast = step >= SETUP_STEPS.length
+    return (
+      <div className="space-y-2 pt-2">
+        <div className="flex items-center gap-2">
+          {step > 1 && (
+            <button
+              type="button"
+              onClick={() => changeStep(step - 1)}
+              className="shrink-0 whitespace-nowrap px-4 py-3 rounded-2xl border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
+            >
+              ← 戻る
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => changeStep(isLast ? null : step + 1)}
+            className="shrink-0 whitespace-nowrap px-4 py-3 rounded-2xl border border-slate-200 bg-white text-xs font-bold text-slate-500 hover:bg-slate-50 cursor-pointer"
+          >
+            スキップ
+          </button>
+          <button
+            type="submit"
+            disabled={disabled}
+            className={`ml-auto whitespace-nowrap px-5 py-3 ${currentThemeObj.bg} hover:opacity-90 active:scale-[0.99] text-white font-extrabold rounded-2xl text-xs transition-all shadow-md cursor-pointer disabled:opacity-50`}
+          >
+            {saving ? '保存中...' : isLast ? '保存して完了' : (
+              <>
+                保存して次へ<span className="hidden sm:inline">（{SETUP_STEPS[step].short}）</span> →
+              </>
+            )}
+          </button>
+        </div>
+        <p className="text-center text-[10px] text-slate-400">
+          「次へ」を押すたびに保存されます。途中でやめても、マイページからいつでも続きを再開できます。
+        </p>
+      </div>
+    )
+  }
+
+  // STEP 9（公開）：公開する前に、ほかのステップの設定状況を確かめてもらう
+  const renderPublishSummary = () => {
+    const undone = SETUP_STEPS.slice(0, -1)
+      .map((s, i) => ({ ...s, n: i + 1, done: stepDone[i] }))
+      .filter((s) => !s.done)
+    return (
+      <div className="p-4 rounded-2xl border border-slate-200/80 bg-slate-50/60 space-y-3">
+        <p className="text-xs font-extrabold text-slate-800">公開前のチェック</p>
+        {undone.length === 0 ? (
+          <p className="text-[11px] font-bold text-emerald-600">✓ すべてのステップが設定済みです。このまま公開できます。</p>
+        ) : (
+          <div className="space-y-1.5">
+            <p className="text-[11px] text-slate-500">まだ設定していないステップがあります（未設定のままでも公開はできます）。</p>
+            {undone.map((s) => (
+              <button
+                key={s.n}
+                type="button"
+                onClick={() => changeStep(s.n)}
+                className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-white border border-slate-200 text-left hover:border-slate-300 cursor-pointer"
+              >
+                <span className="text-[11px] font-bold text-slate-700">
+                  STEP {s.n}　{s.title}
+                </span>
+                <span className={`text-[11px] font-bold shrink-0 ${currentThemeObj.text}`}>設定する →</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {currentPortfolioUrl && (
+          <a
+            href={currentPortfolioUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`inline-block text-[11px] font-bold ${currentThemeObj.text} hover:underline`}
+          >
+            自分のページを確認する ↗
+          </a>
+        )}
+      </div>
+    )
+  }
+
+  // ホーム：ステップの一覧（どこが終わっているか・ここから各ステップへ）
+  const renderSetupOverview = () => {
+    const firstUndone = stepDone.findIndex((done) => !done)
+    const percent = Math.round((stepDoneCount / SETUP_STEPS.length) * 100)
+    return (
+      <div className="bg-white rounded-3xl border border-slate-200/80 p-4 sm:p-5 shadow-xs space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-xs font-extrabold text-slate-900">📋 プロフィールの設定</h2>
+          <span className={`text-sm font-black ${currentThemeObj.text}`}>{percent}%</span>
+        </div>
+        <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+          <div className={`h-full rounded-full ${currentThemeObj.bg} transition-all duration-500`} style={{ width: `${percent}%` }} />
+        </div>
+        <ol className="divide-y divide-slate-100 border border-slate-100 rounded-2xl overflow-hidden">
+          {SETUP_STEPS.map((s, i) => (
+            <li key={s.short}>
+              <button
+                type="button"
+                onClick={() => changeStep(i + 1)}
+                className="w-full flex items-center gap-3 px-3.5 py-3 text-left hover:bg-slate-50 cursor-pointer"
+              >
+                <span
+                  className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-[11px] font-black ${
+                    stepDone[i] ? 'bg-emerald-500 text-white' : 'border-2 border-slate-200 text-slate-400'
+                  }`}
+                >
+                  {stepDone[i] ? '✓' : i + 1}
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-xs font-bold text-slate-800">{s.title}</span>
+                  <span className={`block text-[10px] font-bold ${stepDone[i] ? 'text-emerald-600' : 'text-slate-400'}`}>
+                    {stepDone[i] ? '設定済み' : '未設定'}
+                  </span>
+                </span>
+                <span className={`text-[11px] font-bold shrink-0 ${currentThemeObj.text}`}>このステップへ →</span>
+              </button>
+            </li>
+          ))}
+        </ol>
+        {firstUndone !== -1 && (
+          <button
+            type="button"
+            onClick={() => changeStep(firstUndone + 1)}
+            className={`w-full py-3 ${currentThemeObj.bg} hover:opacity-90 text-white font-extrabold rounded-2xl text-xs shadow-sm cursor-pointer`}
+          >
+            {stepDoneCount === 0 ? 'ガイドに沿って設定を始める →' : `続きから設定する（STEP ${firstUndone + 1}）→`}
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  // ホーム：そのほかの設定ページへの入口
+  const renderOtherSettings = () => {
+    const links = [
+      { href: '/dashboard/form-builder', emoji: '🧮', title: '見積もりフォーム', body: hasEstimateForm ? '作成済み。内容の編集はこちら' : '依頼者が金額を確認できるフォームを作る' },
+      { href: '/dashboard/requests', emoji: '📩', title: '届いたリクエスト', body: '依頼者から直接届いた相談を見る' },
+      { href: '/agreements', emoji: '📝', title: '合意内容の控え', body: '料金・納期・修正回数などを依頼者と記録に残す' },
+      { href: '/dashboard/design', emoji: '🎨', title: 'ページのデザイン', body: '背景・カバー画像・YouTube動画・ご依頼の流れ' },
+      { href: '/dashboard/souls', emoji: '🎭', title: '魂募集', body: 'キャラクターの魂（中の人）を募集するイラストを載せる' },
+      { href: '/dashboard/analytics', emoji: '📊', title: 'アクセス解析', body: '閲覧数（PV）・見積もり問い合わせ・お気に入り' },
+      { href: '/dashboard/notifications', emoji: '🔔', title: 'Discord通知', body: 'リクエストやフォローをDiscordで受け取る' },
+    ]
+    return (
+      <div className="space-y-2">
+        <h2 className="text-xs font-extrabold text-slate-700 px-1 drop-shadow-xs">そのほかの設定</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {links.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="flex items-center gap-3 p-3.5 rounded-2xl bg-white border border-slate-200/80 hover:border-slate-300 hover:shadow-sm transition"
+            >
+              <span className="text-xl shrink-0">{link.emoji}</span>
+              <span className="min-w-0">
+                <span className="block text-xs font-bold text-slate-800">{link.title} →</span>
+                <span className="block text-[10px] text-slate-500">{link.body}</span>
+              </span>
+            </Link>
+          ))}
+        </div>
+      </div>
+    )
   }
 
   useEffect(() => {
@@ -374,14 +623,32 @@ export default function Dashboard() {
           savedPortfolioUrlsRef.current = urls
         }
 
-        // 一覧に載って見つけてもらうのに最低限必要な3つ（作品・料金・タグ）がそろっていない人には、
-        // 先頭に「かんたん登録」を出す。作品の読み込みに失敗したときは、そろっているか判断できないので出さない
+        // 一覧に載って見つけてもらうのに最低限必要な3つ（作品・料金・タグ）がそろっているか
         const loadedHasWork = !!portfolioData && portfolioData.length > 0
         const loadedHasPrice =
           (safeParseInt(profileData?.price_min) ?? 0) > 0 || (profileData?.price_menu_images?.length ?? 0) > 0
         const loadedHasTags = (profileData?.tastes?.length ?? 0) > 0
-        setShowQuickStart(!portfolioError && !(loadedHasWork && loadedHasPrice && loadedHasTags))
-        setQuickStartShowPublicToggle(profileData?.is_public === false)
+
+        // 開くステップ：URLに ?step= があればそこ。無ければ、作品・料金・タグがそろっていない人に
+        // 1回だけ自動で STEP 1 を開く（はじめての人をガイドに乗せる。毎回開くと邪魔なので、開いたことを覚えておく）
+        const stepFromUrl = Number(new URLSearchParams(window.location.search).get('step'))
+        if (stepFromUrl >= 1 && stepFromUrl <= 9) {
+          setStep(stepFromUrl)
+        } else if (!portfolioError && !(loadedHasWork && loadedHasPrice && loadedHasTags)) {
+          const guidedKey = `drawker-setup-guided:${user.id}`
+          let guided = false
+          try {
+            guided = localStorage.getItem(guidedKey) === '1'
+            localStorage.setItem(guidedKey, '1')
+          } catch {
+            // 保存できない環境では、毎回ホームから始める
+            guided = true
+          }
+          if (!guided) {
+            setStep(1)
+            window.history.replaceState(null, '', '/dashboard?step=1')
+          }
+        }
 
         setIsDirty(false)
       } catch (error: any) {
@@ -394,60 +661,6 @@ export default function Dashboard() {
 
     checkUserAndFetchData()
   }, [router])
-
-  // アクセス解析の集計（analytics_logsには元々PV・見積もり利用・お気に入りの
-  // イベントが記録されているが、これまでダッシュボードのどこにも表示していなかった）
-  useEffect(() => {
-    if (!user) return
-
-    const loadAnalytics = async () => {
-      const DAY = 24 * 60 * 60 * 1000
-      const since = new Date(Date.now() - 30 * DAY)
-
-      const { data, error } = await supabase
-        .from('analytics_logs')
-        .select('event_type, created_at')
-        .eq('creator_id', user.id)
-        .gte('created_at', since.toISOString())
-
-      if (error || !data) {
-        console.error('アクセス解析の取得エラー:', error)
-        return
-      }
-
-      const now = Date.now()
-      const dailyPvMap: Record<string, number> = {}
-      let pvThisWeek = 0
-      let pvPrevWeek = 0
-      let inquiryThisMonth = 0
-      let newFavoritesThisWeek = 0
-
-      data.forEach((row: { event_type: string; created_at: string }) => {
-        const daysAgo = (now - new Date(row.created_at).getTime()) / DAY
-
-        if (row.event_type === 'pv') {
-          const dateKey = row.created_at.slice(0, 10)
-          dailyPvMap[dateKey] = (dailyPvMap[dateKey] || 0) + 1
-          if (daysAgo <= 7) pvThisWeek++
-          else if (daysAgo <= 14) pvPrevWeek++
-        } else if (row.event_type === 'estimate_calc') {
-          if (daysAgo <= 30) inquiryThisMonth++
-        } else if (row.event_type === 'favorite') {
-          if (daysAgo <= 7) newFavoritesThisWeek++
-        }
-      })
-
-      const pvDaily: { date: string; count: number }[] = []
-      for (let i = 13; i >= 0; i--) {
-        const key = new Date(now - i * DAY).toISOString().slice(0, 10)
-        pvDaily.push({ date: key, count: dailyPvMap[key] || 0 })
-      }
-
-      setAnalytics({ pvThisWeek, pvPrevWeek, pvDaily, inquiryThisMonth, newFavoritesThisWeek })
-    }
-
-    loadAnalytics()
-  }, [user])
 
   const handleAddSnsLink = () => {
     setIsDirty(true)
@@ -731,7 +944,7 @@ export default function Dashboard() {
       const { data: publicUrlData } = supabase.storage.from('portfolios').getPublicUrl(fileName)
 
       setPriceMenuImages((prev) => [...prev, normalizeStorageUrl(publicUrlData.publicUrl)])
-      // 「かんたん登録」から上げた場合に備えて、載せ方を「画像」にそろえる（タブ側は元から画像のときだけ上げられる）
+      // 念のため、載せ方を「画像」にそろえる（タブ側は元から画像のときだけ上げられる）
       setPriceMenuMode('image')
       setIsDirty(true)
     } catch (error: any) {
@@ -796,7 +1009,7 @@ export default function Dashboard() {
     setTimeout(() => setSaveSuccess(null), 3000)
   }
 
-  // 保存できたら true を返す（「かんたん登録」から、作品の保存と続けて呼ぶため）
+  // 保存できたら true を返す（ガイド付き設定の「次へ」で、保存できたかを確かめるため）
   const handleSaveProfile = async (e?: FormEvent): Promise<boolean> => {
     e?.preventDefault()
     if (!user) return false
@@ -960,7 +1173,7 @@ export default function Dashboard() {
     return saved
   }
 
-  // 保存できたら true を返す（「かんたん登録」から、プロフィールの保存と続けて呼ぶため）
+  // 保存できたら true を返す（ガイド付き設定の「次へ」で、保存できたかを確かめるため）
   const handleSavePortfolio = async (e?: FormEvent): Promise<boolean> => {
     e?.preventDefault()
     if (!user) return false
@@ -1049,63 +1262,6 @@ export default function Dashboard() {
     }
     return saved
   }
-
-  // 「かんたん登録」の保存。作品（portfolio_items）とプロフィール（profiles）は保存先が別なので、続けて両方保存する
-  const handleQuickStartSave = async () => {
-    const hasWork = portfolioUrls.some((url) => url.trim() !== '')
-    const hasPrice = (priceMin.trim() !== '' && Number(priceMin) > 0) || priceMenuImages.length > 0
-    if (!hasWork) {
-      alert('作品を1枚以上アップロードしてください。')
-      return
-    }
-    if (!hasPrice) {
-      alert('参考最低価格を入力するか、料金表の画像をアップロードしてください。')
-      return
-    }
-    if (tastes.length === 0) {
-      alert('得意なジャンルを1つ以上選んでください。')
-      return
-    }
-
-    if (!(await handleSavePortfolio())) return
-    if (!(await handleSaveProfile())) return
-
-    setShowQuickStart(false)
-    showSuccessToast(
-      isPublic ? '登録が完了しました！ページが一覧に掲載されます' : '保存しました（ページは非公開のままです）'
-    )
-  }
-
-  // 「かんたん登録」で料金表の画像を消す。1枚もなくなったら、料金メニューの載せ方を「文字」に戻す
-  const handleQuickStartRemovePriceMenuImage = (index: number) => {
-    if (priceMenuImages.length <= 1) setPriceMenuMode('text')
-    handleRemovePriceMenuImage(index)
-  }
-
-  // プロフィール完成度チェックリスト。既存項目を見るだけで計算できるので新規テーブルは不要。
-  const profileChecklist = useMemo(() => {
-    const items: { label: string; done: boolean; tab: 'basic' | 'pricing' | 'contact' | 'portfolio' }[] = [
-      { label: 'アイコン画像を設定する', done: avatarUrl.trim() !== '', tab: 'basic' },
-      { label: '自己紹介コメントを書く', done: statusComment.trim() !== '', tab: 'basic' },
-      { label: '得意なタグを1つ以上設定する', done: tastes.length > 0, tab: 'contact' },
-      {
-        label: '料金メニューを1つ以上設定する',
-        done:
-          priceMenuMode === 'image'
-            ? priceMenuImages.length > 0
-            : menuItems.some((item) => item.title.trim() !== '' && item.price !== ''),
-        tab: 'pricing',
-      },
-      { label: '参考最低価格を設定する', done: priceMin.trim() !== '' && Number(priceMin) > 0, tab: 'pricing' },
-      { label: '目安納期を設定する', done: leadTimeDays.trim() !== '' && Number(leadTimeDays) > 0, tab: 'pricing' },
-      { label: 'SNS・連絡先リンクを1つ以上設定する', done: snsLinks.some((link) => link.url.trim() !== ''), tab: 'contact' },
-      { label: '作品を1つ以上掲載する', done: portfolioUrls.some((url) => url.trim() !== ''), tab: 'portfolio' },
-      { label: '見積もりフォームを作成する', done: hasEstimateForm, tab: 'contact' },
-    ]
-    const doneCount = items.filter((i) => i.done).length
-    const percent = Math.round((doneCount / items.length) * 100)
-    return { items, percent }
-  }, [avatarUrl, statusComment, tastes, menuItems, priceMenuMode, priceMenuImages, priceMin, leadTimeDays, snsLinks, portfolioUrls, hasEstimateForm])
 
   const handleLogout = async () => {
     if (isDirty) {
@@ -1249,42 +1405,9 @@ export default function Dashboard() {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-        {/* かんたん登録（作品・料金・タグがそろっていない人にだけ出す） */}
-        {showQuickStart && (
-          <QuickStartPanel
-            workUrls={portfolioUrls.filter((url) => url.trim() !== '')}
-            canAddWork={portfolioUrls.some((url) => url.trim() === '')}
-            uploadingWork={uploadingIndex !== null}
-            onUploadWork={(e) => {
-              const emptyIndex = portfolioUrls.findIndex((url) => url.trim() === '')
-              if (emptyIndex !== -1) handleFileUpload(e, emptyIndex)
-            }}
-            priceMin={priceMin}
-            onPriceMinChange={(value) => {
-              setPriceMin(value)
-              setIsDirty(true)
-            }}
-            priceMenuImages={priceMenuMode === 'image' ? priceMenuImages : []}
-            canUsePriceMenuImage={priceMenuMode === 'image' || !menuItems.some((item) => item.title.trim() !== '')}
-            canAddPriceMenuImage={priceMenuImages.length < PRICE_MENU_IMAGE_LIMIT}
-            uploadingPriceMenu={uploadingPriceMenu}
-            onUploadPriceMenuImage={handlePriceMenuImageUpload}
-            onRemovePriceMenuImage={handleQuickStartRemovePriceMenuImage}
-            presetTastes={PRESET_TASTES}
-            tastes={tastes}
-            onToggleTaste={togglePresetTaste}
-            showPublicToggle={quickStartShowPublicToggle}
-            isPublic={isPublic}
-            onPublicChange={(value) => {
-              setIsPublic(value)
-              setIsDirty(true)
-            }}
-            saving={saving}
-            onSave={handleQuickStartSave}
-            onDismiss={() => setShowQuickStart(false)}
-          />
-        )}
 
+        {step === null && (
+          <>
         {/* クイックアクションバー */}
         <div className="bg-white rounded-3xl border border-slate-200/80 p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -1326,13 +1449,13 @@ export default function Dashboard() {
               <div>
                 <p className="text-xs font-extrabold text-amber-800">作品が1枚も登録されていません</p>
                 <p className="text-[11px] text-amber-700 mt-0.5">
-                  作品を1枚も登録していないクリエイターは、トップページや検索結果に表示されません。「作品」タブから1枚以上アップロードしてください。
+                  作品を1枚も登録していないクリエイターは、トップページや検索結果に表示されません。「作品」のステップから1枚以上アップロードしてください。
                 </p>
               </div>
             </div>
             <button
               type="button"
-              onClick={() => handleTabChange('portfolio')}
+              onClick={() => changeStep(3)}
               className="shrink-0 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl transition-colors cursor-pointer whitespace-nowrap"
             >
               作品を登録する
@@ -1340,44 +1463,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* プロフィール完成度 */}
-        {profileChecklist.percent < 100 && (
-          <div className="bg-white rounded-3xl border border-slate-200/80 p-4 sm:p-5 shadow-xs space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
-                📋 プロフィール完成度
-              </h2>
-              <span className={`text-sm font-black ${currentThemeObj.text}`}>
-                {profileChecklist.percent}%
-              </span>
-            </div>
-
-            <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-              <div
-                className={`h-full rounded-full ${currentThemeObj.bg} transition-all duration-500`}
-                style={{ width: `${profileChecklist.percent}%` }}
-              />
-            </div>
-
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              {profileChecklist.items
-                .filter((item) => !item.done)
-                .map((item) => (
-                  <button
-                    key={item.label}
-                    type="button"
-                    onClick={() => handleTabChange(item.tab)}
-                    className="text-[11px] font-bold px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 transition-colors cursor-pointer"
-                  >
-                    ○ {item.label}
-                  </button>
-                ))}
-            </div>
-            <p className="text-[10px] text-slate-400">
-              項目をクリックすると該当のタブに移動します。埋まっているほど依頼者の目に留まりやすくなります。
-            </p>
-          </div>
-        )}
+        {renderSetupOverview()}
 
         {/* アイコンリング未装着の案内 */}
         {!equippedRingId && (
@@ -1399,150 +1485,25 @@ export default function Dashboard() {
             </Link>
           </div>
         )}
-
-        {/* アクセス解析（PV・問い合わせ・お気に入り） */}
-        {analytics && (
-          <div className="bg-white rounded-3xl border border-slate-200/80 p-4 sm:p-5 shadow-xs space-y-4">
-            <div>
-              <h2 className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
-                📊 アクセス解析
-              </h2>
-              <p className="text-[11px] text-slate-400">直近のプロフィール閲覧・見積もり問い合わせ・お気に入りの動きです</p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100">
-                <span className="text-[10px] font-bold text-slate-400 block">今週の閲覧数（PV）</span>
-                <div className="flex items-baseline gap-1.5 mt-0.5">
-                  <span className="text-xl font-black text-slate-900">{analytics.pvThisWeek}</span>
-                  {analytics.pvPrevWeek > 0 && (
-                    <span
-                      className={`text-[10px] font-bold ${
-                        analytics.pvThisWeek >= analytics.pvPrevWeek ? 'text-emerald-600' : 'text-rose-500'
-                      }`}
-                    >
-                      {analytics.pvThisWeek >= analytics.pvPrevWeek ? '▲' : '▼'}
-                      {Math.abs(Math.round(((analytics.pvThisWeek - analytics.pvPrevWeek) / analytics.pvPrevWeek) * 100))}
-                      %（先週比）
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-end gap-0.5 h-8 mt-2">
-                  {analytics.pvDaily.map((d) => {
-                    const max = Math.max(1, ...analytics.pvDaily.map((x) => x.count))
-                    return (
-                      <div
-                        key={d.date}
-                        title={`${d.date}: ${d.count}件`}
-                        className="flex-1 bg-indigo-200 rounded-sm"
-                        style={{ height: `${Math.max(6, (d.count / max) * 100)}%` }}
-                      />
-                    )
-                  })}
-                </div>
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100">
-                <span className="text-[10px] font-bold text-slate-400 block">今月の見積もり問い合わせ数</span>
-                <span className="text-xl font-black text-slate-900 block mt-0.5">{analytics.inquiryThisMonth}</span>
-                <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
-                  見積もりフォームで金額を確認し、依頼内容をコピーして送った回数です
-                </p>
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100">
-                <span className="text-[10px] font-bold text-slate-400 block">今週の新規お気に入り</span>
-                <span className="text-xl font-black text-slate-900 block mt-0.5">+{analytics.newFavoritesThisWeek}</span>
-                <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
-                  累計のお気に入り数はプロフィールカードのハートマークをご確認ください
-                </p>
-              </div>
-            </div>
-          </div>
+          {renderOtherSettings()}
+          </>
         )}
 
-        {/* タブナビゲーション */}
-        <div className="flex p-1 bg-slate-200/60 rounded-2xl max-w-2xl mx-auto overflow-x-auto">
-          <button
-            type="button"
-            onClick={() => handleTabChange('basic')}
-            className={`flex-1 py-2.5 px-2 text-[11px] sm:text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
-              activeTab === 'basic'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-            基本情報
-          </button>
-          <button
-            type="button"
-            onClick={() => handleTabChange('pricing')}
-            className={`flex-1 py-2.5 px-2 text-[11px] sm:text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
-              activeTab === 'pricing'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
-            </svg>
-            料金・条件
-          </button>
-          <button
-            type="button"
-            onClick={() => handleTabChange('contact')}
-            className={`flex-1 py-2.5 px-2 text-[11px] sm:text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
-              activeTab === 'contact'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
-            </svg>
-            タグ・SNS
-          </button>
-          <button
-            type="button"
-            onClick={() => handleTabChange('portfolio')}
-            className={`flex-1 py-2.5 px-2 text-[11px] sm:text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
-              activeTab === 'portfolio'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            作品ギャラリー
-          </button>
-        </div>
 
-        {activeTab !== 'portfolio' && (
+        {step !== null && renderWizardHeader()}
+
+        {step !== null && step !== 3 && (
           <form
-            onSubmit={handleSaveProfile}
+            onSubmit={handleWizardNext}
             onChange={() => setIsDirty(true)}
             className="bg-white rounded-3xl border border-slate-200/70 p-6 sm:p-8 space-y-8 shadow-xs"
           >
-            {activeTab === 'basic' && (
+            {(step === 1 || step === 5 || step === 6 || step === 9) && (
               <div className="space-y-8">
-                <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
-                  <div>
-                    <h2 className="font-extrabold text-slate-900 text-base">基本情報の設定</h2>
-                    <p className="text-xs text-slate-400 mt-1">公開プロフィールに反映される基本情報です</p>
-                  </div>
-                  {avatarUrl && (
-                    <div className="w-12 h-12 rounded-full overflow-hidden border border-slate-200 bg-slate-100 shadow-xs shrink-0">
-                      <img src={avatarUrl} alt="アバタープレビュー" className="w-full h-full object-cover" />
-                    </div>
-                  )}
-                </div>
 
                 {/* テーマカラー選択UI */}
+                {step === 1 && (
+                <>
                 <div className="p-4 rounded-2xl border border-slate-200/80 bg-slate-50/40 space-y-3">
                   <label className="text-xs font-bold text-slate-700 block">テーマカラー設定</label>
                   <div className="flex flex-wrap gap-2.5">
@@ -1569,8 +1530,12 @@ export default function Dashboard() {
                     })}
                   </div>
                 </div>
+                </>
+                )}
 
                 {/* スケジューラー設定 */}
+                {step === 5 && (
+                <>
                 <div className="p-5 rounded-2xl bg-indigo-50/40 border border-indigo-100/80 space-y-4">
                   <div>
                     <h3 className="text-xs font-extrabold text-indigo-950 flex items-center gap-1.5">
@@ -1623,7 +1588,12 @@ export default function Dashboard() {
                     </div>
                   </div>
                 </div>
+                </>
+                )}
 
+                {step === 9 && renderPublishSummary()}
+                {step === 9 && (
+                <>
                 <div className={`p-4 rounded-2xl border transition-all ${
                   isPublic
                     ? 'bg-emerald-50/50 border-emerald-200/80'
@@ -1662,7 +1632,11 @@ export default function Dashboard() {
                     </button>
                   </div>
                 </div>
+                </>
+                )}
 
+                {step === 1 && (
+                <>
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-700">表示名 (クリエイター名) <span className="text-rose-500">*</span></label>
                   <input
@@ -1736,7 +1710,11 @@ export default function Dashboard() {
                     </div>
                   </div>
                 </div>
+                </>
+                )}
 
+                {step === 5 && (
+                <>
                 <div className="p-4 rounded-2xl border border-slate-200/80 bg-slate-50/60 flex items-center justify-between gap-3 flex-wrap">
                   <div>
                     <span className="text-xs font-bold text-slate-700 block">現在の受付ステータス</span>
@@ -1752,7 +1730,11 @@ export default function Dashboard() {
                     {status === 'available' ? '🟢 即対応可' : status === 'stopped' ? '🔴 受注停止' : '🟡 相談受付中'}
                   </span>
                 </div>
+                </>
+                )}
 
+                {step === 6 && (
+                <>
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-700">自己紹介・PRコメント</label>
                   <textarea
@@ -1763,16 +1745,16 @@ export default function Dashboard() {
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all leading-relaxed font-medium"
                   />
                 </div>
+                </>
+                )}
               </div>
             )}
 
-            {activeTab === 'pricing' && (
+            {(step === 4 || step === 5) && (
               <div className="space-y-8">
-                <div className="border-b border-slate-100 pb-4">
-                  <h2 className="font-extrabold text-slate-900 text-base">料金・受託条件の設定</h2>
-                  <p className="text-xs text-slate-400 mt-1">依頼を検討する人が特に気にする金額・制作条件です</p>
-                </div>
 
+                {step === 4 && (
+                <>
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-700">参考最低価格 (円)</label>
                   <div className="relative">
@@ -1780,7 +1762,6 @@ export default function Dashboard() {
                     <input
                       type="number"
                       min="0"
-                      step="500"
                       placeholder="5000"
                       value={priceMin}
                       onChange={(e) => setPriceMin(e.target.value)}
@@ -1872,7 +1853,11 @@ export default function Dashboard() {
                     className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
                   />
                 </div>
+                </>
+                )}
 
+                {step === 5 && (
+                <>
                 <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50/50 cursor-pointer hover:bg-slate-100/50 transition-colors">
                   <input
                     type="checkbox"
@@ -1885,7 +1870,11 @@ export default function Dashboard() {
                   />
                   <span className="text-xs font-bold text-slate-700">商用利用を可能として掲載する</span>
                 </label>
+                </>
+                )}
 
+                {step === 4 && (
+                <>
                 <div className="space-y-3 border-t border-slate-100 pt-6">
                   <div className="flex justify-between items-center">
                     <div>
@@ -1989,7 +1978,6 @@ export default function Dashboard() {
                               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-semibold">¥</span>
                               <input
                                 type="number"
-                                step="500"
                                 placeholder="5000"
                                 value={item.price}
                                 onChange={(e) => handleMenuItemChange(idx, 'price', e.target.value)}
@@ -2071,7 +2059,11 @@ export default function Dashboard() {
                     )}
                   </div>
                 </div>
+                </>
+                )}
 
+                {step === 5 && (
+                <>
                 <div className="space-y-4 border-t border-slate-100 pt-6">
                   <div>
                     <h3 className="text-xs font-bold text-slate-900">制作条件・受託範囲の設定</h3>
@@ -2216,16 +2208,16 @@ export default function Dashboard() {
                     </label>
                   </div>
                 </div>
+                </>
+                )}
               </div>
             )}
 
-            {activeTab === 'contact' && (
+            {(step === 2 || step === 7 || step === 8) && (
               <div className="space-y-8">
-                <div className="border-b border-slate-100 pb-4">
-                  <h2 className="font-extrabold text-slate-900 text-base">タグ・SNS・連絡先の設定</h2>
-                  <p className="text-xs text-slate-400 mt-1">検索でのマッチ度と、依頼者からの連絡経路に関わる設定です</p>
-                </div>
 
+                {step === 2 && (
+                <>
                 <div className="space-y-4">
                   <label className="text-xs font-bold text-slate-700 block">得意なテイスト・タグ設定</label>
 
@@ -2304,15 +2296,17 @@ export default function Dashboard() {
                     )}
                   </div>
                 </div>
+                </>
+                )}
 
                 {/* Links & SNS Section */}
-                <div className="border-t border-slate-100 pt-6 space-y-4">
-                  <div>
-                    <h3 className="font-bold text-slate-900 text-xs">連絡先・SNS / 外部リンク設定</h3>
-                    <p className="text-[11px] text-slate-400 mt-0.5">プロフィールに掲載するSNSや各種サービスへのリンクを自由に追加できます</p>
-                  </div>
+                {(step === 7 || step === 8) && (
+                <>
+                <div className="space-y-4">
 
                   <div className="space-y-4">
+                    {step === 8 && (
+                    <>
                     <div className="space-y-2 p-4 rounded-2xl bg-indigo-50/40 border border-indigo-100">
                       <div className="flex items-center justify-between">
                         <label className="text-xs font-bold text-slate-800 flex items-center gap-2">
@@ -2353,30 +2347,7 @@ export default function Dashboard() {
                       />
                     </div>
 
-                    <Link
-                      href="/dashboard/design"
-                      className="block p-4 rounded-2xl bg-gradient-to-r from-sky-50 via-violet-50 to-pink-50 border border-violet-100 hover:brightness-[0.98] transition space-y-1"
-                    >
-                      <span className="text-xs font-bold text-slate-800 block">🎨 ページのデザインを変える →</span>
-                      <span className="text-[11px] text-slate-500 block">背景・カバー画像・YouTube動画・ご依頼の流れを設定して、あなたらしいポートフォリオに。</span>
-                    </Link>
 
-                    <div className="grid sm:grid-cols-2 gap-3">
-                      <Link
-                        href="/dashboard/souls"
-                        className="p-4 rounded-2xl bg-violet-50/60 border border-violet-100 hover:bg-violet-50 transition-colors space-y-1"
-                      >
-                        <span className="text-xs font-bold text-slate-800 block">🎭 魂募集イラストを掲載する →</span>
-                        <span className="text-[11px] text-slate-500 block">キャラクターの魂（中の人）を募集するイラストを、ポートフォリオに掲載できます。</span>
-                      </Link>
-                      <Link
-                        href="/dashboard/notifications"
-                        className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-100 hover:bg-indigo-50 transition-colors space-y-1"
-                      >
-                        <span className="text-xs font-bold text-slate-800 block">🔔 Discord通知を設定する →</span>
-                        <span className="text-[11px] text-slate-500 block">リクエスト・応募・フォローなどを、あなたのDiscordに届けられます。</span>
-                      </Link>
-                    </div>
 
                     <div className="space-y-2 p-4 rounded-2xl bg-pink-50/40 border border-pink-100">
                       <div className="flex items-center justify-between">
@@ -2411,7 +2382,10 @@ export default function Dashboard() {
                         </span>
                       </label>
                     </div>
+                    </>
+                    )}
 
+                    {step === 7 && (
                     <div className="space-y-3 pt-2">
                       <div className="flex items-center justify-between">
                         <label className="text-xs font-bold text-slate-700 block">SNS / 外部サービスリンク ({snsLinks.length}件)</label>
@@ -2430,7 +2404,7 @@ export default function Dashboard() {
                             <select
                               value={item.platform}
                               onChange={(e) => handleSnsLinkChange(item.id, 'platform', e.target.value)}
-                              className="w-36 px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+                              className="w-28 sm:w-36 shrink-0 px-2 sm:px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
                             >
                               {SNS_PLATFORMS.map((p) => (
                                 <option key={p.id} value={p.id}>
@@ -2444,13 +2418,13 @@ export default function Dashboard() {
                               placeholder={item.platform === 'email' ? 'example@gmail.com' : 'https://...'}
                               value={item.url}
                               onChange={(e) => handleSnsLinkChange(item.id, 'url', e.target.value)}
-                              className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-mono text-[11px]"
+                              className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-mono text-[11px]"
                             />
 
                             <button
                               type="button"
                               onClick={() => handleRemoveSnsLink(item.id)}
-                              className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer text-xs font-bold"
+                              className="shrink-0 p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer text-xs font-bold"
                             >
                               ✕
                             </button>
@@ -2462,31 +2436,25 @@ export default function Dashboard() {
                         )}
                       </div>
                     </div>
+                    )}
                   </div>
                 </div>
+                </>
+                )}
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={saving || uploadingAvatar}
-              className={`w-full py-3.5 ${currentThemeObj.bg} hover:opacity-90 active:scale-[0.99] text-white font-extrabold rounded-2xl text-xs transition-all duration-200 shadow-md cursor-pointer disabled:opacity-50`}
-            >
-              {saving ? '保存中...' : 'プロフィール情報を保存'}
-            </button>
+            {renderWizardNav(saving || uploadingAvatar)}
           </form>
         )}
 
-        {activeTab === 'portfolio' && (
+        {step === 3 && (
+        <>
           <form 
-            onSubmit={handleSavePortfolio} 
+            onSubmit={handleWizardNext} 
             onChange={() => setIsDirty(true)}
             className="bg-white rounded-3xl border border-slate-200/70 p-6 sm:p-8 space-y-8 shadow-xs"
           >
-            <div className="border-b border-slate-100 pb-4">
-              <h2 className="font-extrabold text-slate-900 text-base">作品ギャラリーの設定</h2>
-              <p className="text-xs text-slate-400 mt-1">最大4枚まで登録可能です。1枚目の画像がTwitter OGP・カード一覧の代表画像になります。</p>
-            </div>
 
             {portfolioLoadFailed && (
               <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-700">
@@ -2650,14 +2618,9 @@ export default function Dashboard() {
               ))}
             </div>
 
-            <button
-              type="submit"
-              disabled={saving || uploadingIndex !== null || portfolioLoadFailed}
-              className={`w-full py-3.5 ${currentThemeObj.bg} hover:opacity-90 active:scale-[0.99] text-white font-extrabold rounded-2xl text-xs transition-all duration-200 shadow-md cursor-pointer disabled:opacity-50`}
-            >
-              {saving ? '保存中...' : portfolioLoadFailed ? '読み込みエラーのため保存できません' : '作品ポートフォリオを保存'}
-            </button>
+            {renderWizardNav(saving || uploadingIndex !== null || portfolioLoadFailed)}
           </form>
+        </>
         )}
       </main>
 

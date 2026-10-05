@@ -55,7 +55,10 @@ export async function POST(req: Request) {
     let mediaId: string | undefined
     const imageUrl = profile.thumbnail_url || profile.avatar_url
 
-    if (imageUrl) {
+    const storageOrigin = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '')
+    const isOwnStorageImage = typeof imageUrl === 'string' && !!storageOrigin && imageUrl.startsWith(`${storageOrigin}/storage/v1/object/public/`)
+
+    if (isOwnStorageImage) {
       try {
         const imageRes = await fetch(imageUrl)
         if (imageRes.ok) {

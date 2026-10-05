@@ -525,7 +525,6 @@ export default function WantedDetailClient({ postId }: { postId: string }) {
                   <input
                     type="number"
                     min="0"
-                    step="500"
                     value={proposedPrice}
                     onChange={(e) => setProposedPrice(e.target.value)}
                     placeholder="10000"

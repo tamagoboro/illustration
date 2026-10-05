@@ -235,7 +235,6 @@ export default function WantedFormClient() {
                   <input
                     type="number"
                     min="0"
-                    step="500"
                     value={budgetMin}
                     onChange={(e) => setBudgetMin(e.target.value)}
                     placeholder="5000"
@@ -248,7 +247,6 @@ export default function WantedFormClient() {
                   <input
                     type="number"
                     min="0"
-                    step="500"
                     value={budgetMax}
                     onChange={(e) => setBudgetMax(e.target.value)}
                     placeholder="20000"

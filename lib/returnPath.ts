@@ -16,7 +16,7 @@ const NOT_RETURNABLE_PREFIXES = ['/login', '/reset-password', '/auth', '/welcome
 
 // サイト内の相対パスだけを許可する（外部サイトへ飛ばされるのを防ぐ）
 export const isSafeInternalPath = (path: unknown): path is string =>
-  typeof path === 'string' && path.startsWith('/') && !path.startsWith('//')
+  typeof path === 'string' && path.startsWith('/') && !path.startsWith('//') && !path.startsWith('/\\')
 
 export const isReturnablePath = (path: string) => !NOT_RETURNABLE_PREFIXES.some((prefix) => path.startsWith(prefix))
 

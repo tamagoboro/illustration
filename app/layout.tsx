@@ -4,6 +4,7 @@ import { serializeJsonLd } from '@/lib/safeUrl'
 import LoginBonusPopup from '@/components/LoginBonusPopup'
 import SiteFooter from '@/components/SiteFooter'
 import SessionGuard from '@/components/SessionGuard'
+import MaintenanceGate from '@/components/MaintenanceGate'
 
 const rawSiteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://drawker.com'
 const siteUrl = rawSiteUrl.startsWith('http') ? rawSiteUrl : `https://${rawSiteUrl}`
@@ -102,7 +103,7 @@ export default function RootLayout({
         />
       </head>
       <body>
-        {children}
+        <MaintenanceGate>{children}</MaintenanceGate>
         <SiteFooter />
         <SessionGuard />
         <LoginBonusPopup />

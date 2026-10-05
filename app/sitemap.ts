@@ -79,6 +79,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { path: '/match', changeFrequency: 'monthly', priority: 0.6 },
     { path: '/guide', changeFrequency: 'monthly', priority: 0.6 },
     { path: '/faq', changeFrequency: 'monthly', priority: 0.5 },
+    { path: '/creator-guide', changeFrequency: 'monthly', priority: 0.6 },
+    { path: '/guide/agreements', changeFrequency: 'monthly', priority: 0.5 },
+    { path: '/safety', changeFrequency: 'monthly', priority: 0.5 },
+    { path: '/support', changeFrequency: 'monthly', priority: 0.3 },
     { path: '/about', changeFrequency: 'monthly', priority: 0.5 },
     { path: '/updates', changeFrequency: 'weekly', priority: 0.4 },
   ]

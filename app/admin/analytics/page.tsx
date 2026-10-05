@@ -163,6 +163,9 @@ export default function AdminAnalyticsPage() {
             <Link href="/admin/inquiries" className="text-[11px] font-bold text-slate-400 hover:text-sky-600 transition-colors">
               お問い合わせ
             </Link>
+            <Link href="/admin/maintenance" className="text-[11px] font-bold text-slate-400 hover:text-sky-600 transition-colors">
+              🚧 メンテナンス
+            </Link>
             <Link href="/admin/rings" className="text-[11px] font-bold text-slate-400 hover:text-sky-600 transition-colors">
               リング管理
             </Link>

@@ -7,6 +7,9 @@ import { ALL_NOTIFICATION_TYPES } from '@/lib/notificationTypes'
 // 他のWebhook（new-creator / new-signup-discord）と同じく x-webhook-secret ヘッダーで呼び出し元を確認する。
 export const runtime = 'nodejs'
 
+// 管理者だけに届く通知。種類の設定画面に出していないので、Discord連携がオンなら常に送る
+const ADMIN_ONLY_TYPES = ['inquiry', 'agreement_trouble']
+
 type NotificationRecord = {
   user_id: string
   type: string
@@ -36,8 +39,7 @@ export async function POST(req: Request) {
   // 設定の行が無い＝初期設定のまま（全種類オン）
   const enabled = settings?.discord_enabled ?? true
   const types: string[] = settings?.discord_types ?? ALL_NOTIFICATION_TYPES
-  // お問い合わせ（管理者だけに届く）は種類の設定画面に出していないので、Discord連携がオンなら常に送る
-  if (!enabled || (record.type !== 'inquiry' && !types.includes(record.type))) {
+  if (!enabled || (!ADMIN_ONLY_TYPES.includes(record.type) && !types.includes(record.type))) {
     return NextResponse.json({ message: 'Disabled by user setting' })
   }
 

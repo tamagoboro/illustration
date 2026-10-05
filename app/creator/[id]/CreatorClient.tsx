@@ -29,6 +29,7 @@ import CreatorRecentPosts from '@/components/portfolio/CreatorRecentPosts'
 import { normalizeBackground, backgroundStyle, isDarkBackground, normalizeVideos } from '@/lib/portfolioDesign'
 import { ItemDiscountConfig, Campaign, isCampaignActive, resolveDiscount, applyDiscount, formatDiscountBadge, formatSavingsBadge } from '@/lib/discount'
 import { copyTextOrShow } from '@/lib/clipboard'
+import TradeStatsBadges from '@/components/TradeStatsBadges'
 import { PriceType, computeEstimateTotals, formatOptionPrice } from '@/lib/estimate'
 
 type Option = {
@@ -1190,6 +1191,7 @@ const themeColor = useMemo(() => {
                         🔥 問い合わせ多数
                       </span>
                     )}
+                    <TradeStatsBadges creatorId={id} />
                     {badges?.responseRate != null && badges.responseRate >= 80 && (
                       <span className="text-[11px] bg-emerald-500/10 text-emerald-800 font-extrabold px-3 py-0.5 rounded-full border border-emerald-300 shadow-2xs">
                         💬 応答率{badges.responseRate}%

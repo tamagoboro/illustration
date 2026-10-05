@@ -11,8 +11,10 @@ export function middleware(request: NextRequest) {
 
   const isCanonical = host === CANONICAL_HOST || host === `www.${CANONICAL_HOST}`
   const isLocal = host.startsWith('localhost') || host.startsWith('127.0.0.1')
+  // npm run dev で動かしているときは転送しない（スマホから 192.168.x.x:3000 で開いて確認するときなど）
+  const isDev = process.env.NODE_ENV === 'development'
 
-  if (isCanonical || isLocal) {
+  if (isCanonical || isLocal || isDev) {
     return NextResponse.next()
   }
 

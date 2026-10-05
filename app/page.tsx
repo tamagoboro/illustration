@@ -61,6 +61,7 @@ const NAV_LINKS = [
   { href: '/ranking', label: '注目クリエイター' },
   { href: '/wanted', label: '募集ボード' },
   { href: '/feed', label: 'フィード' },
+  { href: '/agreements/new', label: '📝 控えの作成' },
 ]
 
 // 「イラストレーター紹介」に表示する人数

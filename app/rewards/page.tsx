@@ -430,6 +430,17 @@ export default function RewardsPage() {
           </>
         )}
 
+        <Link
+          href="/agreements"
+          className="flex items-center gap-3 bg-white rounded-3xl border border-slate-200/80 p-4 sm:p-5 shadow-xs hover:border-sky-200 transition"
+        >
+          <span className="text-2xl">📝</span>
+          <span className="min-w-0">
+            <span className="block text-xs font-extrabold text-slate-900">合意内容の控え →</span>
+            <span className="block text-[11px] text-slate-500 mt-0.5">クリエイターと決めた料金・納期・修正回数などの記録。届いた控えへの同意もここから</span>
+          </span>
+        </Link>
+
         {walletSection}
 
         {hasDashboardSetup && <RecentlyViewedCreators />}
